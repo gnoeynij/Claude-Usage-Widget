@@ -779,8 +779,14 @@ class ClaudeWidget(QWidget):
             return QColor(c.red(), c.green(), c.blue(), c.alpha())
         if self._bg_opacity == 0:
             return QColor(c.red(), c.green(), c.blue(), 255)
+
+        # 100% 완전 투명이면 마우스 이벤트가 통과되므로 99%로 처리
+        opacity = self._bg_opacity
+        if opacity >= 100:
+            opacity = 99
+
         # 0%: opaque, 100%: fully transparent
-        a = int(round(c.alpha() * (1.0 - (self._bg_opacity / 100.0))))
+        a = int(round(c.alpha() * (1.0 - (opacity / 100.0))))
         return QColor(c.red(), c.green(), c.blue(), max(0, min(255, a)))
 
     def _rgba(self, c: QColor) -> str:
