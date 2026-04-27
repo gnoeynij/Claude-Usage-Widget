@@ -1,0 +1,12 @@
+# IDE
+.idea/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local build artifacts
+Source/build/
+Source/dist/
+Source/__pycache__/
+
