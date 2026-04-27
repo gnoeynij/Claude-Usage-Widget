@@ -70,5 +70,7 @@ python -m PyInstaller claude_widget.spec --noconfirm
 
 ---
 
+"※ 본 프로그램은 개인 오픈소스 프로젝트로 디지털 서명이 되어있지 않아 Windows SmartScreen 경고 창이 뜰 수 있습니다. 악성코드가 아니니 안심하시고 추가 정보 -> 실행을 눌러주세요!"
+
 ## 📄 License
 이 프로젝트는 [MIT License](LICENSE)를 따릅니다. 누구나 자유롭게 수정 및 배포할 수 있습니다.
