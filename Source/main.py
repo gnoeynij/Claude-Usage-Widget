@@ -21,7 +21,7 @@ def resource_path(relative: str) -> str:
 
 import requests
 from PyQt6.QtCore import (
-    Qt, QTimer, QPoint, QSettings, QThread, pyqtSignal, QRect,
+    Qt, QTimer, QPoint, QSettings, QThread, pyqtSignal, QRect, QEvent,
 )
 from PyQt6.QtGui import (
     QColor, QPainter, QPainterPath, QFont, QIcon, QPixmap,
@@ -30,10 +30,10 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QSizePolicy, QSystemTrayIcon, QMenu,
-    QGraphicsDropShadowEffect,
+    QGraphicsDropShadowEffect, QSlider,
 )
 
-APP_VERSION   = "v1.1.0"
+APP_VERSION   = "v1.2.0"
 USAGE_URL     = "https://api.anthropic.com/api/oauth/usage"
 LEARN_MORE_URL = "https://support.claude.com/ko/"
 
@@ -137,6 +137,8 @@ I18N: dict[str, dict] = {
         "alwaysOnTop":    "Always on Top",
         "darkMode":       "Dark Mode",
         "trayRunning":    "Running in system tray",
+        "widgetSize":     "Widget size",
+        "bgOpacity":      "Background opacity",
     },
     "ko": {
         "appTitle":       "Claude 모니터",
@@ -168,6 +170,8 @@ I18N: dict[str, dict] = {
         "alwaysOnTop":    "항상 위",
         "darkMode":       "다크 모드",
         "trayRunning":    "트레이에서 실행 중",
+        "widgetSize":     "위젯 크기",
+        "bgOpacity":      "배경 투명도",
     },
 }
 
@@ -266,7 +270,8 @@ class ProgressBar(QWidget):
         self._pct   = 0.0
         self._scale = show_scale
         self._theme = theme
-        self.setFixedHeight(28 if show_scale else 20)
+        self._ui_scale = 1.0
+        self.set_scale(1.0)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     def set_theme(self, theme: dict):
@@ -275,6 +280,12 @@ class ProgressBar(QWidget):
 
     def set_percent(self, pct: float):
         self._pct = max(0.0, min(100.0, pct))
+        self.update()
+
+    def set_scale(self, scale: float):
+        self._ui_scale = max(0.7, min(1.4, float(scale)))
+        base_h = 34 if self._scale else 20
+        self.setFixedHeight(int(round(base_h * self._ui_scale)))
         self.update()
 
     @staticmethod
@@ -288,28 +299,37 @@ class ProgressBar(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
+        bar_h = max(12, int(round(20 * self._ui_scale)))
+        rect = self.rect()
+        track_w = max(1, rect.width())
+
         # track
         track = QPainterPath()
-        track.addRoundedRect(0, 0, self.width(), 20, 6, 6)
+        track.addRoundedRect(0, 0, track_w, bar_h, max(4, int(6 * self._ui_scale)), max(4, int(6 * self._ui_scale)))
         p.fillPath(track, self._theme["progress_bg"])
 
         # fill
-        fw = int(self.width() * self._pct / 100)
+        fw = int(track_w * self._pct / 100)
         if fw > 0:
             grad = QLinearGradient(0, 0, fw, 0)
             grad.setColorAt(0, self._bar_color(self._pct, 0.65))
             grad.setColorAt(1, self._bar_color(self._pct, 1.0))
             fp = QPainterPath()
-            fp.addRoundedRect(0, 0, fw, 20, 6, 6)
+            fp.addRoundedRect(0, 0, fw, bar_h, max(4, int(6 * self._ui_scale)), max(4, int(6 * self._ui_scale)))
             p.fillPath(fp, QBrush(grad))
 
         # scale
         if self._scale:
-            p.setFont(QFont("Segoe UI", 7))
+            font_px = max(7, int(round(8 * self._ui_scale)))
+            p.setFont(QFont("Segoe UI", font_px))
             p.setPen(self._theme["text_secondary"])
+            label_w = max(18, int(round(24 * self._ui_scale)))
+            label_h = max(10, int(round(12 * self._ui_scale)))
+            y = min(rect.height() - label_h, bar_h + max(2, int(round(3 * self._ui_scale))))
             for i, lb in enumerate(["0", "25", "50", "75", "100"]):
-                x = int(self.width() * i / 4)
-                p.drawText(x - 10, 22, 20, 9, Qt.AlignmentFlag.AlignCenter, lb)
+                xc = int(track_w * i / 4)
+                x = max(0, min(track_w - label_w, xc - label_w // 2))
+                p.drawText(x, y, label_w, label_h, Qt.AlignmentFlag.AlignCenter, lb)
         p.end()
 
 
@@ -325,16 +345,19 @@ def _divider(theme: dict) -> QWidget:
     return w
 
 
-def _toggle_style(theme: dict) -> str:
+def _toggle_style(theme: dict, scale: float = 1.0) -> str:
+    def sp(px: int) -> int:
+        return max(1, int(round(px * scale)))
+
     tp  = theme["text_primary"]
     ts  = theme["text_secondary"]
     bd  = theme["border"]
     return f"""
         QPushButton {{
-            font-size:11px;
-            padding: 4px 10px;
+            font-size:{sp(11)}px;
+            padding: {sp(4)}px {sp(10)}px;
             border: 1px solid rgba({bd.red()},{bd.green()},{bd.blue()},{bd.alpha()});
-            border-radius: 6px;
+            border-radius: {sp(6)}px;
             background: transparent;
             color: rgba({ts.red()},{ts.green()},{ts.blue()},220);
         }}
@@ -362,10 +385,22 @@ class ClaudeWidget(QWidget):
         self._interval = int(self._cfg.value("sync_interval", 300))
         self._aot      = self._cfg.value("always_on_top", "true") == "true"
         self._dark     = self._cfg.value("dark_mode",     "false") == "true"
+        self._widget_scale = 1.0
+        has_opacity = self._cfg.contains("bg_opacity")
+        raw_opacity = int(self._cfg.value("bg_opacity", 0))
+        if self._cfg.value("bg_opacity_mode", "") != "v2":
+            raw_opacity = (100 - raw_opacity) if has_opacity else 0
+            self._cfg.setValue("bg_opacity_mode", "v2")
+            self._cfg.setValue("bg_opacity", raw_opacity)
+        self._bg_opacity = raw_opacity
+        self._bg_opacity = max(0, min(100, self._bg_opacity))
         self._theme    = THEMES["dark"] if self._dark else THEMES["light"]
+        self._resize_border = 8
 
         self._drag_pos    = QPoint()
         self._dragging    = False
+        self._collapsed_height: int | None = None
+        self._internal_toggle_resize = False
         self._is_syncing  = False
         self._worker: FetchWorker | None = None
         self._sync_timer  = QTimer(self)
@@ -373,8 +408,11 @@ class ClaudeWidget(QWidget):
 
         self._setup_window()
         self._build_ui()
+        self.resize(326, max(360, self.sizeHint().height()))
+        QApplication.instance().installEventFilter(self)
         self._setup_tray()
         self._apply_language()
+        self._apply_widget_scale()
         self._apply_theme()
         self._setup_auto_sync()
 
@@ -384,6 +422,10 @@ class ClaudeWidget(QWidget):
         else:
             scr = QApplication.primaryScreen().geometry()
             self.move(scr.width() - self.width() - 24, 24)
+
+        saved_size = self._cfg.value("widget_size")
+        if saved_size:
+            self.resize(saved_size)
 
 
 
@@ -399,8 +441,9 @@ class ClaudeWidget(QWidget):
         self.setWindowFlags(flags)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
-        self.setMinimumWidth(310)
-        self.setMaximumWidth(340)
+        self.setMinimumWidth(220)
+        self.setMinimumHeight(280)
+        self.setMouseTracking(True)
 
     # ── tray ────────────────────────────────────────────────
     def _make_tray_icon(self) -> QIcon:
@@ -482,6 +525,7 @@ class ClaudeWidget(QWidget):
         # Shadow removed because margins are 0 and it wouldn't be visible without clipping
 
         pl = QVBoxLayout(self._panel)
+        self._panel_layout = pl
         pl.setContentsMargins(0, 0, 0, 0)
         pl.setSpacing(0)
 
@@ -498,6 +542,7 @@ class ClaudeWidget(QWidget):
         # content
         cw = QWidget()
         cl = QVBoxLayout(cw)
+        self._content_layout = cl
         cl.setContentsMargins(14, 14, 14, 14)
         cl.setSpacing(12)
         cl.addWidget(self._make_session_card())
@@ -519,13 +564,15 @@ class ClaudeWidget(QWidget):
     def _make_drag_handle(self) -> QWidget:
         w = QWidget()
         w.setObjectName("dragHandle")
-        w.setFixedHeight(20)
+        self._drag_handle = w
+        w.setFixedHeight(self._sp(20))
         w.setCursor(Qt.CursorShape.SizeAllCursor)
         l = QHBoxLayout(w)
+        self._drag_handle_layout = l
         l.setContentsMargins(0, 8, 0, 4)
         l.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._drag_bar = QFrame()
-        self._drag_bar.setFixedSize(36, 4)
+        self._drag_bar.setFixedSize(self._sp(36), self._sp(4))
         self._drag_bar.setObjectName("dragBar")
         l.addWidget(self._drag_bar)
         w.mousePressEvent       = self._drag_press
@@ -538,33 +585,18 @@ class ClaudeWidget(QWidget):
     def _make_header(self) -> QWidget:
         w = QWidget()
         l = QHBoxLayout(w)
+        self._header_layout = l
         l.setContentsMargins(14, 8, 14, 12)
         left = QHBoxLayout(); left.setSpacing(10)
 
         # icon
         header_png = resource_path(os.path.join("assets", "claude-header.png"))
         ico_path = resource_path(os.path.join("assets", "icon.ico"))
-        icon = QLabel()
-        if os.path.isfile(header_png):
-            # Scale to width 48, keeping aspect ratio (~30px height) exact match to text block height
-            px = QPixmap(header_png).scaledToWidth(48, Qt.TransformationMode.SmoothTransformation)
-            icon.setPixmap(px)
-            icon.setFixedSize(48, px.height())
-        elif os.path.isfile(ico_path):
-            px = QIcon(ico_path).pixmap(34, 34)
-            icon.setPixmap(px)
-        else:
-            px = QPixmap(28, 28); px.fill(Qt.GlobalColor.transparent)
-            pp = QPainter(px)
-            pp.setRenderHint(QPainter.RenderHint.Antialiasing)
-            pp.setBrush(QBrush(ORANGE)); pp.setPen(Qt.PenStyle.NoPen)
-            pp.drawRoundedRect(0, 0, 28, 28, 6, 6)
-            pp.setPen(QPen(QColor(255,255,255), 1.5))
-            pp.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-            pp.drawText(QRect(0,0,28,28), Qt.AlignmentFlag.AlignCenter, "AI")
-            pp.end()
-            icon.setPixmap(px)
-        left.addWidget(icon)
+        self._header_icon = QLabel()
+        self._header_png_path = header_png if os.path.isfile(header_png) else None
+        self._header_ico_path = ico_path if os.path.isfile(ico_path) else None
+        self._update_header_icon()
+        left.addWidget(self._header_icon)
 
         info = QVBoxLayout(); info.setSpacing(2)
         tr = QHBoxLayout(); tr.setSpacing(8)
@@ -588,7 +620,7 @@ class ClaudeWidget(QWidget):
 
         # settings button
         self._settings_btn = QPushButton("⚙")
-        self._settings_btn.setFixedSize(28, 28)
+        self._settings_btn.setFixedSize(self._sp(28), self._sp(28))
         self._settings_btn.clicked.connect(self._toggle_settings)
         l.addWidget(self._settings_btn)
         return w
@@ -638,12 +670,29 @@ class ClaudeWidget(QWidget):
         tog.addWidget(self._aot_btn); tog.addWidget(self._dark_btn); tog.addStretch()
         l.addLayout(tog)
 
+        self._sett_opacity_label = QLabel()
+        self._sett_opacity_label.setObjectName("settLabel")
+        l.addWidget(self._sett_opacity_label)
+        orow = QHBoxLayout(); orow.setSpacing(8)
+        self._opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self._opacity_slider.setRange(0, 100)
+        self._opacity_slider.setSingleStep(5)
+        self._opacity_slider.setValue(self._bg_opacity)
+        self._opacity_slider.valueChanged.connect(self._on_opacity_changed)
+        self._opacity_value = QLabel()
+        self._opacity_value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._opacity_value.setFixedWidth(44)
+        orow.addWidget(self._opacity_slider, 1)
+        orow.addWidget(self._opacity_value)
+        l.addLayout(orow)
+
         return w
 
     # session card
     def _make_session_card(self) -> QFrame:
         f = QFrame(); f.setObjectName("glassCard")
         l = QVBoxLayout(f); l.setContentsMargins(14,14,14,14); l.setSpacing(10)
+        self._session_layout = l
         self._card_shadow_session = QGraphicsDropShadowEffect(f)
         self._card_shadow_session.setBlurRadius(8); self._card_shadow_session.setOffset(0,2)
         f.setGraphicsEffect(self._card_shadow_session)
@@ -665,6 +714,7 @@ class ClaudeWidget(QWidget):
     def _make_weekly_card(self) -> QFrame:
         f = QFrame(); f.setObjectName("glassCard")
         l = QVBoxLayout(f); l.setContentsMargins(14,14,14,14); l.setSpacing(10)
+        self._weekly_layout = l
         self._card_shadow_weekly = QGraphicsDropShadowEffect(f)
         self._card_shadow_weekly.setBlurRadius(8); self._card_shadow_weekly.setOffset(0,2)
         f.setGraphicsEffect(self._card_shadow_weekly)
@@ -714,12 +764,87 @@ class ClaudeWidget(QWidget):
         for lbl, secs in [("manual",0),("5m",300),("10m",600),("30m",1800),("1h",3600)]:
             b = QPushButton(lbl); b.setCheckable(True)
             b.setChecked(secs == self._interval)
-            b.setFixedHeight(22)
+            b.setFixedHeight(self._sp(22))
             b.setProperty("isecs", secs)
             b.clicked.connect(lambda _, bb=b: self._set_interval(bb.property("isecs")))
             self._interval_btns[secs] = b
             l.addWidget(b)
         return w
+
+    def _sp(self, px: int) -> int:
+        return max(1, int(round(px * self._widget_scale)))
+
+    def _alpha_color(self, c: QColor, apply_opacity: bool = True) -> QColor:
+        if not apply_opacity:
+            return QColor(c.red(), c.green(), c.blue(), c.alpha())
+        if self._bg_opacity == 0:
+            return QColor(c.red(), c.green(), c.blue(), 255)
+        # 0%: opaque, 100%: fully transparent
+        a = int(round(c.alpha() * (1.0 - (self._bg_opacity / 100.0))))
+        return QColor(c.red(), c.green(), c.blue(), max(0, min(255, a)))
+
+    def _rgba(self, c: QColor) -> str:
+        return f"rgba({c.red()},{c.green()},{c.blue()},{c.alpha()})"
+
+    def _update_header_icon(self):
+        w = self._sp(48)
+        if self._header_png_path:
+            px = QPixmap(self._header_png_path).scaledToWidth(w, Qt.TransformationMode.SmoothTransformation)
+            self._header_icon.setPixmap(px)
+            self._header_icon.setFixedSize(w, px.height())
+            return
+        if self._header_ico_path:
+            side = self._sp(34)
+            self._header_icon.setPixmap(QIcon(self._header_ico_path).pixmap(side, side))
+            self._header_icon.setFixedSize(side, side)
+            return
+
+        side = self._sp(28)
+        px = QPixmap(side, side)
+        px.fill(Qt.GlobalColor.transparent)
+        pp = QPainter(px)
+        pp.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pp.setBrush(QBrush(ORANGE))
+        pp.setPen(Qt.PenStyle.NoPen)
+        rr = max(4, self._sp(6))
+        pp.drawRoundedRect(0, 0, side, side, rr, rr)
+        pp.setPen(QPen(QColor(255, 255, 255), max(1, self._sp(2) / 2)))
+        pp.setFont(QFont("Segoe UI", max(8, self._sp(9)), QFont.Weight.Bold))
+        pp.drawText(QRect(0, 0, side, side), Qt.AlignmentFlag.AlignCenter, "AI")
+        pp.end()
+        self._header_icon.setPixmap(px)
+        self._header_icon.setFixedSize(side, side)
+
+    def _apply_widget_scale(self):
+        self._widget_scale = max(0.7, min(1.6, self.width() / 326.0))
+        self._resize_border = max(6, self._sp(8))
+
+        self._drag_handle.setFixedHeight(self._sp(20))
+        self._drag_handle_layout.setContentsMargins(0, self._sp(8), 0, self._sp(4))
+        self._drag_bar.setFixedSize(self._sp(36), max(2, self._sp(4)))
+        self._header_layout.setContentsMargins(self._sp(14), self._sp(8), self._sp(14), self._sp(12))
+        self._content_layout.setContentsMargins(self._sp(14), self._sp(14), self._sp(14), self._sp(14))
+        self._content_layout.setSpacing(self._sp(12))
+        self._settings_btn.setFixedSize(self._sp(28), self._sp(28))
+        self._session_layout.setContentsMargins(self._sp(14), self._sp(14), self._sp(14), self._sp(14))
+        self._session_layout.setSpacing(self._sp(10))
+        self._weekly_layout.setContentsMargins(self._sp(14), self._sp(14), self._sp(14), self._sp(14))
+        self._weekly_layout.setSpacing(self._sp(10))
+
+        for b in self._interval_btns.values():
+            b.setFixedHeight(self._sp(22))
+
+        self._session_bar.set_scale(self._widget_scale)
+        self._all_models_bar.set_scale(self._widget_scale)
+        self._sonnet_bar.set_scale(self._widget_scale)
+        self._update_header_icon()
+        self.setMinimumSize(max(220, self._sp(220)), max(280, self._sp(280)))
+
+    def _on_opacity_changed(self, value: int):
+        self._bg_opacity = max(0, min(100, int(value)))
+        self._cfg.setValue("bg_opacity", self._bg_opacity)
+        self._opacity_value.setText(f"{self._bg_opacity}%")
+        self._apply_theme()
 
     # footer
     def _make_footer(self) -> QWidget:
@@ -746,27 +871,41 @@ class ClaudeWidget(QWidget):
         ts = t["text_secondary"]
         tpc = f"rgb({tp.red()},{tp.green()},{tp.blue()})"
         tsc = f"rgba({ts.red()},{ts.green()},{ts.blue()},220)"
-        tog = _toggle_style(t)
+        tog = _toggle_style(t, self._widget_scale)
+
+        panel_bg = self._alpha_color(t["panel_bg"])
+        card_bg = self._alpha_color(t["card_bg"])
+        divider_color = self._alpha_color(t["divider"])
+        progress_bg = self._alpha_color(t["progress_bg"])
+        drag_bar = self._alpha_color(t["drag_bar"])
+        border = self._alpha_color(t["border"])
+
+        runtime_theme = dict(t)
+        runtime_theme["progress_bg"] = progress_bg
+        runtime_theme["divider"] = divider_color
+        runtime_theme["drag_bar"] = drag_bar
 
         # panel
-        self._panel.setStyleSheet(t["panel_qss"])
+        self._panel.setStyleSheet(
+            f"#mainPanel{{background:{self._rgba(panel_bg)};border-radius:0px;border:1px solid {self._rgba(border)};}}"
+        )
 
         # drag bar
-        db = t["drag_bar"]
+        db = drag_bar
         self._drag_bar.setStyleSheet(
             f"background:rgba({db.red()},{db.green()},{db.blue()},{db.alpha()});border-radius:2px;"
         )
 
         # header labels
         self._title_lbl.setStyleSheet(
-            f"font-size:15px;font-weight:700;color:{tpc};letter-spacing:-0.2px;"
+            f"font-size:{self._sp(15)}px;font-weight:700;color:{tpc};letter-spacing:-0.2px;"
         )
-        self._status_icon.setStyleSheet(f"font-size:11px;color:{tsc};")
-        self._status_text.setStyleSheet(f"font-size:10px;color:{tsc};")
+        self._status_icon.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tsc};")
+        self._status_text.setStyleSheet(f"font-size:{self._sp(10)}px;color:{tsc};")
         self._settings_btn.setStyleSheet(f"""
             QPushButton {{
                 background:transparent;border:none;
-                color:{tsc};font-size:14px;border-radius:6px;
+                color:{tsc};font-size:{self._sp(14)}px;border-radius:{self._sp(6)}px;
             }}
             QPushButton:hover {{
                 color:rgb(217,119,87);background:rgba(217,119,87,20);
@@ -774,11 +913,12 @@ class ClaudeWidget(QWidget):
         """)
 
         # settings panel
-        for lbl in (self._sett_lang_label, self._sett_cred_label):
-            lbl.setStyleSheet(f"font-size:11px;font-weight:600;color:{tsc};")
+        for lbl in (self._sett_lang_label, self._sett_cred_label, self._sett_opacity_label):
+            lbl.setStyleSheet(f"font-size:{self._sp(11)}px;font-weight:600;color:{tsc};")
         for btn in (self._btn_en, self._btn_ko, self._aot_btn, self._dark_btn):
             btn.setStyleSheet(tog)
-        self._cred_status.setStyleSheet(f"font-size:11px;color:{tpc};")
+        self._cred_status.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tpc};")
+        self._opacity_value.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tpc};")
         self._cred_refresh.setStyleSheet("""
             QPushButton {
                 font-size:10px;font-weight:600;color:rgb(217,119,87);
@@ -789,7 +929,10 @@ class ClaudeWidget(QWidget):
         """)
 
         # cards
-        card_qss = t["card_qss"]
+        card_qss = (
+            f"#glassCard{{background:{self._rgba(card_bg)};"
+            f"border:1px solid {self._rgba(border)};border-radius:{self._sp(12)}px;}}"
+        )
         for f in (self._session_frame, self._weekly_frame):
             f.setStyleSheet(card_qss)
 
@@ -798,50 +941,50 @@ class ClaudeWidget(QWidget):
 
         # card text
         for w in (self._session_title, self._weekly_title):
-            w.setStyleSheet(f"font-size:13px;font-weight:700;color:{tpc};")
+            w.setStyleSheet(f"font-size:{self._sp(13)}px;font-weight:700;color:{tpc};")
         for w in (self._session_pct,):
-            w.setStyleSheet(f"font-size:22px;font-weight:700;color:{SUCCESS.name()};")
+            w.setStyleSheet(f"font-size:{self._sp(22)}px;font-weight:700;color:{SUCCESS.name()};")
         for w in (self._all_models_lbl, self._sonnet_lbl):
-            w.setStyleSheet(f"font-size:12px;font-weight:500;color:{tpc};")
+            w.setStyleSheet(f"font-size:{self._sp(12)}px;font-weight:500;color:{tpc};")
         for w in (self._all_models_pct, self._sonnet_pct):
-            w.setStyleSheet(f"font-size:12px;font-weight:700;color:{SUCCESS.name()};")
+            w.setStyleSheet(f"font-size:{self._sp(12)}px;font-weight:700;color:{SUCCESS.name()};")
         for w in (self._session_reset, self._all_models_reset):
-            w.setStyleSheet(f"font-size:11px;color:{tsc};")
+            w.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tsc};")
         self._learn_more_btn.setStyleSheet(
-            "QPushButton{font-size:10px;color:rgb(217,119,87);background:transparent;border:none;padding:0;}"
+            f"QPushButton{{font-size:{self._sp(10)}px;color:rgb(217,119,87);background:transparent;border:none;padding:0;}}"
             "QPushButton:hover{text-decoration:underline;}"
         )
-        self._auto_sync_lbl.setStyleSheet(f"font-size:11px;color:{tsc};")
-        self._sync_note.setStyleSheet(f"font-size:9px;color:rgba({ts.red()},{ts.green()},{ts.blue()},160);")
+        self._auto_sync_lbl.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tsc};")
+        self._sync_note.setStyleSheet(f"font-size:{self._sp(9)}px;color:rgba({ts.red()},{ts.green()},{ts.blue()},160);")
 
         # interval buttons
         for b in self._interval_btns.values():
             b.setStyleSheet(tog)
 
         # footer
-        self._last_sync_lbl.setStyleSheet(f"font-size:10px;color:{tsc};")
+        self._last_sync_lbl.setStyleSheet(f"font-size:{self._sp(10)}px;color:{tsc};")
         self.findChild(QLabel, "footerSub")  # version label – update via objectName below
         self._sync_btn.setStyleSheet(
-            "QPushButton{font-size:10px;font-weight:600;color:rgb(217,119,87);background:transparent;border:none;}"
+            f"QPushButton{{font-size:{self._sp(10)}px;font-weight:600;color:rgb(217,119,87);background:transparent;border:none;}}"
             "QPushButton:hover{opacity:0.7;}"
         )
         bd = t["border"]
         self.findChildren(QLabel, "footerSep")[0].setStyleSheet(
-            f"font-size:10px;color:rgba({bd.red()},{bd.green()},{bd.blue()},{bd.alpha()});"
+            f"font-size:{self._sp(10)}px;color:rgba({bd.red()},{bd.green()},{bd.blue()},{bd.alpha()});"
         ) if self.findChildren(QLabel, "footerSep") else None
         self._quit_btn.setStyleSheet(
-            "QPushButton{font-size:10px;font-weight:600;color:rgb(248,113,113);background:transparent;border:none;}"
+            f"QPushButton{{font-size:{self._sp(10)}px;font-weight:600;color:rgb(248,113,113);background:transparent;border:none;}}"
             "QPushButton:hover{opacity:0.7;}"
         )
 
         # dividers
         for d in (self._div_after_header, self._div_before_footer, self._weekly_div):
-            dv = t["divider"]
+            dv = divider_color
             d.setStyleSheet(f"background:rgba({dv.red()},{dv.green()},{dv.blue()},{dv.alpha()});")
 
         # progress bars
         for bar in (self._session_bar, self._all_models_bar, self._sonnet_bar):
-            bar.set_theme(t)
+            bar.set_theme(runtime_theme)
 
         # tray icon
         if hasattr(self, "_tray"):
@@ -876,19 +1019,39 @@ class ClaudeWidget(QWidget):
         self._cred_refresh.setText(s["refresh"])
         self._aot_btn.setText(s["alwaysOnTop"])
         self._dark_btn.setText(s["darkMode"])
+        self._sett_opacity_label.setText(s["bgOpacity"])
+        self._opacity_value.setText(f"{self._bg_opacity}%")
         lv = self._cfg.value("last_sync_time", None)
         self._last_sync_lbl.setText(s["lastSync"](lv) if lv else s["never"])
 
     # ── Toggle helpers ────────────────────────────────────────
     def _toggle_settings(self):
         is_visible = self._settings_panel.isVisible()
-        self._settings_panel.setVisible(not is_visible)
-        
-        # When hiding, forcefully crush the window height so the layout bounds it at the new minimum
-        if is_visible:
-            self.setMinimumHeight(1)
-            self.resize(self.width(), 1)
-        self.adjustSize()
+        keep_w = self.width()
+
+        self._internal_toggle_resize = True
+        try:
+            if not is_visible:
+                # Save current (collapsed) height before expanding settings panel.
+                self._collapsed_height = self.height()
+                self._settings_panel.setVisible(True)
+                self.adjustSize()
+                self.resize(keep_w, self.height())
+            else:
+                self._settings_panel.setVisible(False)
+                target_h = self._collapsed_height if self._collapsed_height is not None else self.height()
+                target_h = max(self.minimumHeight(), int(target_h))
+                self.resize(keep_w, target_h)
+                self._cfg.setValue("widget_size", self.size())
+        finally:
+            self._internal_toggle_resize = False
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        self._apply_widget_scale()
+        self._apply_theme()
+        if not self._settings_panel.isVisible() and not self._internal_toggle_resize:
+            self._cfg.setValue("widget_size", self.size())
 
     def _toggle_aot(self):
         self._aot = not self._aot
@@ -1013,9 +1176,8 @@ class ClaudeWidget(QWidget):
         self._status_text.setText(msg)
         self._status_text.setStyleSheet("font-size:10px;color:rgb(248,113,113);")
 
-    @staticmethod
-    def _set_pct_color(lbl: QLabel, pct: float, big: bool = False):
-        sz = "22px" if big else "12px"
+    def _set_pct_color(self, lbl: QLabel, pct: float, big: bool = False):
+        sz = f"{self._sp(22)}px" if big else f"{self._sp(12)}px"
         if pct >= 80:
             c = "rgb(248,113,113)"
         elif pct >= 50:
@@ -1048,6 +1210,70 @@ class ClaudeWidget(QWidget):
     def _drag_release(self, ev):
         self._dragging = False
         self._cfg.setValue("pos", self.pos()); ev.accept()
+
+    def _resize_edges_from_global(self, gp: QPoint):
+        g = self.frameGeometry()
+        b = self._resize_border
+        on_left = g.left() <= gp.x() < g.left() + b
+        on_right = g.right() - b < gp.x() <= g.right()
+        on_top = g.top() <= gp.y() < g.top() + b
+        on_bottom = g.bottom() - b < gp.y() <= g.bottom()
+
+        edges = Qt.Edge(0)
+        if on_left:
+            edges |= Qt.Edge.LeftEdge
+        if on_right:
+            edges |= Qt.Edge.RightEdge
+        if on_top:
+            edges |= Qt.Edge.TopEdge
+        if on_bottom:
+            edges |= Qt.Edge.BottomEdge
+        return edges
+
+    @staticmethod
+    def _cursor_from_edges(edges: Qt.Edge):
+        has_left = bool(edges & Qt.Edge.LeftEdge)
+        has_right = bool(edges & Qt.Edge.RightEdge)
+        has_top = bool(edges & Qt.Edge.TopEdge)
+        has_bottom = bool(edges & Qt.Edge.BottomEdge)
+
+        if (has_left and has_top) or (has_right and has_bottom):
+            return Qt.CursorShape.SizeFDiagCursor
+        if (has_right and has_top) or (has_left and has_bottom):
+            return Qt.CursorShape.SizeBDiagCursor
+        if has_left or has_right:
+            return Qt.CursorShape.SizeHorCursor
+        if has_top or has_bottom:
+            return Qt.CursorShape.SizeVerCursor
+        return None
+
+    def eventFilter(self, obj, ev):
+        if ev.type() == QEvent.Type.MouseMove and hasattr(ev, "globalPosition") and self.isVisible():
+            gp = ev.globalPosition().toPoint()
+            if self.frameGeometry().contains(gp):
+                edges = self._resize_edges_from_global(gp)
+                shape = self._cursor_from_edges(edges)
+                if shape is not None:
+                    self.setCursor(shape)
+                else:
+                    self.unsetCursor()
+            else:
+                self.unsetCursor()
+
+        if ev.type() == QEvent.Type.MouseButtonPress and hasattr(ev, "globalPosition"):
+            if ev.button() == Qt.MouseButton.LeftButton and self.isVisible():
+                gp = ev.globalPosition().toPoint()
+                if self.frameGeometry().contains(gp):
+                    edges = self._resize_edges_from_global(gp)
+                    if edges != Qt.Edge(0):
+                        wh = self.windowHandle()
+                        if wh and wh.startSystemResize(edges):
+                            return True
+
+        if ev.type() == QEvent.Type.Leave:
+            self.unsetCursor()
+
+        return super().eventFilter(obj, ev)
 
     # ── Misc ─────────────────────────────────────────────────
     def _quit(self):
