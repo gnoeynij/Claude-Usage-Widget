@@ -92,7 +92,12 @@ python -m PyInstaller claude_widget.spec --noconfirm --clean
 
 ## 📝 Change Log
 
-**v1.3.1** (현재)
+**v1.3.2** (현재)
+- **자동 업데이트 확인 / 다운로드 / 재시작**: 옵션 패널 하단 `Check for Updates` 버튼 → 새 버전이 있으면 사용자에게 묻고 → 윈도우 `Downloads` 폴더에 다운로드 → 자동 재시작
+- 자체 서버 없이 동작 — public 릴리즈 전용 레포(`Claude-Widget-Releases`)를 GitHub Releases API 엔드포인트로 활용
+- 다운로드 진행률 표시, 취소 가능, 부분 파일은 `.part`로 격리 후 원자적 rename
+
+**v1.3.1**
 - **항상 위 활성 시 작업표시줄 자동 숨김**: `Always on Top`이 켜져 있으면 위젯이 작업표시줄/Alt+Tab에 표시되지 않아 더 깔끔한 데스크탑 위젯으로 동작 (꺼두면 평소처럼 표시)
 - AOT 토글 시 위젯 위치/크기를 보존하도록 안정화
 

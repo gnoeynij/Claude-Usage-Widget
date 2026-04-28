@@ -9,7 +9,7 @@ Header: anthropic-beta: oauth-2025-04-20
 """
 
 from __future__ import annotations
-import sys, os, json, math, random, webbrowser
+import sys, os, json, math, random, subprocess, tempfile, webbrowser
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -30,12 +30,30 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QPushButton, QFrame, QSizePolicy, QSystemTrayIcon, QMenu,
-    QGraphicsDropShadowEffect, QSlider,
+    QGraphicsDropShadowEffect, QSlider, QMessageBox, QProgressDialog,
 )
 
-APP_VERSION   = "v1.3.1"
+APP_VERSION   = "v1.3.2"
 USAGE_URL     = "https://api.anthropic.com/api/oauth/usage"
 LEARN_MORE_URL = "https://support.claude.com/ko/"
+# GitHub Releases API — used as the auto-update backend (no separate server).
+# Releases are published to a small *public* repo so the .exe can call this
+# endpoint anonymously (60 req/h per IP — plenty). Source code stays private
+# in the main repo; only built artifacts go to this releases repo.
+RELEASES_API_URL = "https://api.github.com/repos/gnoeynij/Claude-Widget-Releases/releases/latest"
+
+
+def _version_tuple(v: str) -> tuple[int, ...]:
+    """Parse 'v1.3.10' / '1.3.10' → (1, 3, 10). Pre-release suffixes ignored.
+    Non-numeric components default to 0 so malformed tags don't crash compare."""
+    s = v.lstrip("vV").split("-")[0].split("+")[0]
+    out: list[int] = []
+    for p in s.split("."):
+        try:
+            out.append(int(p))
+        except ValueError:
+            out.append(0)
+    return tuple(out)
 
 # Default app font family — replaced at startup by _load_app_font() if SUIT
 # SemiBold (open-license, sandollcloud) is available either bundled or system-installed.
@@ -205,6 +223,20 @@ I18N: dict[str, dict] = {
         "miniExitTip":    "Click icon to exit mini mode",
         "miniEnterTip":   "Click icon to enter mini mode",
         "rateLimited":    "Rate limited — backing off",
+        "updateSection":  "Updates",
+        "checkForUpdate": "Check for Updates",
+        "checkingUpdate": "Checking…",
+        "upToDate":       lambda v: f"Up to date ({v})",
+        "updateAvailable": lambda v: f"Update available: {v}",
+        "updateAvailableMsg": lambda new, cur: (
+            f"A new version ({new}) is available.\nCurrent: {cur}\n\n"
+            "Download to your Downloads folder and restart now?"
+        ),
+        "downloading":    lambda p: f"Downloading… {p}%",
+        "downloadFailed": "Download failed",
+        "checkFailed":    "Check failed",
+        "restartingNow":  "Restarting…",
+        "cancel":         "Cancel",
     },
     "ko": {
         "appTitle":       "Claude 모니터",
@@ -251,6 +283,20 @@ I18N: dict[str, dict] = {
         "miniExitTip":    "아이콘 클릭 시 미니 모드 종료",
         "miniEnterTip":   "아이콘 클릭 시 미니 모드 진입",
         "rateLimited":    "API 한도 초과 — 자동 재시도 대기",
+        "updateSection":  "업데이트",
+        "checkForUpdate": "업데이트 확인",
+        "checkingUpdate": "확인 중…",
+        "upToDate":       lambda v: f"최신 버전입니다 ({v})",
+        "updateAvailable": lambda v: f"새 버전 사용 가능: {v}",
+        "updateAvailableMsg": lambda new, cur: (
+            f"새 버전 {new}이(가) 있습니다.\n현재: {cur}\n\n"
+            "다운로드 폴더로 받고 지금 재시작할까요?"
+        ),
+        "downloading":    lambda p: f"다운로드 중… {p}%",
+        "downloadFailed": "다운로드 실패",
+        "checkFailed":    "확인 실패",
+        "restartingNow":  "재시작 중…",
+        "cancel":         "취소",
     },
 }
 
@@ -336,6 +382,96 @@ class FetchWorker(QThread):
             "weeklySonnetPercent":     pct(seven_s),
             "planName": "Max (Extra)" if extra.get("is_enabled") else "Max",
         }
+
+
+# ════════════════════════════════════════════════════════════
+#  Update workers — GitHub Releases API as auto-update backend
+# ════════════════════════════════════════════════════════════
+class UpdateCheckWorker(QThread):
+    """Hits GitHub's anonymous Releases API (60 req/h per IP — plenty)."""
+    finished_with = pyqtSignal(dict)
+
+    def run(self):
+        try:
+            resp = SESSION.get(
+                RELEASES_API_URL, timeout=10,
+                headers={"Accept": "application/vnd.github+json"},
+            )
+        except Exception as e:
+            self.finished_with.emit({"error": str(e)[:80]})
+            return
+        if resp.status_code != 200:
+            self.finished_with.emit({"error": f"HTTP {resp.status_code}"})
+            return
+        try:
+            j = resp.json()
+        except Exception:
+            self.finished_with.emit({"error": "JSON_PARSE_ERROR"})
+            return
+        tag = j.get("tag_name", "") or ""
+        # Pick the first .exe asset — releases are produced by our gh release script.
+        exe_url = ""
+        exe_name = "Claude-Widget.exe"
+        for a in j.get("assets", []) or []:
+            name = (a.get("name") or "")
+            if name.lower().endswith(".exe"):
+                exe_url = a.get("browser_download_url") or ""
+                exe_name = name or exe_name
+                break
+        self.finished_with.emit({"latest": tag, "url": exe_url, "name": exe_name})
+
+
+class UpdateDownloadWorker(QThread):
+    """Streams the new .exe to disk with progress signaling.
+
+    Writes to <dest>.part then renames atomically — partial files won't pollute
+    the user's Downloads folder if they cancel mid-flight."""
+    progress = pyqtSignal(int)
+    finished_with = pyqtSignal(dict)
+
+    def __init__(self, url: str, dest_path: str, parent=None):
+        super().__init__(parent)
+        self._url = url
+        self._dest = dest_path
+        self._cancel = False
+
+    def cancel(self):
+        self._cancel = True
+
+    def run(self):
+        tmp = self._dest + ".part"
+        try:
+            with SESSION.get(self._url, stream=True, timeout=30, allow_redirects=True) as r:
+                if r.status_code != 200:
+                    self.finished_with.emit({"error": f"HTTP {r.status_code}"})
+                    return
+                total = int(r.headers.get("Content-Length") or 0)
+                got = 0
+                last_pct = -1
+                with open(tmp, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=64 * 1024):
+                        if self._cancel:
+                            try: os.remove(tmp)
+                            except Exception: pass
+                            self.finished_with.emit({"error": "CANCELLED"})
+                            return
+                        if not chunk:
+                            continue
+                        f.write(chunk)
+                        got += len(chunk)
+                        if total:
+                            pct = int(got * 100 / total)
+                            if pct != last_pct:
+                                self.progress.emit(pct)
+                                last_pct = pct
+            if os.path.exists(self._dest):
+                os.remove(self._dest)
+            os.rename(tmp, self._dest)
+            self.finished_with.emit({"path": self._dest})
+        except Exception as e:
+            try: os.remove(tmp)
+            except Exception: pass
+            self.finished_with.emit({"error": str(e)[:80]})
 
 
 # ════════════════════════════════════════════════════════════
@@ -484,6 +620,10 @@ class ClaudeWidget(QWidget):
         self._internal_toggle_resize = False
         self._is_syncing  = False
         self._worker: FetchWorker | None = None
+        # Update-check / download workers (manual, triggered from settings panel).
+        self._update_check_worker: UpdateCheckWorker | None = None
+        self._dl_worker: UpdateDownloadWorker | None = None
+        self._dl_progress: QProgressDialog | None = None
         # Single-shot timer re-armed by _schedule_next_sync() after each fetch.
         # This lets us apply jitter/backoff per-cycle instead of a fixed interval —
         # important when one Anthropic account is shared across multiple PCs.
@@ -809,6 +949,20 @@ class ClaudeWidget(QWidget):
         orow.addWidget(self._opacity_slider, 1)
         orow.addWidget(self._opacity_value)
         l.addLayout(orow)
+
+        # Update section — last block in the panel so it doesn't push more
+        # commonly-used controls below the fold.
+        self._sett_update_label = QLabel()
+        self._sett_update_label.setObjectName("settLabel")
+        l.addWidget(self._sett_update_label)
+        ur = QHBoxLayout(); ur.setSpacing(8)
+        self._update_btn = QPushButton()
+        self._update_btn.clicked.connect(self._check_for_updates)
+        self._update_status = QLabel("")
+        self._update_status.setWordWrap(True)
+        self._update_status.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        ur.addWidget(self._update_btn); ur.addWidget(self._update_status, 1)
+        l.addLayout(ur)
 
         return w
 
@@ -1281,21 +1435,26 @@ class ClaudeWidget(QWidget):
 
         # settings panel
         for lbl in (self._sett_lang_label, self._sett_cred_label,
-                    self._sett_opacity_label, self._auto_sync_lbl):
+                    self._sett_opacity_label, self._auto_sync_lbl,
+                    self._sett_update_label):
             lbl.setStyleSheet(f"font-size:{self._sp(11)}px;font-weight:600;color:{tsc};")
         for btn in (self._btn_en, self._btn_ko, self._aot_btn,
                     self._dark_btn):
             btn.setStyleSheet(tog)
         self._cred_status.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tpc};")
+        self._update_status.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tpc};")
         self._opacity_value.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tpc};")
-        self._cred_refresh.setStyleSheet("""
+        accent_btn_qss = """
             QPushButton {
                 font-size:10px;font-weight:600;color:rgb(217,119,87);
                 background:rgba(217,119,87,20);border:1px solid rgba(217,119,87,60);
                 border-radius:4px;padding:3px 8px;
             }
             QPushButton:hover { background:rgba(217,119,87,40); }
-        """)
+            QPushButton:disabled { color:rgba(217,119,87,120); }
+        """
+        self._cred_refresh.setStyleSheet(accent_btn_qss)
+        self._update_btn.setStyleSheet(accent_btn_qss)
 
         # cards
         card_qss = (
@@ -1445,6 +1604,8 @@ class ClaudeWidget(QWidget):
         self._header_icon.setToolTip(s["miniEnterTip"])
         self._sett_opacity_label.setText(s["bgOpacity"])
         self._opacity_value.setText(f"{self._bg_opacity}%")
+        self._sett_update_label.setText(s["updateSection"])
+        self._update_btn.setText(s["checkForUpdate"])
         lv = self._cfg.value("last_sync_time", None)
         self._last_sync_lbl.setText(s["lastSync"](lv) if lv else s["never"])
 
@@ -1515,6 +1676,147 @@ class ClaudeWidget(QWidget):
         if not self._settings_panel.isVisible() and not self._internal_toggle_resize:
             key = "widget_size_mini" if self._mini_mode else "widget_size"
             self._cfg.setValue(key, self.size())
+
+    # ── Update check / download ─────────────────────────────
+    def _check_for_updates(self):
+        if self._update_check_worker is not None or self._dl_worker is not None:
+            return
+        s = I18N[self._lang]
+        self._update_btn.setEnabled(False)
+        self._update_status.setText(s["checkingUpdate"])
+        self._update_check_worker = UpdateCheckWorker(self)
+        self._update_check_worker.finished_with.connect(self._on_update_check_done)
+        self._update_check_worker.finished.connect(self._update_check_worker.deleteLater)
+        self._update_check_worker.start()
+
+    def _on_update_check_done(self, res: dict):
+        self._update_check_worker = None
+        self._update_btn.setEnabled(True)
+        s = I18N[self._lang]
+        if "error" in res:
+            self._update_status.setText(f"{s['checkFailed']}: {res['error']}")
+            return
+        latest = res.get("latest", "")
+        cur    = APP_VERSION
+        if not latest or _version_tuple(latest) <= _version_tuple(cur):
+            self._update_status.setText(s["upToDate"](cur))
+            return
+        url  = res.get("url", "")
+        name = res.get("name", "Claude-Widget.exe")
+        if not url:
+            self._update_status.setText(f"{s['checkFailed']}: no .exe asset")
+            return
+        self._update_status.setText(s["updateAvailable"](latest))
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(s["checkForUpdate"])
+        box.setText(s["updateAvailableMsg"](latest, cur))
+        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        box.setDefaultButton(QMessageBox.StandardButton.Yes)
+        if box.exec() != QMessageBox.StandardButton.Yes:
+            return
+        self._begin_update_download(url, name, latest)
+
+    def _begin_update_download(self, url: str, name: str, latest: str):
+        s = I18N[self._lang]
+        downloads = self._windows_downloads_dir()
+        base, ext = os.path.splitext(name)
+        # Stamp the version in the filename so users can keep multiple builds.
+        if latest and latest.lstrip("vV") not in base:
+            fname = f"{base}-{latest}{ext}"
+        else:
+            fname = name
+        dest = self._unique_path(os.path.join(downloads, fname))
+
+        self._update_btn.setEnabled(False)
+        self._dl_progress = QProgressDialog(
+            s["downloading"](0), s["cancel"], 0, 100, self
+        )
+        self._dl_progress.setWindowTitle(s["checkForUpdate"])
+        self._dl_progress.setWindowModality(Qt.WindowModality.WindowModal)
+        self._dl_progress.setMinimumDuration(0)
+        self._dl_progress.setAutoClose(False)
+        self._dl_progress.setAutoReset(False)
+
+        self._dl_worker = UpdateDownloadWorker(url, dest, self)
+        self._dl_worker.progress.connect(self._on_download_progress)
+        self._dl_worker.finished_with.connect(self._on_download_done)
+        self._dl_worker.finished.connect(self._dl_worker.deleteLater)
+        self._dl_progress.canceled.connect(self._dl_worker.cancel)
+        self._dl_worker.start()
+        self._dl_progress.show()
+
+    def _on_download_progress(self, pct: int):
+        s = I18N[self._lang]
+        if self._dl_progress is not None:
+            self._dl_progress.setValue(pct)
+            self._dl_progress.setLabelText(s["downloading"](pct))
+
+    def _on_download_done(self, res: dict):
+        s = I18N[self._lang]
+        if self._dl_progress is not None:
+            self._dl_progress.close()
+            self._dl_progress = None
+        self._dl_worker = None
+        self._update_btn.setEnabled(True)
+        if "error" in res:
+            if res["error"] == "CANCELLED":
+                self._update_status.setText("")
+            else:
+                self._update_status.setText(f"{s['downloadFailed']}: {res['error']}")
+                QMessageBox.warning(self, s["checkForUpdate"],
+                                    f"{s['downloadFailed']}\n{res['error']}")
+            return
+        new_path = res["path"]
+        self._update_status.setText(s["restartingNow"])
+        self._restart_with_new_exe(new_path)
+
+    def _windows_downloads_dir(self) -> str:
+        """Resolve the user's Downloads folder. The on-disk name is always
+        'Downloads' even on localized Windows (the folder is just *displayed*
+        with the localized label), so a simple join is reliable."""
+        p = Path.home() / "Downloads"
+        if p.is_dir():
+            return str(p)
+        return str(Path.home())
+
+    def _unique_path(self, path: str) -> str:
+        if not os.path.exists(path):
+            return path
+        base, ext = os.path.splitext(path)
+        i = 1
+        while os.path.exists(f"{base} ({i}){ext}"):
+            i += 1
+        return f"{base} ({i}){ext}"
+
+    def _restart_with_new_exe(self, new_exe_path: str):
+        """Spawn a detached helper that waits 2s (so our single-instance mutex
+        is released), then launches the new exe. We then quit the current app."""
+        bat_path = Path(tempfile.gettempdir()) / "claude_widget_restart.bat"
+        bat_path.write_text(
+            "@echo off\r\n"
+            "timeout /t 2 /nobreak >nul\r\n"
+            f'start "" "{new_exe_path}"\r\n'
+            'del "%~f0"\r\n',
+            encoding="ascii",
+        )
+        DETACHED_PROCESS = 0x00000008
+        CREATE_NO_WINDOW = 0x08000000
+        try:
+            subprocess.Popen(
+                ["cmd", "/c", str(bat_path)],
+                creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
+                close_fds=True,
+            )
+        except Exception:
+            # If we can't spawn the helper, surface the path so the user can run it.
+            QMessageBox.information(
+                self, I18N[self._lang]["checkForUpdate"],
+                f"{new_exe_path}",
+            )
+            return
+        self._tray.hide()
+        QApplication.quit()
 
     def _toggle_aot(self):
         self._aot = not self._aot
