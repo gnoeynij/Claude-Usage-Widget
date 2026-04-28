@@ -33,7 +33,7 @@ from PyQt6.QtWidgets import (
     QGraphicsDropShadowEffect, QSlider, QMessageBox, QProgressDialog,
 )
 
-APP_VERSION   = "v1.3.2"
+APP_VERSION   = "v1.3.3"
 USAGE_URL     = "https://api.anthropic.com/api/oauth/usage"
 LEARN_MORE_URL = "https://support.claude.com/ko/"
 # GitHub Releases API — used as the auto-update backend (no separate server).
@@ -237,6 +237,8 @@ I18N: dict[str, dict] = {
         "checkFailed":    "Check failed",
         "restartingNow":  "Restarting…",
         "cancel":         "Cancel",
+        "upToDateShort":   "✓ Up to date",
+        "newVersionShort": lambda v: f"● New: {v}",
     },
     "ko": {
         "appTitle":       "Claude 모니터",
@@ -297,6 +299,8 @@ I18N: dict[str, dict] = {
         "checkFailed":    "확인 실패",
         "restartingNow":  "재시작 중…",
         "cancel":         "취소",
+        "upToDateShort":   "✓ 최신 버전",
+        "newVersionShort": lambda v: f"● 새 버전 {v}",
     },
 }
 
@@ -652,6 +656,10 @@ class ClaudeWidget(QWidget):
         self._apply_theme()
         self._apply_mini_mode(initial=True)
         self._setup_auto_sync()
+        # One-shot startup version check — populates the short status next to
+        # the "Check for Updates" button. 1.5s delay so the UI is fully visible
+        # and the usage-API sync gets a head start.
+        QTimer.singleShot(1500, self._startup_update_check)
 
         pos = self._cfg.value("pos")
         if pos:
@@ -1678,6 +1686,30 @@ class ClaudeWidget(QWidget):
             self._cfg.setValue(key, self.size())
 
     # ── Update check / download ─────────────────────────────
+    def _startup_update_check(self):
+        """One-shot silent check at program launch — populates the short
+        status next to the update button. Errors are suppressed because
+        the user didn't request this check."""
+        if self._update_check_worker is not None:
+            return
+        self._update_check_worker = UpdateCheckWorker(self)
+        self._update_check_worker.finished_with.connect(self._on_startup_update_check_done)
+        self._update_check_worker.finished.connect(self._update_check_worker.deleteLater)
+        self._update_check_worker.start()
+
+    def _on_startup_update_check_done(self, res: dict):
+        self._update_check_worker = None
+        if "error" in res:
+            return
+        latest = res.get("latest", "")
+        if not latest:
+            return
+        s = I18N[self._lang]
+        if _version_tuple(latest) <= _version_tuple(APP_VERSION):
+            self._update_status.setText(s["upToDateShort"])
+        else:
+            self._update_status.setText(s["newVersionShort"](latest))
+
     def _check_for_updates(self):
         if self._update_check_worker is not None or self._dl_worker is not None:
             return

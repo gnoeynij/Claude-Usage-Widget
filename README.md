@@ -92,7 +92,11 @@ python -m PyInstaller claude_widget.spec --noconfirm --clean
 
 ## 📝 Change Log
 
-**v1.3.2** (현재)
+**v1.3.3** (현재)
+- **시작 시 1회 자동 버전 체크**: 위젯 실행 후 약 1.5초 뒤, 옵션 패널 `Check for Updates` 버튼 옆에 `✓ 최신 버전` 또는 `● 새 버전 vX.Y.Z`가 짧게 표시됨 (네트워크 오류 시 무표시)
+- 사용자가 직접 누르는 수동 체크 흐름은 그대로 유지
+
+**v1.3.2**
 - **자동 업데이트 확인 / 다운로드 / 재시작**: 옵션 패널 하단 `Check for Updates` 버튼 → 새 버전이 있으면 사용자에게 묻고 → 윈도우 `Downloads` 폴더에 다운로드 → 자동 재시작
 - 자체 서버 없이 동작 — public 릴리즈 전용 레포(`Claude-Widget-Releases`)를 GitHub Releases API 엔드포인트로 활용
 - 다운로드 진행률 표시, 취소 가능, 부분 파일은 `.part`로 격리 후 원자적 rename
