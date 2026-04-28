@@ -33,7 +33,7 @@ from PyQt6.QtWidgets import (
     QGraphicsDropShadowEffect, QSlider,
 )
 
-APP_VERSION   = "v1.3.0"
+APP_VERSION   = "v1.3.1"
 USAGE_URL     = "https://api.anthropic.com/api/oauth/usage"
 LEARN_MORE_URL = "https://support.claude.com/ko/"
 
@@ -528,13 +528,11 @@ class ClaudeWidget(QWidget):
 
     # ── window ──────────────────────────────────────────────
     def _setup_window(self):
-        # NOTE: Qt.WindowType.Tool 은 삭제 — Tool 창은 작업표시줄에서 자동 제외됨
-        flags = (
-            Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-        )
-        if not self._aot:
-            flags &= ~Qt.WindowType.WindowStaysOnTopHint
+        # Qt.WindowType.Tool 은 작업표시줄에서 창을 자동 제외시킨다.
+        # AOT 활성 시에만 Tool 플래그를 켜서 "항상 위 → 작업표시줄 숨김"으로 묶는다.
+        flags = Qt.WindowType.FramelessWindowHint
+        if self._aot:
+            flags |= Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool
         self.setWindowFlags(flags)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
@@ -1522,12 +1520,16 @@ class ClaudeWidget(QWidget):
         self._aot = not self._aot
         self._cfg.setValue("always_on_top", "true" if self._aot else "false")
         self._aot_btn.setChecked(self._aot)
+        # Preserve geometry — setWindowFlags can re-create the native window
+        # and reset position/size on some Windows compositor paths.
+        geo = self.geometry()
         flags = self.windowFlags()
         if self._aot:
-            flags |= Qt.WindowType.WindowStaysOnTopHint
+            flags |= Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool
         else:
-            flags &= ~Qt.WindowType.WindowStaysOnTopHint
+            flags &= ~(Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
         self.setWindowFlags(flags)
+        self.setGeometry(geo)
         self.show()
         self._rebuild_tray_menu()
 
