@@ -1760,6 +1760,13 @@ class ClaudeWidget(QWidget):
             fname = name
         dest = self._unique_path(os.path.join(downloads, fname))
 
+        # Open Explorer at the Downloads folder so the user can watch the file
+        # land. Silent on failure — the download itself is unaffected.
+        try:
+            os.startfile(downloads)
+        except Exception:
+            pass
+
         self._update_btn.setEnabled(False)
         self._dl_progress = QProgressDialog(
             s["downloading"](0), s["cancel"], 0, 100, self
