@@ -54,6 +54,13 @@
    - **설정**: 헤더 ⚙ 버튼 (옵션 패널 토글)
 4. **자동 동기화**: 옵션 패널 → Auto-sync 항목 → `Off / 5m / 10m / 30m / 1h` 선택. **기본값은 10분** — 다중 PC 환경에서도 부담이 적습니다.
 
+<p align="center">
+  <img src="docs/claude_widget_full_mode.png" alt="Full Mode" width="32%">
+  <img src="docs/claude_widget_options.png" alt="Options Panel" width="32%">
+  <img src="docs/claude_widget_mini_mode.png" alt="Mini Mode" width="32%">
+</p>
+<p align="center"><sub>풀 모드 · 옵션 패널 · 미니 모드</sub></p>
+
 ---
 
 ## 🛠️ Build from Source (직접 빌드하기)
