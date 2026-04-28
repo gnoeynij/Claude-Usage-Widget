@@ -1,5 +1,6 @@
 # IDE
 .idea/
+.claude/
 
 # Python cache
 __pycache__/
@@ -9,4 +10,7 @@ __pycache__/
 Source/build/
 Source/dist/
 Source/__pycache__/
+
+# Release archives (regenerated per release; .exe is the canonical artifact)
+Release/*.zip
 

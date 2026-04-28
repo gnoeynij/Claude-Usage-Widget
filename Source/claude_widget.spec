@@ -12,6 +12,15 @@ a = Analysis(
     datas=[
         (os.path.join(ROOT, 'assets', 'icon.ico'), 'assets'),  # bundle icon
         (os.path.join(ROOT, 'assets', 'claude-header.png'), 'assets'),  # bundle header icon
+        # Bundle the entire fonts/ directory (only if it exists at build time).
+        # Drop SUIT-SemiBold.ttf into Source/assets/fonts/ before building
+        # to ship it with the binary; otherwise the runtime falls back to
+        # system-installed SUIT or Segoe UI.
+        *(
+            [(os.path.join(ROOT, 'assets', 'fonts'), 'assets/fonts')]
+            if os.path.isdir(os.path.join(ROOT, 'assets', 'fonts'))
+            else []
+        ),
     ],
     hiddenimports=[
         'PyQt6.QtCore',

@@ -9,7 +9,7 @@ Header: anthropic-beta: oauth-2025-04-20
 """
 
 from __future__ import annotations
-import sys, os, json, math, webbrowser
+import sys, os, json, math, random, webbrowser
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -24,20 +24,74 @@ from PyQt6.QtCore import (
     Qt, QTimer, QPoint, QSettings, QThread, pyqtSignal, QRect, QEvent,
 )
 from PyQt6.QtGui import (
-    QColor, QPainter, QPainterPath, QFont, QIcon, QPixmap,
+    QColor, QPainter, QPainterPath, QFont, QFontDatabase, QIcon, QPixmap,
     QBrush, QPen, QLinearGradient, QAction,
 )
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QPushButton, QFrame, QSizePolicy, QSystemTrayIcon, QMenu,
     QGraphicsDropShadowEffect, QSlider,
 )
 
-APP_VERSION   = "v1.2.0"
+APP_VERSION   = "v1.3.0"
 USAGE_URL     = "https://api.anthropic.com/api/oauth/usage"
 LEARN_MORE_URL = "https://support.claude.com/ko/"
 
+# Default app font family — replaced at startup by _load_app_font() if SUIT
+# SemiBold (open-license, sandollcloud) is available either bundled or system-installed.
+APP_FONT_FAMILY = "Segoe UI"
+
+# ── UI sizing & scaling ─────────────────────────────────────
+DEFAULT_WIDGET_WIDTH = 326                      # design width — scale 1.0 baseline
+SCALE_FLOOR, SCALE_CEIL = 0.85, 1.6             # clamp range for self._widget_scale
+SCALE_QUANTUM = 0.05                            # quantize to this step → smooth resize
+FULL_MIN_W, FULL_MIN_H = 280, 450               # full-mode minimum widget size
+# 178 = empirical floor that fits "Sonnet 100%" in English at scale 0.85
+# (panel border 2 + padding 4 + icon 51 + spacing 5 + label 50 + gap 3 + pct 60
+#  = 175 exact, plus 3px buffer for sub-pixel font rendering).
+# Korean labels are narrower so they fit comfortably at the same floor.
+MINI_MIN_W, MINI_MIN_H = 178, 95                # mini-mode minimum widget size
+
+# Mini view: label ↔ percent gap is adaptive — full at wide, tight at narrow.
+MINI_GAP_BASE   = 38                            # sp(38) ≈ 1cm at 96 DPI
+MINI_GAP_OFFSET = 15                            # absolute offset on top of sp(BASE)
+MINI_GAP_TIGHT  = 4                             # collapsed gap at narrow width
+MINI_GAP_FULL_AT  = 240                         # widget widths at/above this → full gap
+MINI_GAP_FLOOR_AT = 178                         # widget widths at/below this → tight gap
+
+# ── Auto-sync ───────────────────────────────────────────────
+DEFAULT_SYNC_INTERVAL_SEC = 600                 # 10 min — gentle on shared accounts
+RATE_LIMIT_BACKOFF_CAP_EXP = 4                  # 2^4 = 16× max backoff multiplier
+SYNC_STARTUP_JITTER_MS = 2000                   # 0–N random delay before first sync
+SYNC_JITTER_RATIO = 0.10                        # ±10% per-cycle interval jitter
+
 SESSION = requests.Session()
+
+
+def _load_app_font() -> str:
+    """Resolve the application font family.
+
+    Lookup order (first match wins):
+      1. Bundled  Source/assets/fonts/SUIT-SemiBold.ttf  (loaded into QFontDatabase)
+      2. System-installed family containing 'suit' in its name (case-insensitive)
+      3. Segoe UI fallback
+
+    Returns the family name to pass into QFont(...). Safe to call before any
+    widgets are constructed — only depends on QApplication being instantiated.
+    """
+    bundled = resource_path(os.path.join("assets", "fonts", "SUIT-SemiBold.ttf"))
+    if os.path.isfile(bundled):
+        font_id = QFontDatabase.addApplicationFont(bundled)
+        if font_id != -1:
+            families = QFontDatabase.applicationFontFamilies(font_id)
+            if families:
+                return families[0]
+    # System-installed fallback — match 'suit' loosely so both 'SUIT'
+    # and 'SUIT SemiBold' (depending on installer) are accepted.
+    for fam in QFontDatabase.families():
+        if "suit" in fam.lower():
+            return fam
+    return "Segoe UI"
 
 # ────────────────────────────────────────────────────────────
 #  Theme palettes
@@ -119,7 +173,7 @@ I18N: dict[str, dict] = {
         "sonnetOnly":     "Sonnet only",
         "learnMore":      "Learn more",
         "autoSync":       "Auto-sync",
-        "syncNote":       "Note: API has rate limits. Min 5 min recommended.",
+        "syncNote":       "Note: API has rate limits. Min 10 min recommended.",
         "sync":           "Sync",
         "quit":           "Quit",
         "closeWindow":    "Close",
@@ -128,6 +182,10 @@ I18N: dict[str, dict] = {
         "resetsSoon":     "Resets soon",
         "resetsIn":       lambda h, m: (f"Resets in {h}h {m}m" if h > 0 else f"Resets in {m}m"),
         "resetsAt":       lambda d: f"Resets {d}",
+        "formatResetTime": lambda wd, h, m: (
+            f"{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][wd]} "
+            f"{h % 12 or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
+        ),
         "lastSync":       lambda t: f"last sync {t}",
         "language":       "Language",
         "credentials":    "Credentials",
@@ -139,6 +197,14 @@ I18N: dict[str, dict] = {
         "trayRunning":    "Running in system tray",
         "widgetSize":     "Widget size",
         "bgOpacity":      "Background opacity",
+        "manual":         "Off",
+        "miniMode":       "Mini",
+        "miniSession":    "Session",
+        "miniAll":        "All",
+        "miniSonnet":     "Sonnet",
+        "miniExitTip":    "Click icon to exit mini mode",
+        "miniEnterTip":   "Click icon to enter mini mode",
+        "rateLimited":    "Rate limited — backing off",
     },
     "ko": {
         "appTitle":       "Claude 모니터",
@@ -152,7 +218,7 @@ I18N: dict[str, dict] = {
         "sonnetOnly":     "Sonnet 전용",
         "learnMore":      "자세히 알아보기",
         "autoSync":       "자동 동기화",
-        "syncNote":       "참고: API 속도 제한. 최소 5분 권장.",
+        "syncNote":       "참고: API 속도 제한. 최소 10분 권장.",
         "sync":           "동기화",
         "quit":           "종료",
         "closeWindow":    "닫기",
@@ -161,6 +227,11 @@ I18N: dict[str, dict] = {
         "resetsSoon":     "곧 초기화",
         "resetsIn":       lambda h, m: (f"{h}시간 {m}분 후 초기화" if h > 0 else f"{m}분 후 초기화"),
         "resetsAt":       lambda d: f"{d}에 초기화",
+        "formatResetTime": lambda wd, h, m: (
+            f"{['월','화','수','목','금','토','일'][wd]}요일 "
+            f"{'오전' if h < 12 else '오후'} "
+            f"{h % 12 or 12}:{m:02d}"
+        ),
         "lastSync":       lambda t: f"마지막 동기화 {t}",
         "language":       "언어",
         "credentials":    "인증 정보",
@@ -172,6 +243,14 @@ I18N: dict[str, dict] = {
         "trayRunning":    "트레이에서 실행 중",
         "widgetSize":     "위젯 크기",
         "bgOpacity":      "배경 투명도",
+        "manual":         "수동",
+        "miniMode":       "미니",
+        "miniSession":    "세션",
+        "miniAll":        "전체",
+        "miniSonnet":     "Sonnet",
+        "miniExitTip":    "아이콘 클릭 시 미니 모드 종료",
+        "miniEnterTip":   "아이콘 클릭 시 미니 모드 진입",
+        "rateLimited":    "API 한도 초과 — 자동 재시도 대기",
     },
 }
 
@@ -236,15 +315,13 @@ class FetchWorker(QThread):
             except Exception:
                 pass
 
-        weekly_reset_date = ""
+        # Weekly reset: emit raw components so the UI thread can localize.
+        weekly_reset = None
         if seven_d.get("resets_at"):
             try:
                 rd  = datetime.fromisoformat(seven_d["resets_at"].replace("Z", "+00:00"))
                 loc = rd.astimezone()
-                day = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][loc.weekday()]
-                h12 = loc.hour % 12 or 12
-                ap  = "AM" if loc.hour < 12 else "PM"
-                weekly_reset_date = f"{day} {h12}:{loc.minute:02d} {ap}"
+                weekly_reset = (loc.weekday(), loc.hour, loc.minute)
             except Exception:
                 pass
 
@@ -255,7 +332,7 @@ class FetchWorker(QThread):
             "sessionUsagePercent":     pct(five_h),
             "sessionResetSeconds":     session_reset_secs,
             "weeklyAllModelsPercent":  pct(seven_d),
-            "weeklyAllModelsResetDate": weekly_reset_date,
+            "weeklyAllModelsReset":    weekly_reset,
             "weeklySonnetPercent":     pct(seven_s),
             "planName": "Max (Extra)" if extra.get("is_enabled") else "Max",
         }
@@ -321,7 +398,7 @@ class ProgressBar(QWidget):
         # scale
         if self._scale:
             font_px = max(7, int(round(8 * self._ui_scale)))
-            p.setFont(QFont("Segoe UI", font_px))
+            p.setFont(QFont(APP_FONT_FAMILY, font_px))
             p.setPen(self._theme["text_secondary"])
             label_w = max(18, int(round(24 * self._ui_scale)))
             label_h = max(10, int(round(12 * self._ui_scale)))
@@ -382,7 +459,10 @@ class ClaudeWidget(QWidget):
         super().__init__()
         self._cfg = QSettings("ClaudeWidget", "Claude-Widget-Cross")
         self._lang     = self._cfg.value("lang",          "en")
-        self._interval = int(self._cfg.value("sync_interval", 300))
+        # Default auto-sync = 10 min — gentler on the API when one Anthropic
+        # account is shared across multiple PCs (combined with the jitter +
+        # exponential-backoff logic in _schedule_next_sync).
+        self._interval = int(self._cfg.value("sync_interval", DEFAULT_SYNC_INTERVAL_SEC))
         self._aot      = self._cfg.value("always_on_top", "true") == "true"
         self._dark     = self._cfg.value("dark_mode",     "false") == "true"
         self._widget_scale = 1.0
@@ -394,6 +474,7 @@ class ClaudeWidget(QWidget):
             self._cfg.setValue("bg_opacity", raw_opacity)
         self._bg_opacity = raw_opacity
         self._bg_opacity = max(0, min(100, self._bg_opacity))
+        self._mini_mode = self._cfg.value("mini_mode", "false") == "true"
         self._theme    = THEMES["dark"] if self._dark else THEMES["light"]
         self._resize_border = 8
 
@@ -403,8 +484,23 @@ class ClaudeWidget(QWidget):
         self._internal_toggle_resize = False
         self._is_syncing  = False
         self._worker: FetchWorker | None = None
+        # Single-shot timer re-armed by _schedule_next_sync() after each fetch.
+        # This lets us apply jitter/backoff per-cycle instead of a fixed interval —
+        # important when one Anthropic account is shared across multiple PCs.
         self._sync_timer  = QTimer(self)
+        self._sync_timer.setSingleShot(True)
         self._sync_timer.timeout.connect(self.do_sync)
+        self._consecutive_429 = 0  # exponential-backoff counter for rate limits
+
+        # Runtime state — survives _apply_theme() overrides
+        self._status_state: str = "checking"   # "checking" | "connected" | "error"
+        self._status_error_key: str | None = None  # i18n key for error, if applicable
+        self._status_error_raw: str | None = None  # raw error text fallback
+        self._last_session_pct: float | None = None
+        self._last_all_pct: float | None = None
+        self._last_sonnet_pct: float | None = None
+        self._last_reset: tuple | None = None  # (weekday, hour, minute)
+        self._cred_present: bool | None = None
 
         self._setup_window()
         self._build_ui()
@@ -414,6 +510,7 @@ class ClaudeWidget(QWidget):
         self._apply_language()
         self._apply_widget_scale()
         self._apply_theme()
+        self._apply_mini_mode(initial=True)
         self._setup_auto_sync()
 
         pos = self._cfg.value("pos")
@@ -461,7 +558,7 @@ class ClaudeWidget(QWidget):
         p.setPen(Qt.PenStyle.NoPen)
         p.drawRoundedRect(2, 2, 28, 28, 6, 6)
         p.setPen(QPen(QColor(255, 255, 255), 1.8))
-        p.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        p.setFont(QFont(APP_FONT_FAMILY, 10, QFont.Weight.Bold))
         p.drawText(QRect(0, 0, 32, 32), Qt.AlignmentFlag.AlignCenter, "C")
         p.end()
         return QIcon(px)
@@ -502,6 +599,7 @@ class ClaudeWidget(QWidget):
         m.addSeparator()
         m.addAction(act(s["alwaysOnTop"], self._toggle_aot, True, self._aot))
         m.addAction(act(s["darkMode"],    self._toggle_dark, True, self._dark))
+        m.addAction(act(s["miniMode"],    self._toggle_mini, True, self._mini_mode))
         m.addSeparator()
         lm = m.addMenu(s["language"])
         lm.addAction(act("English",  lambda: self._set_lang("en")))
@@ -530,7 +628,8 @@ class ClaudeWidget(QWidget):
         pl.setSpacing(0)
 
         pl.addWidget(self._make_drag_handle())
-        pl.addWidget(self._make_header())
+        self._header_widget = self._make_header()
+        pl.addWidget(self._header_widget)
 
         self._settings_panel = self._make_settings_panel()
         self._settings_panel.setVisible(False)
@@ -539,24 +638,33 @@ class ClaudeWidget(QWidget):
         self._div_after_header = _divider(self._theme)
         pl.addWidget(self._div_after_header)
 
-        # content
-        cw = QWidget()
-        cl = QVBoxLayout(cw)
+        # content (full mode)
+        self._content_wrapper = QWidget()
+        cl = QVBoxLayout(self._content_wrapper)
         self._content_layout = cl
         cl.setContentsMargins(14, 14, 14, 14)
         cl.setSpacing(12)
-        cl.addWidget(self._make_session_card())
-        cl.addWidget(self._make_weekly_card())
-        cl.addWidget(self._make_sync_row_widget())
+        # No trailing stretch — cards expand to fill extra vertical space so
+        # there's no whitespace below them when the widget is taller than min.
+        # Cards' internal layouts have fixed-height progress bars, so growth
+        # only enlarges natural spacing between text rows (looks balanced).
+        session_card = self._make_session_card()
+        weekly_card = self._make_weekly_card()
+        session_card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        weekly_card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        cl.addWidget(session_card)
+        cl.addWidget(weekly_card)
+        pl.addWidget(self._content_wrapper)
 
-        self._sync_note = QLabel()
-        self._sync_note.setWordWrap(True)
-        cl.addWidget(self._sync_note)
-        pl.addWidget(cw)
+        # mini view (mini mode) — hidden until enabled
+        self._mini_view = self._make_mini_view()
+        self._mini_view.setVisible(False)
+        pl.addWidget(self._mini_view)
 
         self._div_before_footer = _divider(self._theme)
         pl.addWidget(self._div_before_footer)
-        pl.addWidget(self._make_footer())
+        self._footer_widget = self._make_footer()
+        pl.addWidget(self._footer_widget)
 
         outer.addWidget(self._panel)
 
@@ -589,10 +697,12 @@ class ClaudeWidget(QWidget):
         l.setContentsMargins(14, 8, 14, 12)
         left = QHBoxLayout(); left.setSpacing(10)
 
-        # icon
+        # icon — clickable, enters mini mode
         header_png = resource_path(os.path.join("assets", "claude-header.png"))
         ico_path = resource_path(os.path.join("assets", "icon.ico"))
         self._header_icon = QLabel()
+        self._header_icon.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._header_icon.mousePressEvent = self._header_icon_clicked
         self._header_png_path = header_png if os.path.isfile(header_png) else None
         self._header_ico_path = ico_path if os.path.isfile(ico_path) else None
         self._update_header_icon()
@@ -613,7 +723,13 @@ class ClaudeWidget(QWidget):
         sr = QHBoxLayout(); sr.setSpacing(4)
         self._status_icon = QLabel("↻")
         self._status_text = QLabel()
-        sr.addWidget(self._status_icon); sr.addWidget(self._status_text); sr.addStretch()
+        # Long status messages (e.g. "Token expired. Please use Claude Code to refresh")
+        # would otherwise be clipped at narrow widget widths. wordWrap lets them
+        # flow to a second line; the stretch factor lets the label fill horizontal
+        # space so wrapping triggers when needed.
+        self._status_text.setWordWrap(True)
+        self._status_text.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        sr.addWidget(self._status_icon); sr.addWidget(self._status_text, 1)
         info.addLayout(sr)
         left.addLayout(info)
         l.addLayout(left); l.addStretch()
@@ -628,7 +744,7 @@ class ClaudeWidget(QWidget):
     # settings panel
     def _make_settings_panel(self) -> QWidget:
         w = QWidget()
-        l = QVBoxLayout(w); l.setContentsMargins(14, 0, 14, 12); l.setSpacing(10)
+        l = QVBoxLayout(w); l.setContentsMargins(14, 10, 14, 14); l.setSpacing(10)
 
         self._sett_lang_label = QLabel()
         self._sett_lang_label.setObjectName("settLabel")
@@ -655,13 +771,23 @@ class ClaudeWidget(QWidget):
         self._cred_dot = QLabel("●")
         self._cred_dot.setFixedWidth(12)
         self._cred_status = QLabel("…")
+        self._cred_status.setWordWrap(True)
         self._cred_status.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self._cred_refresh = QPushButton()
         self._cred_refresh.clicked.connect(self._refresh_creds_and_sync)
         cr.addWidget(self._cred_dot); cr.addWidget(self._cred_status); cr.addWidget(self._cred_refresh)
         l.addLayout(cr)
 
-        # toggles row
+        # auto-sync section
+        self._auto_sync_lbl = QLabel()
+        self._auto_sync_lbl.setObjectName("settLabel")
+        l.addWidget(self._auto_sync_lbl)
+        l.addWidget(self._make_sync_row_widget())
+        self._sync_note = QLabel()
+        self._sync_note.setWordWrap(True)
+        l.addWidget(self._sync_note)
+
+        # toggles row (mini button lives in the footer instead)
         tog = QHBoxLayout(); tog.setSpacing(6)
         self._aot_btn  = QPushButton(); self._aot_btn.setCheckable(True); self._aot_btn.setChecked(self._aot)
         self._dark_btn = QPushButton(); self._dark_btn.setCheckable(True); self._dark_btn.setChecked(self._dark)
@@ -706,6 +832,7 @@ class ClaudeWidget(QWidget):
         self._session_bar   = ProgressBar(self._theme, show_scale=True)
         l.addWidget(self._session_bar)
         self._session_reset = QLabel("Resets in --"); self._session_reset.setObjectName("resetText")
+        self._session_reset.setWordWrap(True)
         l.addWidget(self._session_reset)
         self._session_frame = f
         return f
@@ -737,6 +864,7 @@ class ClaudeWidget(QWidget):
         l.addWidget(self._all_models_bar)
         self._all_models_reset = QLabel("")
         self._all_models_reset.setObjectName("resetText")
+        self._all_models_reset.setWordWrap(True)
         l.addWidget(self._all_models_reset)
 
         self._weekly_div = _divider(self._theme)
@@ -755,20 +883,28 @@ class ClaudeWidget(QWidget):
         return f
 
     # sync row
+    def _interval_label(self, secs: int) -> str:
+        if secs == 0:
+            return I18N[self._lang]["manual"]
+        if secs >= 3600:
+            return f"{secs // 3600}h"
+        return f"{secs // 60}m"
+
     def _make_sync_row_widget(self) -> QWidget:
         w = QWidget()
         l = QHBoxLayout(w); l.setContentsMargins(0,0,0,0); l.setSpacing(6)
-        self._auto_sync_lbl = QLabel(); l.addWidget(self._auto_sync_lbl); l.addStretch()
 
         self._interval_btns: dict[int, QPushButton] = {}
-        for lbl, secs in [("manual",0),("5m",300),("10m",600),("30m",1800),("1h",3600)]:
-            b = QPushButton(lbl); b.setCheckable(True)
+        for secs in [0, 300, 600, 1800, 3600]:
+            b = QPushButton(self._interval_label(secs))
+            b.setCheckable(True)
             b.setChecked(secs == self._interval)
             b.setFixedHeight(self._sp(22))
             b.setProperty("isecs", secs)
             b.clicked.connect(lambda _, bb=b: self._set_interval(bb.property("isecs")))
             self._interval_btns[secs] = b
             l.addWidget(b)
+        l.addStretch()
         return w
 
     def _sp(self, px: int) -> int:
@@ -794,6 +930,11 @@ class ClaudeWidget(QWidget):
 
     def _update_header_icon(self):
         w = self._sp(48)
+        cache = getattr(self, "_header_icon_cache", {})
+        if cache.get("w") == w:
+            return  # already at this size — skip the disk read + rescale
+        cache["w"] = w
+        self._header_icon_cache = cache
         if self._header_png_path:
             px = QPixmap(self._header_png_path).scaledToWidth(w, Qt.TransformationMode.SmoothTransformation)
             self._header_icon.setPixmap(px)
@@ -815,19 +956,38 @@ class ClaudeWidget(QWidget):
         rr = max(4, self._sp(6))
         pp.drawRoundedRect(0, 0, side, side, rr, rr)
         pp.setPen(QPen(QColor(255, 255, 255), max(1, self._sp(2) / 2)))
-        pp.setFont(QFont("Segoe UI", max(8, self._sp(9)), QFont.Weight.Bold))
+        pp.setFont(QFont(APP_FONT_FAMILY, max(8, self._sp(9)), QFont.Weight.Bold))
         pp.drawText(QRect(0, 0, side, side), Qt.AlignmentFlag.AlignCenter, "AI")
         pp.end()
         self._header_icon.setPixmap(px)
         self._header_icon.setFixedSize(side, side)
 
-    def _apply_widget_scale(self):
-        self._widget_scale = max(0.7, min(1.6, self.width() / 326.0))
+    def _apply_widget_scale(self) -> bool:
+        """Recompute scale-dependent layout. Returns True iff the quantized
+        scale changed, so the caller can skip an _apply_theme() pass when
+        nothing actually needs restyling. Quantizing to 0.05 steps avoids
+        font-size jitter while the user drags to resize."""
+        # Scale floor 0.85 — below this, fonts/borders/icons start to break.
+        # Combined with mode-specific minimum sizes below, this guarantees
+        # readable content at any user-chosen widget size.
+        raw = max(SCALE_FLOOR, min(SCALE_CEIL, self.width() / DEFAULT_WIDGET_WIDTH))
+        quantized = round(raw / SCALE_QUANTUM) * SCALE_QUANTUM
+        if getattr(self, "_widget_scale_applied", None) == quantized:
+            return False
+        self._widget_scale_applied = quantized
+        self._widget_scale = quantized
         self._resize_border = max(6, self._sp(8))
 
-        self._drag_handle.setFixedHeight(self._sp(20))
-        self._drag_handle_layout.setContentsMargins(0, self._sp(8), 0, self._sp(4))
-        self._drag_bar.setFixedSize(self._sp(36), max(2, self._sp(4)))
+        if self._mini_mode:
+            # Tightest possible drag handle in mini mode — just enough
+            # visual affordance to signal it's draggable.
+            self._drag_handle.setFixedHeight(self._sp(7))
+            self._drag_handle_layout.setContentsMargins(0, self._sp(1), 0, self._sp(1))
+            self._drag_bar.setFixedSize(self._sp(24), max(2, self._sp(2)))
+        else:
+            self._drag_handle.setFixedHeight(self._sp(20))
+            self._drag_handle_layout.setContentsMargins(0, self._sp(8), 0, self._sp(4))
+            self._drag_bar.setFixedSize(self._sp(36), max(2, self._sp(4)))
         self._header_layout.setContentsMargins(self._sp(14), self._sp(8), self._sp(14), self._sp(12))
         self._content_layout.setContentsMargins(self._sp(14), self._sp(14), self._sp(14), self._sp(14))
         self._content_layout.setSpacing(self._sp(12))
@@ -844,7 +1004,39 @@ class ClaudeWidget(QWidget):
         self._all_models_bar.set_scale(self._widget_scale)
         self._sonnet_bar.set_scale(self._widget_scale)
         self._update_header_icon()
-        self.setMinimumSize(max(220, self._sp(220)), max(280, self._sp(280)))
+
+        if hasattr(self, "_mini_view"):
+            self._mini_layout.setContentsMargins(
+                self._sp(2), self._sp(2), self._sp(2), self._sp(2)
+            )
+            self._mini_layout.setSpacing(self._sp(6))
+            self._mini_grid.setHorizontalSpacing(self._sp(MINI_GAP_BASE) + MINI_GAP_OFFSET)
+            self._mini_grid.setVerticalSpacing(self._sp(2))
+            self._update_mini_icon()
+
+        # Mode-specific minimum sizes (absolute floor — won't shrink below
+        # these regardless of scale, so content never breaks).
+        # Full-mode min height = drag(20) + header(68) + dividers(2) + footer(30)
+        # + content margins(28) + session card(~117) + spacing(12) + weekly card(~185) ≈ 462,
+        # rounded to 450 for tight-but-safe fit at scale 0.86 (the floor at width 280).
+        # Mini width floor 170 lets the user shrink ~2cm (≈70px) below the
+        # natural mini width (~240). The adaptive grid spacing in
+        # _update_mini_grid_spacing() compresses the label↔percent gap as
+        # width approaches the floor, so content stays unclipped throughout.
+        self._apply_minimum_size()
+
+        return True
+
+    def _apply_minimum_size(self):
+        """Set the widget minimum size based on the current mode + scale.
+        Called from _apply_widget_scale (on scale change) and _apply_mini_mode
+        (on mode toggle) — same calculation in both places, kept DRY here."""
+        if self._mini_mode:
+            self.setMinimumSize(max(MINI_MIN_W, self._sp(MINI_MIN_W)),
+                                max(MINI_MIN_H, self._sp(MINI_MIN_H)))
+        else:
+            self.setMinimumSize(max(FULL_MIN_W, self._sp(FULL_MIN_W)),
+                                max(FULL_MIN_H, self._sp(FULL_MIN_H)))
 
     def _on_opacity_changed(self, value: int):
         self._bg_opacity = max(0, min(100, int(value)))
@@ -852,22 +1044,193 @@ class ClaudeWidget(QWidget):
         self._opacity_value.setText(f"{self._bg_opacity}%")
         self._apply_theme()
 
+    # mini view ────────────────────────────────────────────
+    def _make_mini_view(self) -> QWidget:
+        w = QWidget()
+        w.setObjectName("miniView")
+        l = QHBoxLayout(w)
+        # Maximally tight padding — only 2px from the panel border.
+        l.setContentsMargins(self._sp(2), self._sp(2), self._sp(2), self._sp(2))
+        l.setSpacing(self._sp(6))
+        self._mini_layout = l
+
+        self._mini_icon = QLabel()
+        self._mini_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._mini_icon.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._mini_icon.mousePressEvent = self._mini_icon_clicked
+        l.addWidget(self._mini_icon, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        # 2-column grid: labels | percentages.
+        # Using a grid (instead of HBox+stretch) keeps the gap between label
+        # and percentage at the column spacing only — it doesn't expand with
+        # widget width, so the layout stays tight when shrunk horizontally.
+        # Initial spacing is the "full" gap; _update_mini_grid_spacing()
+        # rewrites it adaptively as the user resizes.
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(self._sp(MINI_GAP_BASE) + MINI_GAP_OFFSET)
+        grid.setVerticalSpacing(self._sp(2))
+        grid.setContentsMargins(0, 0, 0, 0)
+        self._mini_grid = grid
+
+        self._mini_session_lbl = QLabel()
+        self._mini_session_lbl.setObjectName("miniLabel")
+        self._mini_session_pct = QLabel("0%")
+        self._mini_session_pct.setObjectName("miniPct")
+        self._mini_all_lbl = QLabel()
+        self._mini_all_lbl.setObjectName("miniLabel")
+        self._mini_all_pct = QLabel("0%")
+        self._mini_all_pct.setObjectName("miniPct")
+        self._mini_sonnet_lbl = QLabel()
+        self._mini_sonnet_lbl.setObjectName("miniLabel")
+        self._mini_sonnet_pct = QLabel("0%")
+        self._mini_sonnet_pct.setObjectName("miniPct")
+
+        for row_idx, (lbl, pct) in enumerate((
+            (self._mini_session_lbl, self._mini_session_pct),
+            (self._mini_all_lbl, self._mini_all_pct),
+            (self._mini_sonnet_lbl, self._mini_sonnet_pct),
+        )):
+            pct.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            grid.addWidget(lbl, row_idx, 0)
+            grid.addWidget(pct, row_idx, 1)
+
+        l.addLayout(grid)        # natural width — no horizontal stretch
+        l.addStretch()           # absorb extra widget width on the right
+        return w
+
+    def _update_mini_icon(self):
+        side = self._sp(60)
+        cache = getattr(self, "_mini_icon_cache", {})
+        if cache.get("side") == side:
+            return  # already at this size
+        cache["side"] = side
+        self._mini_icon_cache = cache
+        self._mini_icon.setFixedSize(side, side)
+        if self._header_png_path:
+            px = QPixmap(self._header_png_path).scaledToWidth(side, Qt.TransformationMode.SmoothTransformation)
+            self._mini_icon.setPixmap(px)
+        elif self._header_ico_path:
+            self._mini_icon.setPixmap(QIcon(self._header_ico_path).pixmap(side, side))
+        else:
+            px = QPixmap(side, side)
+            px.fill(Qt.GlobalColor.transparent)
+            pp = QPainter(px)
+            pp.setRenderHint(QPainter.RenderHint.Antialiasing)
+            pp.setBrush(QBrush(ORANGE))
+            pp.setPen(Qt.PenStyle.NoPen)
+            rr = max(4, self._sp(6))
+            pp.drawRoundedRect(0, 0, side, side, rr, rr)
+            pp.end()
+            self._mini_icon.setPixmap(px)
+
+    def _update_mini_grid_spacing(self):
+        """Adaptive horizontal spacing for the mini view's label↔percent gap.
+
+        At MINI_GAP_FULL_AT (~240px) and above, use the user-preferred
+        sp(BASE)+OFFSET (~1cm + 15px) gap so percentages sit visibly to the
+        right. As the widget shrinks toward MINI_GAP_FLOOR_AT (~170px), the
+        gap compresses linearly to MINI_GAP_TIGHT so content keeps fitting
+        without clipping.
+
+        Called from resizeEvent so it tracks every width change (independent
+        of the quantized scale early-return in _apply_widget_scale)."""
+        if not hasattr(self, "_mini_grid") or not self._mini_mode:
+            return
+        width = self.width()
+        full_gap = self._sp(MINI_GAP_BASE) + MINI_GAP_OFFSET
+        tight_gap = self._sp(MINI_GAP_TIGHT)
+        if width >= MINI_GAP_FULL_AT:
+            gap = full_gap
+        elif width <= MINI_GAP_FLOOR_AT:
+            gap = tight_gap
+        else:
+            ratio = (width - MINI_GAP_FLOOR_AT) / (MINI_GAP_FULL_AT - MINI_GAP_FLOOR_AT)
+            gap = int(tight_gap + (full_gap - tight_gap) * ratio)
+        self._mini_grid.setHorizontalSpacing(gap)
+
+    def _mini_icon_clicked(self, ev):
+        if ev.button() == Qt.MouseButton.LeftButton:
+            self._toggle_mini()
+            ev.accept()
+
+    def _header_icon_clicked(self, ev):
+        if ev.button() == Qt.MouseButton.LeftButton:
+            self._toggle_mini()
+            ev.accept()
+
+    def _apply_mini_mode(self, initial: bool = False):
+        is_mini = self._mini_mode
+
+        # Auto-close settings when entering mini (settings is unreachable there).
+        # Done before content-wrapper restoration so the in-memory full-size cache
+        # — populated by the most recent full-mode resizeEvent — is what we restore from.
+        if is_mini and self._settings_panel.isVisible():
+            self._settings_panel.setVisible(False)
+            self._collapsed_height = None
+            # Re-show content_wrapper visibility flag to its full-mode state so
+            # the size cache reflects the user's chosen card-mode geometry.
+            self._content_wrapper.setVisible(True)
+            self._div_after_header.setVisible(True)
+
+        # Toggle visibility of full-mode chrome.
+        self._header_widget.setVisible(not is_mini)
+        self._div_after_header.setVisible(not is_mini)
+        self._content_wrapper.setVisible(not is_mini)
+        self._div_before_footer.setVisible(not is_mini)
+        self._footer_widget.setVisible(not is_mini)
+        self._mini_view.setVisible(is_mini)
+
+        # Apply initial adaptive grid spacing for mini view (will be refined
+        # on subsequent resize events as the user drags).
+        if is_mini:
+            self._update_mini_grid_spacing()
+
+        # Resize the window. Mini mode shrinks; full mode restores prior size.
+        self._internal_toggle_resize = True
+        try:
+            self._apply_minimum_size()
+            if is_mini:
+                target = self._cfg.value("widget_size_mini")
+                if target and target.isValid():
+                    self.resize(target)
+                else:
+                    self.adjustSize()
+            elif not initial:
+                # widget_size is updated on every full-mode resizeEvent,
+                # so it always holds the last user-chosen full-mode geometry.
+                saved = self._cfg.value("widget_size")
+                if saved and saved.isValid():
+                    self.resize(saved)
+                else:
+                    self.adjustSize()
+        finally:
+            self._internal_toggle_resize = False
+
+    def _toggle_mini(self):
+        self._mini_mode = not self._mini_mode
+        self._cfg.setValue("mini_mode", "true" if self._mini_mode else "false")
+        self._apply_mini_mode()
+        self._rebuild_tray_menu()
+
     # footer
     def _make_footer(self) -> QWidget:
         w = QWidget()
         l = QHBoxLayout(w); l.setContentsMargins(14,8,14,8); l.setSpacing(8)
-        ver = QLabel(APP_VERSION); ver.setObjectName("footerSub")
+        self._version_lbl = QLabel(APP_VERSION)
+        self._version_lbl.setObjectName("footerVersion")
         self._last_sync_lbl = QLabel()
         self._last_sync_lbl.setObjectName("footerSub")
         self._last_sync_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self._sync_btn = QPushButton()
         self._sync_btn.clicked.connect(self.do_sync)
-        sep = QLabel("|"); sep.setObjectName("footerSep")
+        self._footer_sep = QLabel("|")
+        self._footer_sep.setObjectName("footerSep")
         self._quit_btn = QPushButton()
         self._quit_btn.clicked.connect(self.hide)
 
-        l.addWidget(ver); l.addWidget(self._last_sync_lbl, 1)
-        l.addWidget(self._sync_btn); l.addWidget(sep); l.addWidget(self._quit_btn)
+        l.addWidget(self._version_lbl)
+        l.addWidget(self._last_sync_lbl, 1)
+        l.addWidget(self._sync_btn); l.addWidget(self._footer_sep); l.addWidget(self._quit_btn)
         return w
 
     # ── Theme application ────────────────────────────────────
@@ -919,9 +1282,11 @@ class ClaudeWidget(QWidget):
         """)
 
         # settings panel
-        for lbl in (self._sett_lang_label, self._sett_cred_label, self._sett_opacity_label):
+        for lbl in (self._sett_lang_label, self._sett_cred_label,
+                    self._sett_opacity_label, self._auto_sync_lbl):
             lbl.setStyleSheet(f"font-size:{self._sp(11)}px;font-weight:600;color:{tsc};")
-        for btn in (self._btn_en, self._btn_ko, self._aot_btn, self._dark_btn):
+        for btn in (self._btn_en, self._btn_ko, self._aot_btn,
+                    self._dark_btn):
             btn.setStyleSheet(tog)
         self._cred_status.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tpc};")
         self._opacity_value.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tpc};")
@@ -960,7 +1325,6 @@ class ClaudeWidget(QWidget):
             f"QPushButton{{font-size:{self._sp(10)}px;color:rgb(217,119,87);background:transparent;border:none;padding:0;}}"
             "QPushButton:hover{text-decoration:underline;}"
         )
-        self._auto_sync_lbl.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tsc};")
         self._sync_note.setStyleSheet(f"font-size:{self._sp(9)}px;color:rgba({ts.red()},{ts.green()},{ts.blue()},160);")
 
         # interval buttons
@@ -969,15 +1333,18 @@ class ClaudeWidget(QWidget):
 
         # footer
         self._last_sync_lbl.setStyleSheet(f"font-size:{self._sp(10)}px;color:{tsc};")
-        self.findChild(QLabel, "footerSub")  # version label – update via objectName below
+        self._version_lbl.setStyleSheet(
+            f"font-size:{self._sp(10)}px;font-weight:600;color:rgb(217,119,87);"
+            "letter-spacing:0.3px;"
+        )
         self._sync_btn.setStyleSheet(
             f"QPushButton{{font-size:{self._sp(10)}px;font-weight:600;color:rgb(217,119,87);background:transparent;border:none;}}"
             "QPushButton:hover{opacity:0.7;}"
         )
         bd = t["border"]
-        self.findChildren(QLabel, "footerSep")[0].setStyleSheet(
-            f"font-size:{self._sp(10)}px;color:rgba({bd.red()},{bd.green()},{bd.blue()},{bd.alpha()});"
-        ) if self.findChildren(QLabel, "footerSep") else None
+        self._footer_sep.setStyleSheet(
+            f"font-size:{self._sp(10)}px;color:{self._rgba(bd)};"
+        )
         self._quit_btn.setStyleSheet(
             f"QPushButton{{font-size:{self._sp(10)}px;font-weight:600;color:rgb(248,113,113);background:transparent;border:none;}}"
             "QPushButton:hover{opacity:0.7;}"
@@ -996,7 +1363,56 @@ class ClaudeWidget(QWidget):
         if hasattr(self, "_tray"):
             self._tray.setIcon(self._make_tray_icon())
 
+        # mini view labels — primary text color, larger weight for readability
+        if hasattr(self, "_mini_session_lbl"):
+            for lbl in (self._mini_session_lbl, self._mini_all_lbl, self._mini_sonnet_lbl):
+                lbl.setStyleSheet(
+                    f"font-size:{self._sp(17)}px;font-weight:700;color:{tpc};"
+                    "letter-spacing:-0.1px;"
+                )
+
+        # Re-apply state-dependent colors (status text, percent labels)
+        # so resize/theme changes don't reset them to the gray/green defaults.
+        self._apply_runtime_colors()
+
         self.update()
+
+    # ── Runtime (state-dependent) styling ────────────────────
+    def _apply_runtime_colors(self):
+        """Re-apply colors that depend on current connection state and last
+        observed percent values. Called at the end of _apply_theme() so
+        toggling settings / resizing the window doesn't reset status to gray
+        or percent labels to default green."""
+        if self._status_state == "connected":
+            c = "rgb(16,185,129)"
+        elif self._status_state == "error":
+            c = "rgb(248,113,113)"
+        else:
+            ts = self._theme["text_secondary"]
+            c = f"rgba({ts.red()},{ts.green()},{ts.blue()},220)"
+        self._status_icon.setStyleSheet(f"font-size:{self._sp(11)}px;color:{c};")
+        self._status_text.setStyleSheet(f"font-size:{self._sp(10)}px;color:{c};")
+
+        # Full-mode percent colors stay tied to last successful values so
+        # context isn't lost when a sync fails. Mini-mode percent colors
+        # collapse to "0% green" on error/checking — matches the "0%" text
+        # set by _reset_mini_pct_to_zero() so both stay in sync.
+        is_connected = self._status_state == "connected"
+        if self._last_session_pct is not None:
+            self._set_pct_color(self._session_pct, self._last_session_pct, big=True)
+        if self._last_all_pct is not None:
+            self._set_pct_color(self._all_models_pct, self._last_all_pct)
+        if self._last_sonnet_pct is not None:
+            self._set_pct_color(self._sonnet_pct, self._last_sonnet_pct)
+
+        if hasattr(self, "_mini_session_pct"):
+            for mini_lbl, last_pct in (
+                (self._mini_session_pct, self._last_session_pct),
+                (self._mini_all_pct, self._last_all_pct),
+                (self._mini_sonnet_pct, self._last_sonnet_pct),
+            ):
+                pct_for_color = last_pct if (is_connected and last_pct is not None) else 0.0
+                self._set_pct_color(mini_lbl, pct_for_color, mini=True)
 
     # ── Language ─────────────────────────────────────────────
     def _set_lang(self, lc: str):
@@ -1010,7 +1426,6 @@ class ClaudeWidget(QWidget):
     def _apply_language(self):
         s = I18N[self._lang]
         self._title_lbl.setText(s["appTitle"])
-        self._status_text.setText(s["checking"])
         self._session_title.setText(s["currentSession"])
         self._weekly_title.setText(s["weeklyLimits"])
         self._all_models_lbl.setText(s["allModels"])
@@ -1025,10 +1440,41 @@ class ClaudeWidget(QWidget):
         self._cred_refresh.setText(s["refresh"])
         self._aot_btn.setText(s["alwaysOnTop"])
         self._dark_btn.setText(s["darkMode"])
+        self._mini_session_lbl.setText(s["miniSession"])
+        self._mini_all_lbl.setText(s["miniAll"])
+        self._mini_sonnet_lbl.setText(s["miniSonnet"])
+        self._mini_icon.setToolTip(s["miniExitTip"])
+        self._header_icon.setToolTip(s["miniEnterTip"])
         self._sett_opacity_label.setText(s["bgOpacity"])
         self._opacity_value.setText(f"{self._bg_opacity}%")
         lv = self._cfg.value("last_sync_time", None)
         self._last_sync_lbl.setText(s["lastSync"](lv) if lv else s["never"])
+
+        # Status text — re-render in current language based on tracked state.
+        if self._status_state == "connected":
+            self._status_text.setText(s["connected"])
+        elif self._status_state == "error":
+            if self._status_error_key and self._status_error_key in s:
+                self._status_text.setText(s[self._status_error_key])
+            elif self._status_error_raw:
+                self._status_text.setText(self._status_error_raw)
+        else:
+            self._status_text.setText(s["checking"])
+
+        # Credentials status — re-localize, preferring tracked state to avoid
+        # an extra filesystem read when we already know the result.
+        if self._cred_present is None:
+            self._cred_present = FetchWorker.read_credentials() is not None
+        self._cred_status.setText(s["autoDetected"] if self._cred_present else s["notFound"])
+
+        # Interval buttons — only "manual" (secs=0) is language-dependent.
+        for secs, btn in self._interval_btns.items():
+            btn.setText(self._interval_label(secs))
+
+        # Weekly reset text (day name + AM/PM is language-dependent)
+        if self._last_reset:
+            formatted = s["formatResetTime"](*self._last_reset)
+            self._all_models_reset.setText(s["resetsAt"](formatted))
 
     # ── Toggle helpers ────────────────────────────────────────
     def _toggle_settings(self):
@@ -1040,11 +1486,17 @@ class ClaudeWidget(QWidget):
             if not is_visible:
                 # Save current (collapsed) height before expanding settings panel.
                 self._collapsed_height = self.height()
+                # Hide cards while settings is open so the panel takes the
+                # middle area cleanly — keeps top/middle/bottom proportions natural.
+                self._content_wrapper.setVisible(False)
+                self._div_after_header.setVisible(False)
                 self._settings_panel.setVisible(True)
                 self.adjustSize()
                 self.resize(keep_w, self.height())
             else:
                 self._settings_panel.setVisible(False)
+                self._content_wrapper.setVisible(True)
+                self._div_after_header.setVisible(True)
                 target_h = self._collapsed_height if self._collapsed_height is not None else self.height()
                 target_h = max(self.minimumHeight(), int(target_h))
                 self.resize(keep_w, target_h)
@@ -1054,10 +1506,17 @@ class ClaudeWidget(QWidget):
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
-        self._apply_widget_scale()
-        self._apply_theme()
+        # Only re-apply the (expensive) theme stylesheet pass when the quantized
+        # scale actually changed — this keeps drag-resize smooth instead of
+        # restyling every widget on every mouse-move event.
+        if self._apply_widget_scale():
+            self._apply_theme()
+        # Mini-grid spacing tracks width continuously so the layout compresses
+        # smoothly as the user drags the mini widget narrower.
+        self._update_mini_grid_spacing()
         if not self._settings_panel.isVisible() and not self._internal_toggle_resize:
-            self._cfg.setValue("widget_size", self.size())
+            key = "widget_size_mini" if self._mini_mode else "widget_size"
+            self._cfg.setValue(key, self.size())
 
     def _toggle_aot(self):
         self._aot = not self._aot
@@ -1089,10 +1548,33 @@ class ClaudeWidget(QWidget):
 
     # ── Sync ─────────────────────────────────────────────────
     def _setup_auto_sync(self):
+        """(Re)start the auto-sync cycle.
+
+        First sync uses a 0–2s random delay so multiple PCs sharing the same
+        Anthropic account (multiple installs of this widget) don't all hit the
+        usage endpoint at the same instant when they boot together.
+        Subsequent syncs are scheduled by _schedule_next_sync() with ±10%
+        jitter and exponential backoff on rate limits."""
         self._sync_timer.stop()
+        self._consecutive_429 = 0
         if self._interval > 0:
-            self.do_sync()
-            self._sync_timer.start(self._interval * 1000)
+            self._sync_timer.start(random.randint(0, SYNC_STARTUP_JITTER_MS))
+
+    def _schedule_next_sync(self):
+        """Re-arm the single-shot sync timer after a fetch completes.
+
+        - Adds ±10% random jitter to the configured interval so polling cycles
+          across multiple PCs don't stay phase-locked.
+        - On a `429 Rate Limited` response, backs off exponentially:
+          2× → 4× → 8× → 16× the interval, then caps. The counter resets to 0
+          (back to normal interval) the moment a request succeeds, so the
+          backoff doesn't linger after the API recovers."""
+        if self._interval <= 0:
+            return  # manual mode
+        backoff = 2 ** min(self._consecutive_429, RATE_LIMIT_BACKOFF_CAP_EXP)
+        base_ms = self._interval * 1000 * backoff
+        jitter_ms = int(base_ms * random.uniform(-SYNC_JITTER_RATIO, SYNC_JITTER_RATIO))
+        self._sync_timer.start(max(1000, base_ms + jitter_ms))
 
     def do_sync(self):
         if self._is_syncing:
@@ -1110,90 +1592,149 @@ class ClaudeWidget(QWidget):
     def _on_done(self, usage: dict):
         self._is_syncing = False
         s = I18N[self._lang]
-        t = self._theme
-        tp = t["text_primary"]
-        tpc = f"rgb({tp.red()},{tp.green()},{tp.blue()})"
-
         self._sync_btn.setText(s["sync"])
 
-        # cred dot
-        creds = FetchWorker.read_credentials()
-        if creds:
-            self._cred_dot.setStyleSheet(f"font-size:10px;color:rgb(16,185,129);")
-            self._cred_status.setText(s["autoDetected"])
-        else:
-            self._cred_dot.setStyleSheet(f"font-size:10px;color:rgb(248,113,113);")
-            self._cred_status.setText(s["notFound"])
+        self._update_cred_indicator(s)
 
         err = usage.get("error")
-        if err == "NO_CREDENTIALS":
-            self._set_status_error(s["notLoggedIn"]); return
-        if err == "TOKEN_EXPIRED":
-            self._set_status_error(s["tokenExpired"]); return
+        # Track 429s for exponential backoff. Other errors leave the counter
+        # alone so a transient hiccup doesn't slow down recovery.
+        if err == "RATE_LIMITED":
+            self._consecutive_429 += 1
+        elif not err:
+            self._consecutive_429 = 0
+        # Re-arm the auto-sync timer with jitter (and backoff if applicable).
+        # Done unconditionally before any early returns so polling continues
+        # whatever the outcome.
+        self._schedule_next_sync()
+
         if err:
-            self._set_status_error(err[:40]); return
+            self._handle_sync_error(err, s)
+            return
 
-        # session
-        sp = usage["sessionUsagePercent"]
-        self._session_bar.set_percent(sp)
-        self._session_pct.setText(f"{round(sp)}%")
-        self._set_pct_color(self._session_pct, sp, big=True)
+        self._render_session(usage, s)
+        self._render_weekly(usage, s)
+        self._render_sonnet(usage)
+        self._plan_badge.setText(usage.get("planName", "Max"))
+        self._set_status_connected(s)
+        self._record_last_sync_time(s)
 
+    # ── _on_done helpers ────────────────────────────────────
+    def _update_cred_indicator(self, s: dict):
+        creds = FetchWorker.read_credentials()
+        self._cred_present = creds is not None
+        ok_color = "rgb(16,185,129)" if creds else "rgb(248,113,113)"
+        self._cred_dot.setStyleSheet(f"font-size:10px;color:{ok_color};")
+        self._cred_status.setText(s["autoDetected"] if creds else s["notFound"])
+
+    def _handle_sync_error(self, err: str, s: dict):
+        # Mini view shows only percentages, so reset them to "0%" on
+        # disconnect — stale "--" or last-known values would mislead at a glance.
+        self._reset_mini_pct_to_zero()
+        if err == "NO_CREDENTIALS":
+            self._set_status_error(s["notLoggedIn"], key="notLoggedIn")
+        elif err == "TOKEN_EXPIRED":
+            self._set_status_error(s["tokenExpired"], key="tokenExpired")
+        elif err == "RATE_LIMITED":
+            self._set_status_error(s["rateLimited"], key="rateLimited")
+        else:
+            self._set_status_error(err[:40])
+
+    def _render_session(self, usage: dict, s: dict):
+        pct = usage["sessionUsagePercent"]
+        self._last_session_pct = pct
+        self._session_bar.set_percent(pct)
+        self._render_pct(self._session_pct, pct, big=True)
+        self._render_pct(self._mini_session_pct, pct, mini=True)
         secs = usage["sessionResetSeconds"]
         h, m = secs // 3600, (secs % 3600) // 60
         self._session_reset.setText(
             s["resetsSoon"] if (h == 0 and m == 0) else s["resetsIn"](h, m)
         )
 
-        # all models
-        ap = usage["weeklyAllModelsPercent"]
-        self._all_models_bar.set_percent(ap)
-        self._all_models_pct.setText(f"{round(ap)}%")
-        self._set_pct_color(self._all_models_pct, ap)
-        rd = usage.get("weeklyAllModelsResetDate", "")
-        self._all_models_reset.setText(s["resetsAt"](rd) if rd else "")
+    def _render_weekly(self, usage: dict, s: dict):
+        pct = usage["weeklyAllModelsPercent"]
+        self._last_all_pct = pct
+        self._all_models_bar.set_percent(pct)
+        self._render_pct(self._all_models_pct, pct)
+        self._render_pct(self._mini_all_pct, pct, mini=True)
+        self._last_reset = usage.get("weeklyAllModelsReset")
+        if self._last_reset:
+            formatted = s["formatResetTime"](*self._last_reset)
+            self._all_models_reset.setText(s["resetsAt"](formatted))
+        else:
+            self._all_models_reset.setText("")
 
-        # sonnet
-        so = usage["weeklySonnetPercent"]
-        self._sonnet_bar.set_percent(so)
-        self._sonnet_pct.setText(f"{round(so)}%")
-        self._set_pct_color(self._sonnet_pct, so)
+    def _render_sonnet(self, usage: dict):
+        pct = usage["weeklySonnetPercent"]
+        self._last_sonnet_pct = pct
+        self._sonnet_bar.set_percent(pct)
+        self._render_pct(self._sonnet_pct, pct)
+        self._render_pct(self._mini_sonnet_pct, pct, mini=True)
 
-        # plan
-        self._plan_badge.setText(usage.get("planName", "Max"))
-
-        # status
+    def _set_status_connected(self, s: dict):
+        self._status_state = "connected"
+        self._status_error_key = None
+        self._status_error_raw = None
         self._status_icon.setText("✓")
         self._status_icon.setStyleSheet("font-size:11px;color:rgb(16,185,129);")
         self._status_text.setText(s["connected"])
         self._status_text.setStyleSheet("font-size:10px;color:rgb(16,185,129);")
 
-        # last sync
-        now  = datetime.now()
-        h12  = now.hour % 12 or 12
-        ap2  = "AM" if now.hour < 12 else "PM"
-        tstr = f"{h12}:{now.minute:02d} {ap2}".lower()
+    def _record_last_sync_time(self, s: dict):
+        now = datetime.now()
+        h12 = now.hour % 12 or 12
+        ap = "AM" if now.hour < 12 else "PM"
+        tstr = f"{h12}:{now.minute:02d} {ap}".lower()
         self._cfg.setValue("last_sync_time", tstr)
         self._last_sync_lbl.setText(s["lastSync"](tstr))
 
-    def _set_status_error(self, msg: str):
+    def _set_status_error(self, msg: str, key: str | None = None):
+        self._status_state = "error"
+        self._status_error_key = key
+        self._status_error_raw = msg if key is None else None
         self._status_icon.setText("✗")
         self._status_icon.setStyleSheet("font-size:11px;color:rgb(248,113,113);")
         self._status_text.setText(msg)
         self._status_text.setStyleSheet("font-size:10px;color:rgb(248,113,113);")
 
-    def _set_pct_color(self, lbl: QLabel, pct: float, big: bool = False):
-        sz = f"{self._sp(22)}px" if big else f"{self._sp(12)}px"
+    def _reset_mini_pct_to_zero(self):
+        """Show '0%' on the mini-mode percent labels when the API is unreachable.
+        Full-mode cards keep their last-known values (still useful as context);
+        mini view has no other state cue, so a clear '0%' is preferable to stale data.
+        _apply_runtime_colors() also forces mini color to 0%-green while
+        _status_state == 'error', keeping text and color in sync after theme changes."""
+        if not hasattr(self, "_mini_session_pct"):
+            return
+        for lbl in (self._mini_session_pct, self._mini_all_pct, self._mini_sonnet_pct):
+            lbl.setText("0%")
+            self._set_pct_color(lbl, 0.0, mini=True)
+
+    def _render_pct(self, lbl: QLabel, pct: float, *, big: bool = False, mini: bool = False):
+        """Update a percent label's text + color in one shot.
+        Replaces the `lbl.setText(f"{round(p)}%"); self._set_pct_color(lbl, p, ...)`
+        idiom that was repeated 6× in _on_done."""
+        lbl.setText(f"{round(pct)}%")
+        self._set_pct_color(lbl, pct, big=big, mini=mini)
+
+    def _set_pct_color(self, lbl: QLabel, pct: float, big: bool = False, mini: bool = False):
+        if mini:
+            sz = f"{self._sp(26)}px"
+        elif big:
+            sz = f"{self._sp(22)}px"
+        else:
+            sz = f"{self._sp(12)}px"
         if pct >= 80:
             c = "rgb(248,113,113)"
         elif pct >= 50:
             c = "rgb(245,158,11)"
         else:
             c = "rgb(16,185,129)"
-        lbl.setStyleSheet(f"font-size:{sz};font-weight:700;color:{c};")
+        lbl.setStyleSheet(f"font-size:{sz};font-weight:700;color:{c};letter-spacing:-0.2px;")
 
     def _refresh_creds_and_sync(self):
         creds = FetchWorker.read_credentials()
+        self._cred_present = creds is not None
         s = I18N[self._lang]
         if creds:
             self._cred_dot.setStyleSheet("font-size:10px;color:rgb(16,185,129);")
@@ -1324,7 +1865,15 @@ def main():
     app.setApplicationName("Claude Widget")
     app.setOrganizationName("ClaudeWidget")
     app.setQuitOnLastWindowClosed(False)  # CRITICAL: keeps alive in tray after all windows hidden
-    app.setFont(QFont("Segoe UI", 10))
+
+    # Resolve and apply the global font (SUIT SemiBold preferred — bundled
+    # or system-installed; falls back to Segoe UI so the app still runs cleanly
+    # even before the user drops the .ttf into Source/assets/fonts/).
+    global APP_FONT_FAMILY
+    APP_FONT_FAMILY = _load_app_font()
+    app_font = QFont(APP_FONT_FAMILY, 10)
+    app_font.setWeight(QFont.Weight.DemiBold)  # request SemiBold weight
+    app.setFont(app_font)
 
     # Set application icon (works for taskbar + alt-tab even on frameless windows)
     ico_path = resource_path(os.path.join("assets", "icon.ico"))
