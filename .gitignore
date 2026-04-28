@@ -14,3 +14,6 @@ Source/__pycache__/
 # Release archives (regenerated per release; .exe is the canonical artifact)
 Release/*.zip
 
+# Internal owner notes — not for distribution
+PROJECT_NOTES.md
+
