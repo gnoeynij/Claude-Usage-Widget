@@ -1759,11 +1759,14 @@ class ClaudeWidget(QWidget):
         self._cfg.setValue("pos", self.pos()); ev.accept()
 
     def _resize_edges_from_global(self, gp: QPoint):
+        # Top edge (and top-left/top-right corners) intentionally NOT resizable:
+        # the drag handle and Claude icon live there, so resize would steal
+        # mouse events that should belong to the move/click flow — especially
+        # noticeable in mini mode where the entire top strip is interactive.
         g = self.frameGeometry()
         b = self._resize_border
         on_left = g.left() <= gp.x() < g.left() + b
         on_right = g.right() - b < gp.x() <= g.right()
-        on_top = g.top() <= gp.y() < g.top() + b
         on_bottom = g.bottom() - b < gp.y() <= g.bottom()
 
         edges = Qt.Edge(0)
@@ -1771,8 +1774,6 @@ class ClaudeWidget(QWidget):
             edges |= Qt.Edge.LeftEdge
         if on_right:
             edges |= Qt.Edge.RightEdge
-        if on_top:
-            edges |= Qt.Edge.TopEdge
         if on_bottom:
             edges |= Qt.Edge.BottomEdge
         return edges
