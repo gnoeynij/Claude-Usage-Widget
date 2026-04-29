@@ -49,6 +49,8 @@ Claude Usage Widget은 바탕화면 한 구석에 띄워두고 Anthropic Claude 
 
 본 프로그램은 개인 오픈소스 프로젝트로 디지털 서명이 되어 있지 않아 Windows SmartScreen 경고가 표시될 수 있습니다. 악성코드가 아니므로 `추가 정보 → 실행`을 눌러 진행하시면 됩니다.
 
+> ⚠️ 본 위젯은 Claude Code의 OAuth 사용량 엔드포인트를 호출합니다. Anthropic 측에서 해당 엔드포인트가 변경되거나 정책이 바뀔 경우 동작이 멈출 수 있습니다.
+
 ---
 
 ## 🛠️ Build from Source
@@ -81,12 +83,15 @@ python -m PyInstaller claude_widget.spec --noconfirm --clean
 ## 📝 Change Log
 
 ### v1.4.0 (현재)
-- 자동 업데이트 — 옵션 패널의 `Check for Updates` 버튼으로 새 버전 확인, 사용자 동의 시 Windows `Downloads` 폴더에 다운로드 후 자동 재시작
-- 시작 시 1회 자동 버전 체크 — 위젯 실행 후 약 1.5초 뒤, `Check for Updates` 버튼 옆에 `✓ 최신 버전` 또는 `● 새 버전 vX.Y.Z`가 표시됩니다 (네트워크 오류 시 무표시)
-- 다운로드 시작 시 Downloads 폴더 자동 열기 — 다운로드 진행을 Explorer에서 실시간 확인 가능
-- 다운로드 진행률 표시, 취소 가능, 부분 파일은 `.part`로 격리 후 원자적 rename
-- 항상 위 활성 시 작업표시줄 자동 숨김 — `Always on Top`이 켜져 있으면 위젯이 작업표시줄/Alt+Tab에 표시되지 않습니다 (꺼두면 평소처럼 표시)
-- AOT 토글 시 위젯 위치/크기를 보존하도록 안정화
+- 자동 업데이트 — `Check for Updates` 버튼으로 새 버전 다운로드 후 자동 재시작
+- 시작 시 1회 버전 체크 — 옵션 패널에 `✓ 최신 버전` 또는 `● 새 버전` 짧게 표시
+- 다운로드 시 Downloads 폴더 자동 열기, 진행률·취소 지원
+- 항상 위 활성 시 작업표시줄/Alt+Tab 자동 숨김
+- 미니↔풀 전환 시 부드러운 사이즈 애니메이션 (180ms OutCubic)
+- 코너 드래그 막힘 해소 — min height 점프 제거
+- 모드 전환 시 직전 사이즈 정확 복원
+- 카드/옵션 패널/푸터 폰트 사이즈 정비 (최소 사이즈 가독성 ↑)
+- 세션 카드 컴팩트 비율로 정리 (남는 공간은 위클리 카드가 흡수)
 - 원작자 attribution 및 LICENSE 파일 정비
 
 ### v1.3.0
@@ -95,12 +100,8 @@ python -m PyInstaller claude_widget.spec --noconfirm --clean
 - API 호출 안정성 — jitter ±10%, 시작 지연 0–2초, 429 지수 백오프 도입
 - 자동 동기화 옵션을 콘텐츠 영역에서 옵션 패널로 이동
 - 주간 reset 시각의 한국어 표기 자연화
-- 헤더 status 텍스트 자동 줄바꿈
-- 미니 모드 미연결 시 0% 표시 (이전 `--`)
-- 풀 모드 최소 크기 합리화 (280×450)
 - 리사이즈 성능 최적화 — quantized scale 0.05 step + 아이콘 캐싱
 - 버전 색상 가시성 개선
-- 코드 리팩토링
 
 ### v1.2.0
 - 위젯 크기 조절을 설정 슬라이더에서 창 모서리/가장자리 드래그 방식으로 전환
@@ -131,5 +132,7 @@ python -m PyInstaller claude_widget.spec --noconfirm --clean
 - 수정·추가 저작권 © 2026 choi jinyeong — Modifications and additional features
 
 원작자에게 사전 양해를 구하고 공개되었습니다. MIT 라이선스의 저작권 고지 보존 조건에 따라 본 포크의 사용, 수정, 재배포가 자유롭습니다.
+
+본 프로그램은 [PyQt6](https://www.riverbankcomputing.com/software/pyqt/)(GPL-3.0)를 사용합니다. PyQt6의 GPL-3.0 의무에 따라 본 프로젝트의 전체 소스 코드는 본 GitHub 레포지토리에서 확인할 수 있습니다.
 
 폰트: [SUIT](https://sun.fo/suit/) by Sun (SIL Open Font License)

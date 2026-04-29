@@ -22,6 +22,7 @@ def resource_path(relative: str) -> str:
 import requests
 from PyQt6.QtCore import (
     Qt, QTimer, QPoint, QSettings, QThread, pyqtSignal, QRect, QEvent,
+    QPropertyAnimation, QEasingCurve, QSize,
 )
 from PyQt6.QtGui import (
     QColor, QPainter, QPainterPath, QFont, QFontDatabase, QIcon, QPixmap,
@@ -571,7 +572,7 @@ def _toggle_style(theme: dict, scale: float = 1.0) -> str:
     bd  = theme["border"]
     return f"""
         QPushButton {{
-            font-size:{sp(11)}px;
+            font-size:{sp(13)}px;
             padding: {sp(4)}px {sp(10)}px;
             border: 1px solid rgba({bd.red()},{bd.green()},{bd.blue()},{bd.alpha()});
             border-radius: {sp(6)}px;
@@ -627,6 +628,23 @@ class ClaudeWidget(QWidget):
         self._update_check_worker: UpdateCheckWorker | None = None
         self._dl_worker: UpdateDownloadWorker | None = None
         self._dl_progress: QProgressDialog | None = None
+        # Debounce timer for theme reapply during continuous resize. Crossing
+        # a 0.05 scale-quantum mid-drag (especially diagonal corner drags) used
+        # to fire a full QSS rebuild every frame — visibly stuttery. Now we
+        # restart the timer on each quantum cross and only reapply once the
+        # drag pauses, while geometry/margin updates still run every frame so
+        # layout responsiveness is unaffected.
+        self._theme_reapply_timer = QTimer(self)
+        self._theme_reapply_timer.setSingleShot(True)
+        self._theme_reapply_timer.timeout.connect(self._apply_theme)
+        # Single shared geometry animation, reused for mini↔full transitions.
+        # We suppress the resize-event size-save while it runs so intermediate
+        # interpolated sizes don't overwrite the user's saved geometry.
+        self._resize_anim = QPropertyAnimation(self, b"size", self)
+        self._resize_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._resize_anim.finished.connect(
+            lambda: setattr(self, "_internal_toggle_resize", False)
+        )
         # Single-shot timer re-armed by _schedule_next_sync() after each fetch.
         # This lets us apply jitter/backoff per-cycle instead of a fixed interval —
         # smooths out call timing and recovers gracefully from 429 responses.
@@ -789,13 +807,13 @@ class ClaudeWidget(QWidget):
         self._content_layout = cl
         cl.setContentsMargins(14, 14, 14, 14)
         cl.setSpacing(12)
-        # No trailing stretch — cards expand to fill extra vertical space so
-        # there's no whitespace below them when the widget is taller than min.
-        # Cards' internal layouts have fixed-height progress bars, so growth
-        # only enlarges natural spacing between text rows (looks balanced).
+        # Session card stays at its natural compact height (3 rows: header,
+        # progress bar, reset text). Only the weekly card expands so that
+        # extra vertical space lands in the card with more content rather
+        # than inflating padding inside the small session card.
         session_card = self._make_session_card()
         weekly_card = self._make_weekly_card()
-        session_card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        session_card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         weekly_card.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         cl.addWidget(session_card)
         cl.addWidget(weekly_card)
@@ -1189,13 +1207,17 @@ class ClaudeWidget(QWidget):
     def _apply_minimum_size(self):
         """Set the widget minimum size based on the current mode + scale.
         Called from _apply_widget_scale (on scale change) and _apply_mini_mode
-        (on mode toggle) — same calculation in both places, kept DRY here."""
+        (on mode toggle) — same calculation in both places, kept DRY here.
+
+        Width may scale with the current widget_scale so wider windows still
+        have room for content. Height stays at the absolute mode floor on
+        purpose: scaling min-height with width meant that pulling the side
+        edge outward inflated the height clamp too, so a follow-up corner
+        drag inward would jam mid-motion when height hit the new min."""
         if self._mini_mode:
-            self.setMinimumSize(max(MINI_MIN_W, self._sp(MINI_MIN_W)),
-                                max(MINI_MIN_H, self._sp(MINI_MIN_H)))
+            self.setMinimumSize(max(MINI_MIN_W, self._sp(MINI_MIN_W)), MINI_MIN_H)
         else:
-            self.setMinimumSize(max(FULL_MIN_W, self._sp(FULL_MIN_W)),
-                                max(FULL_MIN_H, self._sp(FULL_MIN_H)))
+            self.setMinimumSize(max(FULL_MIN_W, self._sp(FULL_MIN_W)), FULL_MIN_H)
 
     def _on_opacity_changed(self, value: int):
         self._bg_opacity = max(0, min(100, int(value)))
@@ -1345,27 +1367,50 @@ class ClaudeWidget(QWidget):
             self._update_mini_grid_spacing()
 
         # Resize the window. Mini mode shrinks; full mode restores prior size.
+        # Mode toggles use an animated tween (OutCubic, ~180ms) for a smooth
+        # transition; the very first call at startup uses an instant resize
+        # so the widget appears at its remembered size without an opening jump.
         self._internal_toggle_resize = True
         try:
             self._apply_minimum_size()
             if is_mini:
                 target = self._cfg.value("widget_size_mini")
-                if target and target.isValid():
-                    self.resize(target)
-                else:
-                    self.adjustSize()
-            elif not initial:
+            else:
                 # widget_size is updated on every full-mode resizeEvent,
                 # so it always holds the last user-chosen full-mode geometry.
-                saved = self._cfg.value("widget_size")
-                if saved and saved.isValid():
-                    self.resize(saved)
+                target = self._cfg.value("widget_size")
+
+            if target and target.isValid():
+                if initial:
+                    self.resize(target)
                 else:
-                    self.adjustSize()
+                    self._animate_resize_to(target)
+            else:
+                self.adjustSize()
         finally:
-            self._internal_toggle_resize = False
+            # If we kicked off an animation, the finished-signal handler will
+            # clear this flag instead — leave it set so resize-event saves stay
+            # suppressed for the duration of the tween.
+            if self._resize_anim.state() != QPropertyAnimation.State.Running:
+                self._internal_toggle_resize = False
+
+    def _animate_resize_to(self, target: QSize, duration: int = 180):
+        """Tween the window from its current size to `target` size."""
+        if self._resize_anim.state() == QPropertyAnimation.State.Running:
+            self._resize_anim.stop()
+        self._resize_anim.setDuration(duration)
+        self._resize_anim.setStartValue(self.size())
+        self._resize_anim.setEndValue(target)
+        self._resize_anim.start()
 
     def _toggle_mini(self):
+        # Snapshot the size we're LEAVING so the return transition restores
+        # exactly this geometry. resizeEvent updates these keys continuously
+        # during normal use, but this also covers cases the resize-save guard
+        # skips (settings panel open, programmatic resize in flight).
+        leaving_key = "widget_size_mini" if self._mini_mode else "widget_size"
+        self._cfg.setValue(leaving_key, self.size())
+
         self._mini_mode = not self._mini_mode
         self._cfg.setValue("mini_mode", "true" if self._mini_mode else "false")
         self._apply_mini_mode()
@@ -1429,7 +1474,7 @@ class ClaudeWidget(QWidget):
             f"font-size:{self._sp(15)}px;font-weight:700;color:{tpc};letter-spacing:-0.2px;"
         )
         self._status_icon.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tsc};")
-        self._status_text.setStyleSheet(f"font-size:{self._sp(10)}px;color:{tsc};")
+        self._status_text.setStyleSheet(f"font-size:{self._sp(12)}px;color:{tsc};")
         self._settings_btn.setStyleSheet(f"""
             QPushButton {{
                 background:transparent;border:none;
@@ -1444,21 +1489,21 @@ class ClaudeWidget(QWidget):
         for lbl in (self._sett_lang_label, self._sett_cred_label,
                     self._sett_opacity_label, self._auto_sync_lbl,
                     self._sett_update_label):
-            lbl.setStyleSheet(f"font-size:{self._sp(11)}px;font-weight:600;color:{tsc};")
+            lbl.setStyleSheet(f"font-size:{self._sp(14)}px;font-weight:600;color:{tsc};")
         for btn in (self._btn_en, self._btn_ko, self._aot_btn,
                     self._dark_btn):
             btn.setStyleSheet(tog)
         self._cred_status.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tpc};")
-        self._update_status.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tpc};")
-        self._opacity_value.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tpc};")
-        accent_btn_qss = """
-            QPushButton {
-                font-size:10px;font-weight:600;color:rgb(217,119,87);
+        self._update_status.setStyleSheet(f"font-size:{self._sp(13)}px;color:{tpc};")
+        self._opacity_value.setStyleSheet(f"font-size:{self._sp(13)}px;color:{tpc};")
+        accent_btn_qss = f"""
+            QPushButton {{
+                font-size:{self._sp(13)}px;font-weight:600;color:rgb(217,119,87);
                 background:rgba(217,119,87,20);border:1px solid rgba(217,119,87,60);
-                border-radius:4px;padding:3px 8px;
-            }
-            QPushButton:hover { background:rgba(217,119,87,40); }
-            QPushButton:disabled { color:rgba(217,119,87,120); }
+                border-radius:{self._sp(5)}px;padding:{self._sp(4)}px {self._sp(10)}px;
+            }}
+            QPushButton:hover {{ background:rgba(217,119,87,40); }}
+            QPushButton:disabled {{ color:rgba(217,119,87,120); }}
         """
         self._cred_refresh.setStyleSheet(accent_btn_qss)
         self._update_btn.setStyleSheet(accent_btn_qss)
@@ -1476,41 +1521,41 @@ class ClaudeWidget(QWidget):
 
         # card text
         for w in (self._session_title, self._weekly_title):
-            w.setStyleSheet(f"font-size:{self._sp(13)}px;font-weight:700;color:{tpc};")
+            w.setStyleSheet(f"font-size:{self._sp(17)}px;font-weight:700;color:{tpc};")
         for w in (self._session_pct,):
-            w.setStyleSheet(f"font-size:{self._sp(22)}px;font-weight:700;color:{SUCCESS.name()};")
+            w.setStyleSheet(f"font-size:{self._sp(28)}px;font-weight:700;color:{SUCCESS.name()};")
         for w in (self._all_models_lbl, self._sonnet_lbl):
-            w.setStyleSheet(f"font-size:{self._sp(12)}px;font-weight:500;color:{tpc};")
+            w.setStyleSheet(f"font-size:{self._sp(16)}px;font-weight:500;color:{tpc};")
         for w in (self._all_models_pct, self._sonnet_pct):
-            w.setStyleSheet(f"font-size:{self._sp(12)}px;font-weight:700;color:{SUCCESS.name()};")
+            w.setStyleSheet(f"font-size:{self._sp(22)}px;font-weight:700;color:{SUCCESS.name()};")
         for w in (self._session_reset, self._all_models_reset):
-            w.setStyleSheet(f"font-size:{self._sp(11)}px;color:{tsc};")
+            w.setStyleSheet(f"font-size:{self._sp(13)}px;color:{tsc};")
         self._learn_more_btn.setStyleSheet(
-            f"QPushButton{{font-size:{self._sp(10)}px;color:rgb(217,119,87);background:transparent;border:none;padding:0;}}"
+            f"QPushButton{{font-size:{self._sp(12)}px;color:rgb(217,119,87);background:transparent;border:none;padding:0;}}"
             "QPushButton:hover{text-decoration:underline;}"
         )
-        self._sync_note.setStyleSheet(f"font-size:{self._sp(9)}px;color:rgba({ts.red()},{ts.green()},{ts.blue()},160);")
+        self._sync_note.setStyleSheet(f"font-size:{self._sp(11)}px;color:rgba({ts.red()},{ts.green()},{ts.blue()},160);")
 
         # interval buttons
         for b in self._interval_btns.values():
             b.setStyleSheet(tog)
 
         # footer
-        self._last_sync_lbl.setStyleSheet(f"font-size:{self._sp(10)}px;color:{tsc};")
+        self._last_sync_lbl.setStyleSheet(f"font-size:{self._sp(12)}px;color:{tsc};")
         self._version_lbl.setStyleSheet(
-            f"font-size:{self._sp(10)}px;font-weight:600;color:rgb(217,119,87);"
+            f"font-size:{self._sp(12)}px;font-weight:600;color:rgb(217,119,87);"
             "letter-spacing:0.3px;"
         )
         self._sync_btn.setStyleSheet(
-            f"QPushButton{{font-size:{self._sp(10)}px;font-weight:600;color:rgb(217,119,87);background:transparent;border:none;}}"
+            f"QPushButton{{font-size:{self._sp(12)}px;font-weight:600;color:rgb(217,119,87);background:transparent;border:none;}}"
             "QPushButton:hover{opacity:0.7;}"
         )
         bd = t["border"]
         self._footer_sep.setStyleSheet(
-            f"font-size:{self._sp(10)}px;color:{self._rgba(bd)};"
+            f"font-size:{self._sp(12)}px;color:{self._rgba(bd)};"
         )
         self._quit_btn.setStyleSheet(
-            f"QPushButton{{font-size:{self._sp(10)}px;font-weight:600;color:rgb(248,113,113);background:transparent;border:none;}}"
+            f"QPushButton{{font-size:{self._sp(12)}px;font-weight:600;color:rgb(248,113,113);background:transparent;border:none;}}"
             "QPushButton:hover{opacity:0.7;}"
         )
 
@@ -1555,7 +1600,7 @@ class ClaudeWidget(QWidget):
             ts = self._theme["text_secondary"]
             c = f"rgba({ts.red()},{ts.green()},{ts.blue()},220)"
         self._status_icon.setStyleSheet(f"font-size:{self._sp(11)}px;color:{c};")
-        self._status_text.setStyleSheet(f"font-size:{self._sp(10)}px;color:{c};")
+        self._status_text.setStyleSheet(f"font-size:{self._sp(12)}px;color:{c};")
 
         # Full-mode percent colors stay tied to last successful values so
         # context isn't lost when a sync fails. Mini-mode percent colors
@@ -1674,9 +1719,11 @@ class ClaudeWidget(QWidget):
         super().resizeEvent(ev)
         # Only re-apply the (expensive) theme stylesheet pass when the quantized
         # scale actually changed — this keeps drag-resize smooth instead of
-        # restyling every widget on every mouse-move event.
+        # restyling every widget on every mouse-move event. Additionally
+        # debounce the QSS pass so diagonal corner drags don't stutter when
+        # multiple quantum crossings happen in quick succession.
         if self._apply_widget_scale():
-            self._apply_theme()
+            self._theme_reapply_timer.start(50)
         # Mini-grid spacing tracks width continuously so the layout compresses
         # smoothly as the user drags the mini widget narrower.
         self._update_mini_grid_spacing()
@@ -2018,9 +2065,9 @@ class ClaudeWidget(QWidget):
         self._status_error_key = None
         self._status_error_raw = None
         self._status_icon.setText("✓")
-        self._status_icon.setStyleSheet("font-size:11px;color:rgb(16,185,129);")
+        self._status_icon.setStyleSheet(f"font-size:{self._sp(11)}px;color:rgb(16,185,129);")
         self._status_text.setText(s["connected"])
-        self._status_text.setStyleSheet("font-size:10px;color:rgb(16,185,129);")
+        self._status_text.setStyleSheet(f"font-size:{self._sp(12)}px;color:rgb(16,185,129);")
 
     def _record_last_sync_time(self, s: dict):
         now = datetime.now()
@@ -2035,9 +2082,9 @@ class ClaudeWidget(QWidget):
         self._status_error_key = key
         self._status_error_raw = msg if key is None else None
         self._status_icon.setText("✗")
-        self._status_icon.setStyleSheet("font-size:11px;color:rgb(248,113,113);")
+        self._status_icon.setStyleSheet(f"font-size:{self._sp(11)}px;color:rgb(248,113,113);")
         self._status_text.setText(msg)
-        self._status_text.setStyleSheet("font-size:10px;color:rgb(248,113,113);")
+        self._status_text.setStyleSheet(f"font-size:{self._sp(12)}px;color:rgb(248,113,113);")
 
     def _reset_mini_pct_to_zero(self):
         """Show '0%' on the mini-mode percent labels when the API is unreachable.
@@ -2059,12 +2106,15 @@ class ClaudeWidget(QWidget):
         self._set_pct_color(lbl, pct, big=big, mini=mini)
 
     def _set_pct_color(self, lbl: QLabel, pct: float, big: bool = False, mini: bool = False):
+        # Sizes must mirror the corresponding card-text rules in _apply_theme,
+        # because this method overwrites the same labels' stylesheets every
+        # sync — a divergence here means the QSS-driven sizes silently revert.
         if mini:
             sz = f"{self._sp(26)}px"
         elif big:
-            sz = f"{self._sp(22)}px"
+            sz = f"{self._sp(28)}px"
         else:
-            sz = f"{self._sp(12)}px"
+            sz = f"{self._sp(22)}px"
         if pct >= 80:
             c = "rgb(248,113,113)"
         elif pct >= 50:
