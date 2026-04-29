@@ -37,8 +37,19 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
+        # Heavy ML/scientific stacks — never imported by main.py
         'tkinter', 'matplotlib', 'numpy', 'pandas',
         'scipy', 'PIL', 'cv2', 'sklearn',
+        # Qt modules we don't use (PyInstaller often pulls them by default)
+        'PyQt6.QtNetwork', 'PyQt6.QtMultimedia', 'PyQt6.QtMultimediaWidgets',
+        'PyQt6.QtSql', 'PyQt6.QtPrintSupport', 'PyQt6.QtSvg', 'PyQt6.QtSvgWidgets',
+        'PyQt6.QtTest', 'PyQt6.QtXml', 'PyQt6.QtOpenGL', 'PyQt6.QtOpenGLWidgets',
+        'PyQt6.QtPdf', 'PyQt6.QtPdfWidgets', 'PyQt6.QtQuick', 'PyQt6.QtQml',
+        'PyQt6.QtWebEngineCore', 'PyQt6.QtWebEngineWidgets', 'PyQt6.QtWebChannel',
+        'PyQt6.QtBluetooth', 'PyQt6.QtSerialPort', 'PyQt6.QtNfc',
+        'PyQt6.QtSensors', 'PyQt6.QtPositioning', 'PyQt6.QtLocation',
+        # Std-lib pieces we never reach in this app
+        'unittest', 'pydoc', 'doctest', 'xmlrpc', 'pickletools',
     ],
     noarchive=False,
     optimize=1,

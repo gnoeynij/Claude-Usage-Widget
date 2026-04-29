@@ -6,10 +6,23 @@ Claude Usage Monitor — PyQt6 Desktop Widget
 API  : https://api.anthropic.com/api/oauth/usage
 Auth : ~/.claude/.credentials.json  (claudeAiOauth.accessToken)
 Header: anthropic-beta: oauth-2025-04-20
+
+────────────────────────────────────────────────────────────
+파일 구조 한눈에 보기
+────────────────────────────────────────────────────────────
+1) 모듈 상수 / 폰트 로딩         (~50–110 줄)
+2) THEMES (라이트/다크 팔레트)   (~110–170 줄)
+3) I18N (en/ko 사전)             (~170–280 줄)
+4) FetchWorker                   — 사용량 API 호출 워커
+5) UpdateCheckWorker             — GitHub Releases 최신 버전 조회
+6) UpdateDownloadWorker          — 새 .exe 다운로드 (스트리밍 + 취소)
+7) ProgressBar                   — 임계치 색상 + 눈금 옵션 커스텀 위젯
+8) ClaudeWidget                  — 메인 위젯 (헤더/카드/푸터/미니/옵션)
+9) main()                        — 진입점 (단일 인스턴스 mutex 포함)
 """
 
 from __future__ import annotations
-import sys, os, json, math, random, subprocess, tempfile, webbrowser
+import sys, os, json, math, random, gc, subprocess, tempfile, webbrowser
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -176,6 +189,26 @@ DANGER  = QColor(248, 113, 113)
 WARNING = QColor(245, 158, 11)
 SUCCESS = QColor(16,  185, 129)
 
+# QSS에 그대로 꽂아 쓸 수 있는 RGB 문자열 — 각 색상의 단일 출처.
+# alpha 변동이 있는 hover/disabled 상태는 호출부에서 inline rgba(...)로 합성한다.
+ORANGE_RGB  = f"rgb({ORANGE.red()},{ORANGE.green()},{ORANGE.blue()})"
+DANGER_RGB  = f"rgb({DANGER.red()},{DANGER.green()},{DANGER.blue()})"
+SUCCESS_RGB = f"rgb({SUCCESS.red()},{SUCCESS.green()},{SUCCESS.blue()})"
+
+# 사용량 % 임계치 — 진행바 색상과 % 라벨 색상이 동일 기준을 공유.
+PCT_THRESHOLD_DANGER = 80   # ≥ 이 값 → DANGER (빨강)
+PCT_THRESHOLD_WARN   = 50   # ≥ 이 값 → WARNING (주황) / 이하 → SUCCESS (초록)
+
+# 자동 sync 간격 옵션 (초). 0 = 수동(Off).
+SYNC_INTERVAL_OPTIONS_SEC = (0, 300, 600, 1800, 3600)
+
+# 시작 시 자동 버전 체크가 발화되기까지의 지연.
+# UI가 완전히 그려진 뒤 + 사용량 sync와 시점이 부딪히지 않도록 분리.
+STARTUP_UPDATE_CHECK_DELAY_MS = 1500
+
+# 번들 아이콘 자산의 상대 경로 — resource_path()와 함께 사용.
+ICON_ASSET_PATH = os.path.join("assets", "icon.ico")
+
 # ────────────────────────────────────────────────────────────
 #  i18n
 # ────────────────────────────────────────────────────────────
@@ -310,6 +343,14 @@ I18N: dict[str, dict] = {
 #  Background fetch worker
 # ════════════════════════════════════════════════════════════
 class FetchWorker(QThread):
+    """Anthropic OAuth 사용량 API를 호출하는 백그라운드 워커.
+
+    UI 스레드를 막지 않기 위해 QThread로 분리. ~/.claude/.credentials.json
+    에서 OAuth 액세스 토큰을 읽어 GET 요청을 보내고, 응답을 가공한 dict
+    하나를 result 시그널로 UI 스레드에 전달한다. 에러는 예외를 던지지 않고
+    {"error": "..."} 형태로 같은 시그널에 실어 보낸다 — 호출자는 한 곳에서
+    정상/에러 분기를 할 수 있다.
+    """
     result = pyqtSignal(dict)
 
     @staticmethod
@@ -393,7 +434,12 @@ class FetchWorker(QThread):
 #  Update workers — GitHub Releases API as auto-update backend
 # ════════════════════════════════════════════════════════════
 class UpdateCheckWorker(QThread):
-    """Hits GitHub's anonymous Releases API (60 req/h per IP — plenty)."""
+    """GitHub Releases API에서 최신 릴리즈 정보를 조회하는 워커.
+
+    익명 호출이므로 레포가 public이어야 200을 받을 수 있다. private이면 404.
+    GitHub의 익명 Rate Limit은 IP당 시간당 60회 — 시작 시 1회 + 사용자 클릭
+    체크 정도로는 절대 부족하지 않음.
+    """
     finished_with = pyqtSignal(dict)
 
     def run(self):
@@ -427,10 +473,14 @@ class UpdateCheckWorker(QThread):
 
 
 class UpdateDownloadWorker(QThread):
-    """Streams the new .exe to disk with progress signaling.
+    """새 버전 .exe를 사용자 Downloads 폴더로 스트리밍 다운로드하는 워커.
 
-    Writes to <dest>.part then renames atomically — partial files won't pollute
-    the user's Downloads folder if they cancel mid-flight."""
+    핵심 디자인:
+    - 진행률(0~100)은 progress 시그널로 매 청크마다 송출 → UI는 ProgressDialog로 표시
+    - 사용자가 다이얼로그에서 취소를 누르면 cancel() → 다음 청크 전에 멈추고 .part 파일 삭제
+    - 다운로드는 <dest>.part 임시 파일에 쓰고, 완료 후에만 정식 파일명으로 rename
+      (atomic rename) — 중간에 끊겨도 Downloads 폴더에 깨진 파일이 남지 않음
+    """
     progress = pyqtSignal(int)
     finished_with = pyqtSignal(dict)
 
@@ -483,6 +533,13 @@ class UpdateDownloadWorker(QThread):
 #  Custom Progress Bar
 # ════════════════════════════════════════════════════════════
 class ProgressBar(QWidget):
+    """임계치별 색상이 바뀌는 커스텀 진행바 (둥근 모서리 + 그라디언트).
+
+    - <50%: 초록 / 50–79%: 주황 / ≥80%: 빨강
+    - show_scale=True 면 0/25/50/75/100 눈금 라벨을 아래에 그림
+    - 위젯 스케일 변경 시 set_scale()로 높이/폰트 비례 조정
+    paintEvent 직접 그리는 방식이라 QSS만으로 표현하기 까다로운 알파/그라디언트도 자유로움.
+    """
     def __init__(self, theme: dict, show_scale: bool = False, parent=None):
         super().__init__(parent)
         self._pct   = 0.0
@@ -509,9 +566,13 @@ class ProgressBar(QWidget):
     @staticmethod
     def _bar_color(pct, alpha=1.0):
         a = int(255 * alpha)
-        if pct >= 80: return QColor(248, 113, 113, a)
-        if pct >= 50: return QColor(245, 158, 11, a)
-        return QColor(16, 185, 129, a)
+        # 임계치는 _set_pct_color()와 단일 출처(PCT_THRESHOLD_*)를 공유한다.
+        base = (
+            DANGER  if pct >= PCT_THRESHOLD_DANGER else
+            WARNING if pct >= PCT_THRESHOLD_WARN   else
+            SUCCESS
+        )
+        return QColor(base.red(), base.green(), base.blue(), a)
 
     def paintEvent(self, _):
         p = QPainter(self)
@@ -580,7 +641,7 @@ def _toggle_style(theme: dict, scale: float = 1.0) -> str:
             color: rgba({ts.red()},{ts.green()},{ts.blue()},220);
         }}
         QPushButton:checked {{
-            color: rgb(217,119,87);
+            color: {ORANGE_RGB};
             background: rgba(217,119,87,30);
             border-color: rgba(217,119,87,90);
             font-weight: 600;
@@ -595,9 +656,22 @@ def _toggle_style(theme: dict, scale: float = 1.0) -> str:
 #  Main widget
 # ════════════════════════════════════════════════════════════
 class ClaudeWidget(QWidget):
+    """프레임리스 메인 위젯. 모든 UI/상태/이벤트가 이 클래스에 모여 있다.
+
+    구성 요소
+    - 헤더: 드래그 핸들 + Claude 아이콘 + 상태 텍스트 + 옵션 ⚙ 버튼
+    - 콘텐츠: 현재 세션 카드 + 주간 사용량 카드
+    - 미니뷰: 풀모드 영역과 visibility를 토글하는 컴팩트 그리드
+    - 옵션 패널: 언어/인증/자동동기화/AOT/다크/투명도/업데이트
+    - 푸터: 버전 / 마지막 sync / 동기화 / 닫기
+
+    상태 보존: QSettings("ClaudeWidget", "Claude-Widget-Cross") — 언어, 사이즈,
+    위치, AOT, 다크 모드, 투명도, 미니 모드 여부, 동기화 주기, 마지막 sync 시각.
+    """
 
     def __init__(self):
         super().__init__()
+        # ── 설정값 로드 (이전 세션 상태 복원) ─────────────────
         self._cfg = QSettings("ClaudeWidget", "Claude-Widget-Cross")
         self._lang     = self._cfg.value("lang",          "en")
         # Default auto-sync = 10 min — a gentle call rate combined with the
@@ -661,6 +735,8 @@ class ClaudeWidget(QWidget):
         self._last_all_pct: float | None = None
         self._last_sonnet_pct: float | None = None
         self._last_reset: tuple | None = None  # (weekday, hour, minute)
+        # 마지막으로 받은 세션 초기화까지 남은 시간(초). 언어 전환 시 다시 그릴 때 사용.
+        self._last_session_reset_secs: int | None = None
         self._cred_present: bool | None = None
 
         self._setup_window()
@@ -674,9 +750,9 @@ class ClaudeWidget(QWidget):
         self._apply_mini_mode(initial=True)
         self._setup_auto_sync()
         # One-shot startup version check — populates the short status next to
-        # the "Check for Updates" button. 1.5s delay so the UI is fully visible
-        # and the usage-API sync gets a head start.
-        QTimer.singleShot(1500, self._startup_update_check)
+        # the "Check for Updates" button. Delay so the UI is fully visible and
+        # the usage-API sync gets a head start (constant at module top).
+        QTimer.singleShot(STARTUP_UPDATE_CHECK_DELAY_MS, self._startup_update_check)
 
         pos = self._cfg.value("pos")
         if pos:
@@ -691,10 +767,14 @@ class ClaudeWidget(QWidget):
 
 
 
-    # ── window ──────────────────────────────────────────────
+    # ── 창 플래그 설정 ─────────────────────────────────────
     def _setup_window(self):
-        # Qt.WindowType.Tool 은 작업표시줄에서 창을 자동 제외시킨다.
-        # AOT 활성 시에만 Tool 플래그를 켜서 "항상 위 → 작업표시줄 숨김"으로 묶는다.
+        """프레임리스 창 + AOT 상태에 따른 Tool 플래그 설정.
+
+        Qt.WindowType.Tool 은 작업표시줄에서 창을 자동 제외시킨다.
+        AOT 활성 시에만 Tool 플래그를 켜서 "항상 위 → 작업표시줄 숨김"으로 묶는다.
+        AOT가 꺼져 있으면 일반 창처럼 작업표시줄/Alt+Tab에 노출된다.
+        """
         flags = Qt.WindowType.FramelessWindowHint
         if self._aot:
             flags |= Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool
@@ -707,7 +787,7 @@ class ClaudeWidget(QWidget):
 
     # ── tray ────────────────────────────────────────────────
     def _make_tray_icon(self) -> QIcon:
-        ico_path = resource_path(os.path.join("assets", "icon.ico"))
+        ico_path = resource_path(ICON_ASSET_PATH)
         if os.path.isfile(ico_path):
             return QIcon(ico_path)
             
@@ -862,7 +942,7 @@ class ClaudeWidget(QWidget):
 
         # icon — clickable, enters mini mode
         header_png = resource_path(os.path.join("assets", "claude-header.png"))
-        ico_path = resource_path(os.path.join("assets", "icon.ico"))
+        ico_path = resource_path(ICON_ASSET_PATH)
         self._header_icon = QLabel()
         self._header_icon.setCursor(Qt.CursorShape.PointingHandCursor)
         self._header_icon.mousePressEvent = self._header_icon_clicked
@@ -876,7 +956,7 @@ class ClaudeWidget(QWidget):
         self._title_lbl = QLabel("Claude Monitor")
         self._plan_badge = QLabel("Max")
         self._plan_badge.setStyleSheet(
-            "font-size:9px;font-weight:600;color:rgb(217,119,87);"
+            f"font-size:9px;font-weight:600;color:{ORANGE_RGB};"
             "background:rgba(217,119,87,26);border:1px solid rgba(217,119,87,64);"
             "border-radius:4px;padding:1px 6px;"
         )
@@ -1072,7 +1152,7 @@ class ClaudeWidget(QWidget):
         l = QHBoxLayout(w); l.setContentsMargins(0,0,0,0); l.setSpacing(6)
 
         self._interval_btns: dict[int, QPushButton] = {}
-        for secs in [0, 300, 600, 1800, 3600]:
+        for secs in SYNC_INTERVAL_OPTIONS_SEC:
             b = QPushButton(self._interval_label(secs))
             b.setCheckable(True)
             b.setChecked(secs == self._interval)
@@ -1140,7 +1220,13 @@ class ClaudeWidget(QWidget):
         self._header_icon.setFixedSize(side, side)
 
     def _apply_widget_scale(self) -> bool:
-        """Recompute scale-dependent layout. Returns True iff the quantized
+        """위젯 너비를 기반으로 스케일을 계산하고 모든 사이즈 종속 요소를 재배치.
+
+        스케일은 0.05 단위로 양자화 → 드래그 중 폰트 크기가 매 프레임 흔들리는 현상 방지.
+        반환값이 True면 양자 경계를 넘은 것이므로 호출자(`resizeEvent`)가
+        `_apply_theme()`도 트리거. False면 스타일 시트는 그대로 두어 매끄러운 드래그 유지.
+
+        Recompute scale-dependent layout. Returns True iff the quantized
         scale changed, so the caller can skip an _apply_theme() pass when
         nothing actually needs restyling. Quantizing to 0.05 steps avoids
         font-size jitter while the user drags to resize."""
@@ -1340,6 +1426,16 @@ class ClaudeWidget(QWidget):
             ev.accept()
 
     def _apply_mini_mode(self, initial: bool = False):
+        """풀↔미니 모드 전환의 핵심 로직.
+
+        별도 위젯이 아니라 동일 위젯 안에서 풀모드 chrome과 미니뷰의 visibility를
+        토글하는 방식. initial=True (시작 시 1회)는 즉시 resize, 그 외에는
+        180ms OutCubic 애니메이션으로 부드러운 사이즈 보간.
+
+        타깃 사이즈는 모드별 키(widget_size / widget_size_mini)에 저장된 값을
+        그대로 복원 — 사용자가 모드 사이를 오갈 때 그 모드에서 마지막에
+        본인이 직접 조정한 사이즈로 정확히 돌아간다.
+        """
         is_mini = self._mini_mode
 
         # Auto-close settings when entering mini (settings is unreachable there).
@@ -1404,10 +1500,12 @@ class ClaudeWidget(QWidget):
         self._resize_anim.start()
 
     def _toggle_mini(self):
-        # Snapshot the size we're LEAVING so the return transition restores
-        # exactly this geometry. resizeEvent updates these keys continuously
-        # during normal use, but this also covers cases the resize-save guard
-        # skips (settings panel open, programmatic resize in flight).
+        """헤더/미니뷰의 Claude 아이콘 클릭 또는 트레이 메뉴에서 호출.
+
+        모드 플립 직전에 *떠나는 모드*의 현재 사이즈를 그 모드 키에 즉시 스냅샷.
+        resizeEvent가 평소엔 연속 저장하지만 옵션 패널 열림/programmatic resize
+        등의 가드 케이스에서 누락될 수 있어 여기서 한 번 더 보장.
+        """
         leaving_key = "widget_size_mini" if self._mini_mode else "widget_size"
         self._cfg.setValue(leaving_key, self.size())
 
@@ -1481,7 +1579,7 @@ class ClaudeWidget(QWidget):
                 color:{tsc};font-size:{self._sp(14)}px;border-radius:{self._sp(6)}px;
             }}
             QPushButton:hover {{
-                color:rgb(217,119,87);background:rgba(217,119,87,20);
+                color:{ORANGE_RGB};background:rgba(217,119,87,20);
             }}
         """)
 
@@ -1498,7 +1596,7 @@ class ClaudeWidget(QWidget):
         self._opacity_value.setStyleSheet(f"font-size:{self._sp(13)}px;color:{tpc};")
         accent_btn_qss = f"""
             QPushButton {{
-                font-size:{self._sp(13)}px;font-weight:600;color:rgb(217,119,87);
+                font-size:{self._sp(13)}px;font-weight:600;color:{ORANGE_RGB};
                 background:rgba(217,119,87,20);border:1px solid rgba(217,119,87,60);
                 border-radius:{self._sp(5)}px;padding:{self._sp(4)}px {self._sp(10)}px;
             }}
@@ -1531,7 +1629,7 @@ class ClaudeWidget(QWidget):
         for w in (self._session_reset, self._all_models_reset):
             w.setStyleSheet(f"font-size:{self._sp(13)}px;color:{tsc};")
         self._learn_more_btn.setStyleSheet(
-            f"QPushButton{{font-size:{self._sp(12)}px;color:rgb(217,119,87);background:transparent;border:none;padding:0;}}"
+            f"QPushButton{{font-size:{self._sp(12)}px;color:{ORANGE_RGB};background:transparent;border:none;padding:0;}}"
             "QPushButton:hover{text-decoration:underline;}"
         )
         self._sync_note.setStyleSheet(f"font-size:{self._sp(11)}px;color:rgba({ts.red()},{ts.green()},{ts.blue()},160);")
@@ -1543,11 +1641,11 @@ class ClaudeWidget(QWidget):
         # footer
         self._last_sync_lbl.setStyleSheet(f"font-size:{self._sp(12)}px;color:{tsc};")
         self._version_lbl.setStyleSheet(
-            f"font-size:{self._sp(12)}px;font-weight:600;color:rgb(217,119,87);"
+            f"font-size:{self._sp(12)}px;font-weight:600;color:{ORANGE_RGB};"
             "letter-spacing:0.3px;"
         )
         self._sync_btn.setStyleSheet(
-            f"QPushButton{{font-size:{self._sp(12)}px;font-weight:600;color:rgb(217,119,87);background:transparent;border:none;}}"
+            f"QPushButton{{font-size:{self._sp(12)}px;font-weight:600;color:{ORANGE_RGB};background:transparent;border:none;}}"
             "QPushButton:hover{opacity:0.7;}"
         )
         bd = t["border"]
@@ -1555,7 +1653,7 @@ class ClaudeWidget(QWidget):
             f"font-size:{self._sp(12)}px;color:{self._rgba(bd)};"
         )
         self._quit_btn.setStyleSheet(
-            f"QPushButton{{font-size:{self._sp(12)}px;font-weight:600;color:rgb(248,113,113);background:transparent;border:none;}}"
+            f"QPushButton{{font-size:{self._sp(12)}px;font-weight:600;color:{DANGER_RGB};background:transparent;border:none;}}"
             "QPushButton:hover{opacity:0.7;}"
         )
 
@@ -1593,9 +1691,9 @@ class ClaudeWidget(QWidget):
         toggling settings / resizing the window doesn't reset status to gray
         or percent labels to default green."""
         if self._status_state == "connected":
-            c = "rgb(16,185,129)"
+            c = SUCCESS_RGB
         elif self._status_state == "error":
-            c = "rgb(248,113,113)"
+            c = DANGER_RGB
         else:
             ts = self._theme["text_secondary"]
             c = f"rgba({ts.red()},{ts.green()},{ts.blue()},220)"
@@ -1686,6 +1784,14 @@ class ClaudeWidget(QWidget):
         if self._last_reset:
             formatted = s["formatResetTime"](*self._last_reset)
             self._all_models_reset.setText(s["resetsAt"](formatted))
+
+        # Session reset text (language-dependent — "Resets in 1h 4m" / "1시간 4분 후 초기화")
+        if self._last_session_reset_secs is not None:
+            secs = self._last_session_reset_secs
+            h, m = secs // 3600, (secs % 3600) // 60
+            self._session_reset.setText(
+                s["resetsSoon"] if (h == 0 and m == 0) else s["resetsIn"](h, m)
+            )
 
     # ── Toggle helpers ────────────────────────────────────────
     def _toggle_settings(self):
@@ -1875,8 +1981,13 @@ class ClaudeWidget(QWidget):
         return f"{base} ({i}){ext}"
 
     def _restart_with_new_exe(self, new_exe_path: str):
-        """Spawn a detached helper that waits 2s (so our single-instance mutex
-        is released), then launches the new exe. We then quit the current app."""
+        """새 .exe를 실행하고 자기 자신을 종료해 자동 재시작 효과를 만든다.
+
+        문제: main.py의 단일 인스턴스 mutex(`ClaudeWidget_Mutex_v1`)가 살아 있는
+        상태에서 새 .exe를 즉시 실행하면 새 인스턴스가 mutex 충돌로 즉시 종료됨.
+        해결: 임시 .bat 헬퍼를 detached로 띄워 2초 대기 후 새 exe를 실행.
+        그 사이 우리 프로세스는 quit() → mutex 해제 → 새 exe가 정상 시작.
+        """
         bat_path = Path(tempfile.gettempdir()) / "claude_widget_restart.bat"
         bat_path.write_text(
             "@echo off\r\n"
@@ -1937,26 +2048,26 @@ class ClaudeWidget(QWidget):
 
     # ── Sync ─────────────────────────────────────────────────
     def _setup_auto_sync(self):
-        """(Re)start the auto-sync cycle.
+        """자동 동기화 사이클 시작/재시작.
 
-        First sync uses a 0–2s random delay so the very first request after
-        launch doesn't always land on the exact same wall-clock instant.
-        Subsequent syncs are scheduled by _schedule_next_sync() with ±10%
-        jitter and exponential backoff on rate limits."""
+        첫 sync는 0–2초 랜덤 지연 후 실행 — 매번 정확히 같은 시각에 첫 호출이
+        떨어지지 않게 분산. 이후 sync는 _schedule_next_sync()가 ±10% jitter와
+        429 응답 시 지수 백오프를 적용해 매 사이클 단발성 타이머로 다시 잡는다.
+        """
         self._sync_timer.stop()
         self._consecutive_429 = 0
         if self._interval > 0:
             self._sync_timer.start(random.randint(0, SYNC_STARTUP_JITTER_MS))
 
     def _schedule_next_sync(self):
-        """Re-arm the single-shot sync timer after a fetch completes.
+        """fetch 완료 후 다음 sync까지의 대기 타이머를 다시 설정.
 
-        - Adds ±10% random jitter to the configured interval so polling cycles
-          don't stay locked to fixed wall-clock moments.
-        - On a `429 Rate Limited` response, backs off exponentially:
-          2× → 4× → 8× → 16× the interval, then caps. The counter resets to 0
-          (back to normal interval) the moment a request succeeds, so the
-          backoff doesn't linger after the API recovers."""
+        - 사용자가 설정한 주기(예: 600초)에 ±10% 랜덤 jitter를 붙여서 호출
+          시점이 고정되지 않도록 함 → 자연스러운 분산.
+        - 직전 응답이 `429 Rate Limited` 였다면 지수 백오프 적용:
+          1× → 2× → 4× → 8× → 16× (상한). 한 번이라도 성공하면 카운터를
+          0으로 리셋해 즉시 정상 주기로 복귀 — 백오프가 누적되어 멈춰있지 않음.
+        """
         if self._interval <= 0:
             return  # manual mode
         backoff = 2 ** min(self._consecutive_429, RATE_LIMIT_BACKOFF_CAP_EXP)
@@ -2006,12 +2117,16 @@ class ClaudeWidget(QWidget):
         self._plan_badge.setText(usage.get("planName", "Max"))
         self._set_status_connected(s)
         self._record_last_sync_time(s)
+        # Sync 1회 사이클이 끝나는 시점은 short-lived 객체(JSON 파싱 결과,
+        # response 객체, deleteLater 예약 워커 등)를 정리하기 좋은 자연스러운
+        # 휴식 지점. 백그라운드로 오래 띄워둘 때 메모리 누적을 줄여 준다.
+        gc.collect()
 
     # ── _on_done helpers ────────────────────────────────────
     def _update_cred_indicator(self, s: dict):
         creds = FetchWorker.read_credentials()
         self._cred_present = creds is not None
-        ok_color = "rgb(16,185,129)" if creds else "rgb(248,113,113)"
+        ok_color = SUCCESS_RGB if creds else DANGER_RGB
         self._cred_dot.setStyleSheet(f"font-size:10px;color:{ok_color};")
         self._cred_status.setText(s["autoDetected"] if creds else s["notFound"])
 
@@ -2035,6 +2150,7 @@ class ClaudeWidget(QWidget):
         self._render_pct(self._session_pct, pct, big=True)
         self._render_pct(self._mini_session_pct, pct, mini=True)
         secs = usage["sessionResetSeconds"]
+        self._last_session_reset_secs = secs
         h, m = secs // 3600, (secs % 3600) // 60
         self._session_reset.setText(
             s["resetsSoon"] if (h == 0 and m == 0) else s["resetsIn"](h, m)
@@ -2065,9 +2181,9 @@ class ClaudeWidget(QWidget):
         self._status_error_key = None
         self._status_error_raw = None
         self._status_icon.setText("✓")
-        self._status_icon.setStyleSheet(f"font-size:{self._sp(11)}px;color:rgb(16,185,129);")
+        self._status_icon.setStyleSheet(f"font-size:{self._sp(11)}px;color:{SUCCESS_RGB};")
         self._status_text.setText(s["connected"])
-        self._status_text.setStyleSheet(f"font-size:{self._sp(12)}px;color:rgb(16,185,129);")
+        self._status_text.setStyleSheet(f"font-size:{self._sp(12)}px;color:{SUCCESS_RGB};")
 
     def _record_last_sync_time(self, s: dict):
         now = datetime.now()
@@ -2082,9 +2198,9 @@ class ClaudeWidget(QWidget):
         self._status_error_key = key
         self._status_error_raw = msg if key is None else None
         self._status_icon.setText("✗")
-        self._status_icon.setStyleSheet(f"font-size:{self._sp(11)}px;color:rgb(248,113,113);")
+        self._status_icon.setStyleSheet(f"font-size:{self._sp(11)}px;color:{DANGER_RGB};")
         self._status_text.setText(msg)
-        self._status_text.setStyleSheet(f"font-size:{self._sp(12)}px;color:rgb(248,113,113);")
+        self._status_text.setStyleSheet(f"font-size:{self._sp(12)}px;color:{DANGER_RGB};")
 
     def _reset_mini_pct_to_zero(self):
         """Show '0%' on the mini-mode percent labels when the API is unreachable.
@@ -2115,12 +2231,12 @@ class ClaudeWidget(QWidget):
             sz = f"{self._sp(28)}px"
         else:
             sz = f"{self._sp(22)}px"
-        if pct >= 80:
-            c = "rgb(248,113,113)"
-        elif pct >= 50:
-            c = "rgb(245,158,11)"
+        if pct >= PCT_THRESHOLD_DANGER:
+            c = DANGER.name()
+        elif pct >= PCT_THRESHOLD_WARN:
+            c = WARNING.name()
         else:
-            c = "rgb(16,185,129)"
+            c = SUCCESS.name()
         lbl.setStyleSheet(f"font-size:{sz};font-weight:700;color:{c};letter-spacing:-0.2px;")
 
     def _refresh_creds_and_sync(self):
@@ -2128,10 +2244,10 @@ class ClaudeWidget(QWidget):
         self._cred_present = creds is not None
         s = I18N[self._lang]
         if creds:
-            self._cred_dot.setStyleSheet("font-size:10px;color:rgb(16,185,129);")
+            self._cred_dot.setStyleSheet(f"font-size:10px;color:{SUCCESS_RGB};")
             self._cred_status.setText(s["autoDetected"])
         else:
-            self._cred_dot.setStyleSheet("font-size:10px;color:rgb(248,113,113);")
+            self._cred_dot.setStyleSheet(f"font-size:10px;color:{DANGER_RGB};")
             self._cred_status.setText(s["notFound"])
         self.do_sync()
 
@@ -2234,10 +2350,15 @@ class ClaudeWidget(QWidget):
 #  Entry point
 # ════════════════════════════════════════════════════════════
 def main():
+    """애플리케이션 진입점.
+
+    순서: AppUserModelID 등록 → 단일 인스턴스 mutex → 폰트/아이콘 → 위젯 생성/표시.
+    """
     if sys.platform == "win32":
         try:
             import ctypes
-            # Must set AppUserModelID so Windows uses our icon instead of Python's default for taskbar
+            # AppUserModelID — Windows가 작업표시줄 아이콘을 Python 기본 아이콘 대신
+            # 우리 아이콘으로 표시하도록 식별자를 등록한다.
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ClaudeWidget.Desktop.App.v1")
         except Exception:
             pass
@@ -2268,7 +2389,7 @@ def main():
     app.setFont(app_font)
 
     # Set application icon (works for taskbar + alt-tab even on frameless windows)
-    ico_path = resource_path(os.path.join("assets", "icon.ico"))
+    ico_path = resource_path(ICON_ASSET_PATH)
     if os.path.isfile(ico_path):
         app.setWindowIcon(QIcon(ico_path))
 
