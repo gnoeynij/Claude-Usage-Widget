@@ -37,10 +37,10 @@ APP_VERSION   = "v1.3.3"
 USAGE_URL     = "https://api.anthropic.com/api/oauth/usage"
 LEARN_MORE_URL = "https://support.claude.com/ko/"
 # GitHub Releases API — used as the auto-update backend (no separate server).
-# Releases are published to a small *public* repo so the .exe can call this
-# endpoint anonymously (60 req/h per IP — plenty). Source code stays private
-# in the main repo; only built artifacts go to this releases repo.
-RELEASES_API_URL = "https://api.github.com/repos/gnoeynij/Claude-Widget-Releases/releases/latest"
+# Anonymous calls require this repo to be public; while the repo is private,
+# the call returns 404 and the startup check stays silent, the manual button
+# shows "확인 실패: HTTP 404". Both behaviors are intentional fallbacks.
+RELEASES_API_URL = "https://api.github.com/repos/gnoeynij/Claude-Usage-Widget/releases/latest"
 
 
 def _version_tuple(v: str) -> tuple[int, ...]:

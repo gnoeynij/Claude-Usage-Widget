@@ -124,31 +124,31 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - 주석: 기본은 작성하지 않는다. *왜 이렇게 했는지*가 비자명한 경우(숨은 제약, 과거 버그 우회, Windows API 동작 차이 등)에만 짧게 추가한다.
 - 포매터/린터: 별도 강제 없음. `black` / `ruff` 같은 자동 포매터를 *기존 코드 전체에* 돌리지 말 것 (대량 diff 발생 → Karpathy §3 위반).
 
-### 릴리즈 정책 — 두 레포 미러링
+### 릴리즈 정책 — 단일 레포
 
-**모든 GitHub 릴리즈는 두 레포 양쪽에 동일한 태그·노트·`.exe` 자산으로 발행한다.**
+**모든 릴리즈는 메인 레포 `gnoeynij/Claude-Usage-Widget` 한 곳에서만 발행한다.**
 
-| 레포 | 역할 |
-|---|---|
-| `gnoeynij/Claude-Usage-Widget` (private, 메인) | 소스 커밋·태그·릴리즈 노트 보관용 |
-| `gnoeynij/Claude-Widget-Releases` (public) | 위젯 자동 업데이트 기능이 익명 호출하는 엔드포인트 (`RELEASES_API_URL` 상수가 가리킴) |
+이전에 별도 운영하던 public 미러 레포(`Claude-Widget-Releases`)는 2026-04-29 라이선스 정리 과정에서 삭제됨. 원작자(INNO-HI) 양해 후 attribution + LICENSE를 정비했으므로 단일 레포로 충분.
 
 **표준 발행 시퀀스**:
 ```bash
-# 1. 메인 레포에 코드 변경 커밋·태그·푸시
+# 1. 코드 변경 커밋·태그·푸시
 git push && git push origin vX.Y.Z
 
-# 2. 메인 레포 릴리즈 (보관용)
+# 2. 메인 레포 릴리즈
 gh release create vX.Y.Z --repo gnoeynij/Claude-Usage-Widget \
-  --title "..." --notes "..." Release/Claude-Widget.exe
-
-# 3. public 레포 릴리즈 (자동 업데이트 엔드포인트) — 동일 인자 미러
-gh release create vX.Y.Z --repo gnoeynij/Claude-Widget-Releases \
   --title "..." --notes "..." Release/Claude-Widget.exe
 ```
 
-**둘 중 하나만 누락되면 안 된다.**
-- public 누락 → 사용자 위젯의 `Check for Updates`가 옛 버전을 보게 됨 (사실상 업데이트 차단).
-- 메인 누락 → 소스 커밋과 릴리즈 노트 매칭 단절.
+### 자동 업데이트 동작 조건
 
-> 자동 업데이트가 public 레포 분리 구조인 이유: 메인 레포가 private이므로 익명 GitHub Releases API 호출이 404를 받는다. 토큰을 .exe에 임베드하는 방식은 PyInstaller 분해(`pyinstxtractor` + `decompyle3`)로 거의 원본 복원이 가능해 보안적 의미가 없다.
+`Source/main.py`의 `RELEASES_API_URL`은 메인 레포를 가리킨다. **익명 GitHub Releases API 호출은 메인 레포가 public일 때만 200을 반환**한다.
+
+| 메인 레포 visibility | 시작 시 1회 체크 | 수동 `Check for Updates` 버튼 |
+|---|---|---|
+| public | ✅ 동작 — `✓ 최신 버전` / `● 새 버전 vX.Y.Z` 표시 | ✅ 동작 |
+| private | 🔇 silent (오류 무시 — 사용자가 요청한 동작 아님) | ❌ "확인 실패: HTTP 404" 표시 |
+
+private 상태에서도 위젯 본체와 사용량 동기화는 정상 작동한다. 자동 업데이트만 영향받는다.
+
+> **토큰을 .exe에 임베드해 private 상태에서도 동작시키려는 시도는 금지.** PyInstaller 빌드는 `pyinstxtractor` + `decompyle3`로 거의 원본 복원이 가능해 어떤 토큰 암호화 방식도 보안적 의미가 없다.
