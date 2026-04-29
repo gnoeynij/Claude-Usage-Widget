@@ -30,10 +30,10 @@
   - `배경 투명도 슬라이더`: 0% = 완전 불투명, 100% = 완전 투명
   - `한국어/영어 즉시 전환`: 모든 텍스트(상태/요일/AM-PM 포함) 동적 재번역
   - `SUIT SemiBold` 폰트 번들: 깔끔한 한글 가독성
-- **다중 PC 안전 (v1.3.0+)**:
-  - 시작 시 0–2초 랜덤 지연 (동시 부팅 thundering-herd 방지)
-  - 매 sync 주기마다 ±10% jitter (PC 간 호출 시점 자연 분산)
-  - `429 Rate Limited` 시 지수 백오프 (2× → 4× → 8× → 16× 상한, 성공 즉시 복귀)
+- **API 호출 안정성 (v1.3.0+)**:
+  - 시작 시 0–2초 랜덤 지연으로 부드러운 첫 동기화
+  - 매 sync 주기마다 ±10% jitter (호출 시점 자연 분산)
+  - `429 Rate Limited` 응답 시 지수 백오프 (2× → 4× → 8× → 16× 상한, 성공 즉시 복귀)
 - **최적화된 성능**:
   - API 연속 새로고침 시 TCP/TLS Handshake 지연을 없애는 통신 최적화 적용
   - 리사이즈 중 quantized 0.05 단위 스케일링 + 아이콘 캐싱으로 매끄러운 드래그
@@ -54,7 +54,7 @@
    - **숨기기**: 상단 바 더블클릭 또는 푸터 [닫기]
    - **완전 종료**: 시스템 트레이 우클릭 → `프로그램 종료`
    - **설정**: 헤더 ⚙ 버튼 (옵션 패널 토글)
-4. **자동 동기화**: 옵션 패널 → Auto-sync 항목 → `Off / 5m / 10m / 30m / 1h` 선택. **기본값은 10분** — 다중 PC 환경에서도 부담이 적습니다.
+4. **자동 동기화**: 옵션 패널 → Auto-sync 항목 → `Off / 5m / 10m / 30m / 1h` 선택. **기본값은 10분** — Anthropic API에 부담이 적은 호출 빈도입니다.
 
 <p align="center">
   <img src="docs/claude_widget_full_mode.png" alt="Full Mode" width="32%">
@@ -149,7 +149,7 @@ python -m PyInstaller claude_widget.spec --noconfirm --clean
 이 프로젝트는 [MIT License](LICENSE)를 따릅니다.
 
 - **원본 저작권** © 2026 [INNO-HI](https://github.com/INNO-HI/ClaudeUsageWidget) — Original work
-- **수정·추가 저작권** © 2026 choi jinyeong — Modifications and additional features (미니 모드, 다중 PC API 안전, 자동 업데이트 등)
+- **수정·추가 저작권** © 2026 choi jinyeong — Modifications and additional features (미니 모드, API 호출 안정성, 자동 업데이트 등)
 
 원작자에게 사전 양해를 구하고 공개되었으며, MIT 라이선스의 조건(저작권 고지 보존)에 따라 본 포크의 사용·수정·재배포는 자유롭습니다.
 

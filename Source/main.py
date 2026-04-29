@@ -599,9 +599,8 @@ class ClaudeWidget(QWidget):
         super().__init__()
         self._cfg = QSettings("ClaudeWidget", "Claude-Widget-Cross")
         self._lang     = self._cfg.value("lang",          "en")
-        # Default auto-sync = 10 min — gentler on the API when one Anthropic
-        # account is shared across multiple PCs (combined with the jitter +
-        # exponential-backoff logic in _schedule_next_sync).
+        # Default auto-sync = 10 min — a gentle call rate combined with the
+        # jitter + exponential-backoff logic in _schedule_next_sync.
         self._interval = int(self._cfg.value("sync_interval", DEFAULT_SYNC_INTERVAL_SEC))
         self._aot      = self._cfg.value("always_on_top", "true") == "true"
         self._dark     = self._cfg.value("dark_mode",     "false") == "true"
@@ -630,7 +629,7 @@ class ClaudeWidget(QWidget):
         self._dl_progress: QProgressDialog | None = None
         # Single-shot timer re-armed by _schedule_next_sync() after each fetch.
         # This lets us apply jitter/backoff per-cycle instead of a fixed interval —
-        # important when one Anthropic account is shared across multiple PCs.
+        # smooths out call timing and recovers gracefully from 429 responses.
         self._sync_timer  = QTimer(self)
         self._sync_timer.setSingleShot(True)
         self._sync_timer.timeout.connect(self.do_sync)
@@ -1893,9 +1892,8 @@ class ClaudeWidget(QWidget):
     def _setup_auto_sync(self):
         """(Re)start the auto-sync cycle.
 
-        First sync uses a 0–2s random delay so multiple PCs sharing the same
-        Anthropic account (multiple installs of this widget) don't all hit the
-        usage endpoint at the same instant when they boot together.
+        First sync uses a 0–2s random delay so the very first request after
+        launch doesn't always land on the exact same wall-clock instant.
         Subsequent syncs are scheduled by _schedule_next_sync() with ±10%
         jitter and exponential backoff on rate limits."""
         self._sync_timer.stop()
@@ -1907,7 +1905,7 @@ class ClaudeWidget(QWidget):
         """Re-arm the single-shot sync timer after a fetch completes.
 
         - Adds ±10% random jitter to the configured interval so polling cycles
-          across multiple PCs don't stay phase-locked.
+          don't stay locked to fixed wall-clock moments.
         - On a `429 Rate Limited` response, backs off exponentially:
           2× → 4× → 8× → 16× the interval, then caps. The counter resets to 0
           (back to normal interval) the moment a request succeeds, so the
