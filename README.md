@@ -5,6 +5,8 @@
 ![Windows](https://img.shields.io/badge/Platform-Windows-lightgrey.svg)
 ![License](https://img.shields.io/badge/License-MIT-orange.svg)
 
+> **Attribution**: 이 프로젝트는 [INNO-HI/ClaudeUsageWidget](https://github.com/INNO-HI/ClaudeUsageWidget)의 Windows 전용 개인 포크입니다. 원작자분([@khwee2000](https://velog.io/@khwee2000))의 양해를 구해 공개합니다. 원본 저작권은 [INNO-HI](https://github.com/INNO-HI)에 있으며, 본 포크에서 추가된 부분의 변경 사항은 [Change Log](#-change-log)를 참고하세요. 자세한 라이선스 조건은 [LICENSE](LICENSE) 파일을 확인하세요.
+
 **Claude Usage Widget**은 바탕화면 한 구석에 띄워두고 Anthropic Claude API의 사용량(현재 세션 한도, 주간 할당량 등)을 실시간으로 추적·모니터링할 수 있는 독립형 데스크탑 위젯입니다. 크롬 웹 브라우저나 콘솔 패널에 접속할 필요 없이 컴퓨터 위에서 즉각적으로 상태를 확인하세요.
 
 ---
@@ -143,6 +145,12 @@ python -m PyInstaller claude_widget.spec --noconfirm --clean
 "※ 본 프로그램은 개인 오픈소스 프로젝트로 디지털 서명이 되어있지 않아 Windows SmartScreen 경고 창이 뜰 수 있습니다. 악성코드가 아니니 안심하시고 추가 정보 → 실행을 눌러주세요!"
 
 ## 📄 License
-이 프로젝트는 [MIT License](LICENSE)를 따릅니다. 누구나 자유롭게 수정 및 배포할 수 있습니다.
+
+이 프로젝트는 [MIT License](LICENSE)를 따릅니다.
+
+- **원본 저작권** © 2026 [INNO-HI](https://github.com/INNO-HI/ClaudeUsageWidget) — Original work
+- **수정·추가 저작권** © 2026 choi jinyeong — Modifications and additional features (미니 모드, 다중 PC API 안전, 자동 업데이트 등)
+
+원작자에게 사전 양해를 구하고 공개되었으며, MIT 라이선스의 조건(저작권 고지 보존)에 따라 본 포크의 사용·수정·재배포는 자유롭습니다.
 
 폰트: [SUIT](https://sun.fo/suit/) by Sun (SIL Open Font License)
