@@ -80,7 +80,7 @@ python -m PyInstaller claude_widget.spec --noconfirm --clean
 
 ## 📝 Change Log
 
-### v1.3.1 (현재)
+### v1.4.0 (현재)
 - 자동 업데이트 — 옵션 패널의 `Check for Updates` 버튼으로 새 버전 확인, 사용자 동의 시 Windows `Downloads` 폴더에 다운로드 후 자동 재시작
 - 시작 시 1회 자동 버전 체크 — 위젯 실행 후 약 1.5초 뒤, `Check for Updates` 버튼 옆에 `✓ 최신 버전` 또는 `● 새 버전 vX.Y.Z`가 표시됩니다 (네트워크 오류 시 무표시)
 - 다운로드 시작 시 Downloads 폴더 자동 열기 — 다운로드 진행을 Explorer에서 실시간 확인 가능
