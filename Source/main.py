@@ -33,7 +33,7 @@ from PyQt6.QtWidgets import (
     QGraphicsDropShadowEffect, QSlider, QMessageBox, QProgressDialog,
 )
 
-APP_VERSION   = "v1.3.3"
+APP_VERSION   = "v1.3.1"
 USAGE_URL     = "https://api.anthropic.com/api/oauth/usage"
 LEARN_MORE_URL = "https://support.claude.com/ko/"
 # GitHub Releases API — used as the auto-update backend (no separate server).
