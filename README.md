@@ -1,80 +1,84 @@
+**English** | [한국어](README.ko.md)
+
 # Claude Usage Widget
+
+A desktop widget for **Claude Code** that shows your **Anthropic API usage** — current session and weekly limits — at a glance, without opening a browser or terminal. Built with **PyQt6** for **Windows**.
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![PyQt6](https://img.shields.io/badge/PyQt6-Framework-green.svg)
 ![Windows](https://img.shields.io/badge/Platform-Windows-lightgrey.svg)
 ![License](https://img.shields.io/badge/License-MIT-orange.svg)
 
-> 이 프로젝트는 [INNO-HI/ClaudeUsageWidget](https://github.com/INNO-HI/ClaudeUsageWidget)의 Windows 전용 개인 포크입니다. 원작자 [@khwee2000](https://velog.io/@khwee2000)의 양해를 구하여 공개합니다. 원본 저작권은 [INNO-HI](https://github.com/INNO-HI)에 있으며, 본 포크의 변경 사항은 [Change Log](#-change-log)를, 라이선스 조건은 [LICENSE](LICENSE)를 참고하세요.
+> This project is a Windows-only personal fork of [INNO-HI/ClaudeUsageWidget](https://github.com/INNO-HI/ClaudeUsageWidget), published with the original author [@khwee2000](https://velog.io/@khwee2000)'s permission. Original copyright belongs to [INNO-HI](https://github.com/INNO-HI). See the [Change Log](#-change-log) for fork-specific changes and [LICENSE](LICENSE) for terms.
 
-Claude Usage Widget은 바탕화면 한 구석에 띄워두고 Anthropic Claude API의 사용량을 실시간으로 확인할 수 있는 데스크탑 위젯입니다. 브라우저나 콘솔에 접속할 필요 없이 화면에서 바로 현재 세션과 주간 한도를 볼 수 있습니다.
+Claude Usage Widget is a lightweight desktop tool that sits in a corner of your screen and tracks your Claude Code usage in real time. It is aimed at developers who use Claude Code daily and want a passive, always-visible usage monitor instead of polling a dashboard.
 
 ---
 
 ## ✨ Features
 
-- 실시간 모니터링 — 현재 세션과 주간 사용량(All Models / Sonnet)을 퍼센트로 표시
-- 풀 모드 / 미니 모드 — 카드 기반 풀 모드와 아이콘 + 퍼센트만 보이는 미니 모드. 헤더의 Claude 아이콘 클릭으로 상호 전환
-- 글래스모피즘 디자인 — Windows 환경에 어울리는 무테 위젯, 다크/라이트 모드 지원
-- 자유로운 위치·크기 조절 — 상단 바 드래그로 이동, 모서리/가장자리 드래그로 리사이즈, 더블클릭으로 즉시 숨김
-- 시스템 트레이 상주 — 위젯을 닫아도 트레이에서 백그라운드 동작
-- 옵션 패널 — 언어, 인증, 자동 동기화, 항상 위, 다크 모드, 투명도, 업데이트 확인을 한 곳에서 관리
-- 한국어/영어 즉시 전환 — 모든 텍스트(요일·AM/PM 포함)가 동적으로 재번역
-- SUIT SemiBold 폰트 번들 — 깔끔한 한글 가독성
-- API 호출 안정성 — 시작 시 0–2초 랜덤 지연, 매 sync 주기마다 ±10% jitter, 429 응답 시 지수 백오프(2× → 16× 상한)
-- 자동 업데이트 — 옵션 패널의 업데이트 확인 버튼으로 새 버전을 받아 자동 재시작
-- 자동 인증 — `~/.claude/.credentials.json`을 자동 감지하여 별도 로그인이 필요 없음
+- **Real-time usage monitoring** — Current session and weekly usage (All Models / Sonnet) shown as percentages
+- **Full mode / Mini mode** — Card-based full view and a compact icon + percent mini view. Toggle by clicking the Claude icon in the header
+- **Glassmorphism design** — Frameless widget tuned for Windows, with dark/light mode
+- **Free positioning & resizing** — Drag the top bar to move, drag corners/edges to resize, double-click to hide
+- **System tray** — Closing the widget keeps it running in the system tray
+- **Options panel** — Language, authentication, auto-sync, always-on-top, dark mode, opacity, and update check, all in one place
+- **Instant Korean / English switching** — Every string (including weekday and AM/PM) re-translates dynamically
+- **Bundled SUIT SemiBold font** — Clean Korean readability
+- **Resilient API calls** — 0–2s random startup delay, ±10% jitter per sync cycle, exponential backoff (2× → 16× cap) on HTTP 429
+- **Auto-update** — One click in the options panel downloads the new release and restarts the app
+- **Auto-authentication** — Reuses `~/.claude/.credentials.json`; no separate login required
 
 ---
 
 ## 🚀 Installation & Usage
 
-1. 다운로드 — [Releases](../../releases) 탭에서 최신 `Claude-Widget.exe`를 받습니다.
-2. 실행 — `Claude-Widget.exe`를 더블클릭합니다. 실행에는 PC에 [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview)가 1회 이상 로그인된 인증 정보(`~/.claude/.credentials.json`)가 필요합니다.
-3. 조작
-   - 풀 ↔ 미니 전환 — 헤더 또는 미니뷰의 Claude 아이콘 클릭
-   - 이동 — 상단 회색 바 드래그
-   - 리사이즈 — 창 모서리/가장자리 드래그
-   - 숨기기 — 상단 바 더블클릭 또는 푸터의 `닫기`
-   - 완전 종료 — 시스템 트레이 우클릭 → `프로그램 종료`
-   - 설정 — 헤더의 ⚙ 버튼
-4. 자동 동기화 — 옵션 패널의 Auto-sync에서 `Off / 5m / 10m / 30m / 1h` 중 선택합니다. 기본값은 10분입니다.
+1. **Download** — Grab the latest `Claude-Widget.exe` from the [Releases](../../releases) tab.
+2. **Run** — Double-click `Claude-Widget.exe`. The widget needs an existing [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) login on the same PC (`~/.claude/.credentials.json`).
+3. **Controls**
+   - Full ↔ Mini — Click the Claude icon in the header or mini view
+   - Move — Drag the gray top bar
+   - Resize — Drag window corners/edges
+   - Hide — Double-click the top bar, or press `Close` in the footer
+   - Quit — Right-click the system tray icon → `Exit`
+   - Settings — `⚙` button in the header
+4. **Auto-sync** — In the options panel, choose `Off / 5m / 10m / 30m / 1h`. Default is 10 minutes.
 
 <p align="center">
   <img src="docs/claude_widget_full_mode.png" alt="Full Mode" width="32%">
   <img src="docs/claude_widget_options.png" alt="Options Panel" width="32%">
   <img src="docs/claude_widget_mini_mode.png" alt="Mini Mode" width="32%">
 </p>
-<p align="center"><sub>풀 모드 · 옵션 패널 · 미니 모드</sub></p>
+<p align="center"><sub>Full mode · Options panel · Mini mode</sub></p>
 
-본 프로그램은 개인 오픈소스 프로젝트로 디지털 서명이 되어 있지 않아 Windows SmartScreen 경고가 표시될 수 있습니다. 악성코드가 아니므로 `추가 정보 → 실행`을 눌러 진행하시면 됩니다.
+This is an unsigned personal open-source build, so Windows SmartScreen may warn you on first launch. It is not malware — click `More info → Run anyway` to proceed.
 
-> ⚠️ 본 위젯은 Claude Code의 OAuth 사용량 엔드포인트를 호출합니다. Anthropic 측에서 해당 엔드포인트가 변경되거나 정책이 바뀔 경우 동작이 멈출 수 있습니다.
+> ⚠️ The widget calls Claude Code's OAuth usage endpoint. If Anthropic changes the endpoint or policy, the widget may stop working until updated.
 
 ---
 
 ## 🛠️ Build from Source
 
-Python 3.10 이상과 PyQt6로 제작되었습니다.
+Built with Python 3.10+ and PyQt6.
 
 ```bash
-# 1. 저장소 클론
+# 1. Clone
 git clone https://github.com/gnoeynij/Claude-Usage-Widget.git
 cd Claude-Usage-Widget/Source
 
-# 2. 의존성 설치
+# 2. Install dependencies
 pip install -r requirements.txt
 pip install pyinstaller
 
-# 3. (선택) SUIT SemiBold 폰트를 번들하려면
-#    https://sun.fo/suit/ 에서 다운로드 후
-#    SUIT-SemiBold.ttf 를 Source/assets/fonts/ 에 배치합니다.
-#    번들이 없으면 시스템 SUIT → Segoe UI 순으로 폴백됩니다.
+# 3. (Optional) Bundle the SUIT SemiBold font
+#    Download from https://sun.fo/suit/
+#    and place SUIT-SemiBold.ttf in Source/assets/fonts/.
+#    Without it, the widget falls back to system SUIT → Segoe UI.
 
-# 4. PyInstaller 빌드
+# 4. Build with PyInstaller
 python -m PyInstaller claude_widget.spec --noconfirm --clean
 
-# 5. 산출물
+# 5. Output
 # Source/dist/Claude-Widget.exe
 ```
 
@@ -82,34 +86,34 @@ python -m PyInstaller claude_widget.spec --noconfirm --clean
 
 ## 📝 Change Log
 
-### v1.4.0 (현재)
-- 자동 업데이트 (`Check for Updates`로 새 버전 다운로드 → 자동 재시작)
-- 항상 위 활성 시 작업표시줄/Alt+Tab 숨김
-- 모드 전환 부드러움·사이즈 복원·폰트 가독성 정비
+### v1.4.0 (current)
+- Auto-update (`Check for Updates` downloads the new release and restarts automatically)
+- Always-on-top now hides the widget from the taskbar / Alt+Tab
+- Smoother mode switching, size restore, font polish
 
 ### v1.3.0
-- 미니 모드 추가, SUIT SemiBold 한글 폰트 번들
-- API 호출 안정성 (jitter + 429 지수 백오프), 한국어 i18n 강화
+- Mini mode added; SUIT SemiBold Korean font bundled
+- API stability (jitter + 429 exponential backoff), Korean i18n improvements
 
 ### v1.2.0
-- 모서리/가장자리 드래그로 위젯 크기 조절, 반응형 스케일링
-- 배경 투명도 동작 정비
+- Resize via window corners/edges, responsive scaling
+- Background opacity behavior fixed
 
 ### v1.1.0
-- 백그라운드 위젯 모드 + 트레이 메뉴 정리
-- API 통신 안정화 및 메모리 정리
+- Background widget mode + cleaned-up tray menu
+- API stability and memory cleanup
 
 ---
 
 ## 📄 License
 
-이 프로젝트는 [MIT License](LICENSE)를 따릅니다.
+Released under the [MIT License](LICENSE).
 
-- 원본 저작권 © 2026 [INNO-HI](https://github.com/INNO-HI/ClaudeUsageWidget) — Original work
-- 수정·추가 저작권 © 2026 choi jinyeong — Modifications and additional features
+- Original work © 2026 [INNO-HI](https://github.com/INNO-HI/ClaudeUsageWidget)
+- Modifications and additional features © 2026 choi jinyeong
 
-원작자에게 사전 양해를 구하고 공개되었습니다. MIT 라이선스의 저작권 고지 보존 조건에 따라 본 포크의 사용, 수정, 재배포가 자유롭습니다.
+Published with the original author's prior permission. The MIT license preserves attribution while allowing free use, modification, and redistribution.
 
-본 프로그램은 [PyQt6](https://www.riverbankcomputing.com/software/pyqt/)(GPL-3.0)를 사용합니다. PyQt6의 GPL-3.0 의무에 따라 본 프로젝트의 전체 소스 코드는 본 GitHub 레포지토리에서 확인할 수 있습니다.
+This program uses [PyQt6](https://www.riverbankcomputing.com/software/pyqt/) (GPL-3.0). Per PyQt6's GPL-3.0 obligation, the full source code of this project is available in this GitHub repository.
 
-폰트: [SUIT](https://sun.fo/suit/) by Sun (SIL Open Font License)
+Font: [SUIT](https://sun.fo/suit/) by Sun (SIL Open Font License)
