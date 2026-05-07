@@ -22,7 +22,7 @@ Header: anthropic-beta: oauth-2025-04-20
 """
 
 from __future__ import annotations
-import sys, os, json, math, random, gc, subprocess, tempfile, webbrowser
+import sys, os, random, gc, subprocess, tempfile, webbrowser
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -32,9 +32,8 @@ def resource_path(relative: str) -> str:
     base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base, relative)
 
-import requests
 from PyQt6.QtCore import (
-    Qt, QTimer, QPoint, QSettings, QThread, pyqtSignal, QRect, QEvent,
+    Qt, QTimer, QPoint, QSettings, QRect, QEvent,
     QPropertyAnimation, QEasingCurve, QSize,
 )
 from PyQt6.QtGui import (
@@ -45,16 +44,20 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QPushButton, QFrame, QSizePolicy, QSystemTrayIcon, QMenu,
     QGraphicsDropShadowEffect, QSlider, QMessageBox, QProgressDialog,
+    QProgressBar,
 )
 
+from _shared import (
+    SESSION, USAGE_URL, RELEASES_API_URL,
+    FetchWorker, UpdateCheckWorker, UpdateDownloadWorker,
+    iter_usage_records, group_into_blocks, find_active_block,
+    cost_usd, SESSION_BLOCK_HOURS,
+)
+from collections import defaultdict
+from datetime import timedelta
+
 APP_VERSION   = "v1.4.0"
-USAGE_URL     = "https://api.anthropic.com/api/oauth/usage"
 LEARN_MORE_URL = "https://support.claude.com/ko/"
-# GitHub Releases API — used as the auto-update backend (no separate server).
-# Anonymous calls require this repo to be public; while the repo is private,
-# the call returns 404 and the startup check stays silent, the manual button
-# shows "확인 실패: HTTP 404". Both behaviors are intentional fallbacks.
-RELEASES_API_URL = "https://api.github.com/repos/gnoeynij/Claude-Usage-Widget/releases/latest"
 
 
 def _version_tuple(v: str) -> tuple[int, ...]:
@@ -78,6 +81,9 @@ DEFAULT_WIDGET_WIDTH = 326                      # design width — scale 1.0 bas
 SCALE_FLOOR, SCALE_CEIL = 0.85, 1.6             # clamp range for self._widget_scale
 SCALE_QUANTUM = 0.05                            # quantize to this step → smooth resize
 FULL_MIN_W, FULL_MIN_H = 280, 450               # full-mode minimum widget size
+# detail 모드 — 카드 4개를 모두 담아야 하니 full보다 더 크다 (default 사이즈는
+# QSettings에 저장된 widget_size_detail이 있으면 그 값, 없으면 minimum 부근).
+DETAIL_MIN_W, DETAIL_MIN_H = 400, 720
 # 178 = empirical floor that fits "Sonnet 100%" in English at scale 0.85
 # (panel border 2 + padding 4 + icon 51 + spacing 5 + label 50 + gap 3 + pct 60
 #  = 175 exact, plus 3px buffer for sub-pixel font rendering).
@@ -96,8 +102,6 @@ DEFAULT_SYNC_INTERVAL_SEC = 600                 # 10 min — gentle on shared ac
 RATE_LIMIT_BACKOFF_CAP_EXP = 4                  # 2^4 = 16× max backoff multiplier
 SYNC_STARTUP_JITTER_MS = 2000                   # 0–N random delay before first sync
 SYNC_JITTER_RATIO = 0.10                        # ±10% per-cycle interval jitter
-
-SESSION = requests.Session()
 
 
 def _load_app_font() -> str:
@@ -254,8 +258,27 @@ I18N: dict[str, dict] = {
         "miniSession":    "Session",
         "miniAll":        "All",
         "miniSonnet":     "Sonnet",
-        "miniExitTip":    "Click icon to exit mini mode",
-        "miniEnterTip":   "Click icon to enter mini mode",
+        "miniExitTip":    "Click: original mode",
+        "miniEnterTip":   "Click: mini · Right-click: detail",
+        # detail mode
+        "detailActiveTitle":  "Active session · 5h block",
+        "detailLoading":      "Loading…",
+        "detailNoActive":     "No active session",
+        "detailStartElapsed": "{start} start · {elapsed} elapsed / {remaining} left ({pct}%)",
+        "detailVsPeak":       "{ratio}% of peak ${peak}",
+        "detailPeakNone":     "No peak data",
+        "detailPeriodsTitle": "Periods",
+        "detailToday":        "Today",
+        "detailYesterday":    "Yesterday",
+        "detailWeek":         "This week",
+        "detailMonth":        "This month",
+        "detailRecentTitle":  "Recent {n} blocks",
+        "detailModelsTitle":  "By model",
+        "detailStatsTitle":   "All-time stats",
+        "detailStat_total":    "Total cost",
+        "detailStat_messages": "Messages",
+        "detailStat_avgBlock": "Avg / block",
+        "detailStat_cache":    "Cache hit",
         "rateLimited":    "Rate limited — backing off",
         "updateSection":  "Updates",
         "checkForUpdate": "Check for Updates",
@@ -316,8 +339,27 @@ I18N: dict[str, dict] = {
         "miniSession":    "세션",
         "miniAll":        "전체",
         "miniSonnet":     "Sonnet",
-        "miniExitTip":    "아이콘 클릭 시 미니 모드 종료",
-        "miniEnterTip":   "아이콘 클릭 시 미니 모드 진입",
+        "miniExitTip":    "클릭: 오리지널 모드",
+        "miniEnterTip":   "클릭: 미니 · 우클릭: 상세",
+        # detail mode
+        "detailActiveTitle":  "활성 세션 · 5h 블록",
+        "detailLoading":      "불러오는 중…",
+        "detailNoActive":     "활성 세션 없음",
+        "detailStartElapsed": "{start} 시작 · 경과 {elapsed} / 남은 {remaining} ({pct}%)",
+        "detailVsPeak":       "peak ${peak} 대비 {ratio}%",
+        "detailPeakNone":     "peak 데이터 없음",
+        "detailPeriodsTitle": "경과 기간",
+        "detailToday":        "오늘",
+        "detailYesterday":    "어제",
+        "detailWeek":         "이번 주",
+        "detailMonth":        "이번 달",
+        "detailRecentTitle":  "최근 {n}개 블록",
+        "detailModelsTitle":  "모델별 누적",
+        "detailStatsTitle":   "전체 통계",
+        "detailStat_total":    "누적 비용",
+        "detailStat_messages": "메시지 수",
+        "detailStat_avgBlock": "블록당 평균",
+        "detailStat_cache":    "캐시 활용률",
         "rateLimited":    "API 한도 초과 — 자동 재시도 대기",
         "updateSection":  "업데이트",
         "checkForUpdate": "업데이트 확인",
@@ -337,196 +379,6 @@ I18N: dict[str, dict] = {
         "newVersionShort": lambda v: f"● 새 버전 {v}",
     },
 }
-
-
-# ════════════════════════════════════════════════════════════
-#  Background fetch worker
-# ════════════════════════════════════════════════════════════
-class FetchWorker(QThread):
-    """Anthropic OAuth 사용량 API를 호출하는 백그라운드 워커.
-
-    UI 스레드를 막지 않기 위해 QThread로 분리. ~/.claude/.credentials.json
-    에서 OAuth 액세스 토큰을 읽어 GET 요청을 보내고, 응답을 가공한 dict
-    하나를 result 시그널로 UI 스레드에 전달한다. 에러는 예외를 던지지 않고
-    {"error": "..."} 형태로 같은 시그널에 실어 보낸다 — 호출자는 한 곳에서
-    정상/에러 분기를 할 수 있다.
-    """
-    result = pyqtSignal(dict)
-
-    @staticmethod
-    def read_credentials() -> dict | None:
-        p = Path.home() / ".claude" / ".credentials.json"
-        try:
-            raw = json.loads(p.read_text("utf-8"))
-            oauth = raw.get("claudeAiOauth")
-            return oauth if (oauth and oauth.get("accessToken")) else None
-        except Exception:
-            return None
-
-    def run(self):
-        self.result.emit(self._fetch())
-
-    def _fetch(self) -> dict:
-        creds = self.read_credentials()
-        if not creds:
-            return {"error": "NO_CREDENTIALS"}
-
-        headers = {
-            "Authorization": f"Bearer {creds['accessToken']}",
-            "anthropic-beta": "oauth-2025-04-20",
-            "Accept": "application/json",
-        }
-        try:
-            resp = SESSION.get(USAGE_URL, headers=headers, timeout=15)
-        except Exception as e:
-            return {"error": str(e)[:60]}
-
-        if resp.status_code in (401, 403):
-            return {"error": "TOKEN_EXPIRED"}
-        if resp.status_code == 429:
-            return {"error": "RATE_LIMITED"}
-        if resp.status_code != 200:
-            return {"error": f"HTTP {resp.status_code}"}
-
-        try:
-            j = resp.json()
-        except Exception:
-            return {"error": "JSON_PARSE_ERROR"}
-
-        five_h   = j.get("five_hour",        {})
-        seven_d  = j.get("seven_day",         {})
-        seven_s  = j.get("seven_day_sonnet",  {})
-        extra    = j.get("extra_usage",       {})
-
-        session_reset_secs = 0
-        if five_h.get("resets_at"):
-            try:
-                dt   = datetime.fromisoformat(five_h["resets_at"].replace("Z", "+00:00"))
-                diff = (dt - datetime.now(timezone.utc)).total_seconds()
-                session_reset_secs = max(0, math.floor(diff))
-            except Exception:
-                pass
-
-        # Weekly reset: emit raw components so the UI thread can localize.
-        weekly_reset = None
-        if seven_d.get("resets_at"):
-            try:
-                rd  = datetime.fromisoformat(seven_d["resets_at"].replace("Z", "+00:00"))
-                loc = rd.astimezone()
-                weekly_reset = (loc.weekday(), loc.hour, loc.minute)
-            except Exception:
-                pass
-
-        def pct(d): return float(d.get("utilization") or 0)
-
-        return {
-            "isConnected":             True,
-            "sessionUsagePercent":     pct(five_h),
-            "sessionResetSeconds":     session_reset_secs,
-            "weeklyAllModelsPercent":  pct(seven_d),
-            "weeklyAllModelsReset":    weekly_reset,
-            "weeklySonnetPercent":     pct(seven_s),
-            "planName": "Max (Extra)" if extra.get("is_enabled") else "Max",
-        }
-
-
-# ════════════════════════════════════════════════════════════
-#  Update workers — GitHub Releases API as auto-update backend
-# ════════════════════════════════════════════════════════════
-class UpdateCheckWorker(QThread):
-    """GitHub Releases API에서 최신 릴리즈 정보를 조회하는 워커.
-
-    익명 호출이므로 레포가 public이어야 200을 받을 수 있다. private이면 404.
-    GitHub의 익명 Rate Limit은 IP당 시간당 60회 — 시작 시 1회 + 사용자 클릭
-    체크 정도로는 절대 부족하지 않음.
-    """
-    finished_with = pyqtSignal(dict)
-
-    def run(self):
-        try:
-            resp = SESSION.get(
-                RELEASES_API_URL, timeout=10,
-                headers={"Accept": "application/vnd.github+json"},
-            )
-        except Exception as e:
-            self.finished_with.emit({"error": str(e)[:80]})
-            return
-        if resp.status_code != 200:
-            self.finished_with.emit({"error": f"HTTP {resp.status_code}"})
-            return
-        try:
-            j = resp.json()
-        except Exception:
-            self.finished_with.emit({"error": "JSON_PARSE_ERROR"})
-            return
-        tag = j.get("tag_name", "") or ""
-        # Pick the first .exe asset — releases are produced by our gh release script.
-        exe_url = ""
-        exe_name = "Claude-Widget.exe"
-        for a in j.get("assets", []) or []:
-            name = (a.get("name") or "")
-            if name.lower().endswith(".exe"):
-                exe_url = a.get("browser_download_url") or ""
-                exe_name = name or exe_name
-                break
-        self.finished_with.emit({"latest": tag, "url": exe_url, "name": exe_name})
-
-
-class UpdateDownloadWorker(QThread):
-    """새 버전 .exe를 사용자 Downloads 폴더로 스트리밍 다운로드하는 워커.
-
-    핵심 디자인:
-    - 진행률(0~100)은 progress 시그널로 매 청크마다 송출 → UI는 ProgressDialog로 표시
-    - 사용자가 다이얼로그에서 취소를 누르면 cancel() → 다음 청크 전에 멈추고 .part 파일 삭제
-    - 다운로드는 <dest>.part 임시 파일에 쓰고, 완료 후에만 정식 파일명으로 rename
-      (atomic rename) — 중간에 끊겨도 Downloads 폴더에 깨진 파일이 남지 않음
-    """
-    progress = pyqtSignal(int)
-    finished_with = pyqtSignal(dict)
-
-    def __init__(self, url: str, dest_path: str, parent=None):
-        super().__init__(parent)
-        self._url = url
-        self._dest = dest_path
-        self._cancel = False
-
-    def cancel(self):
-        self._cancel = True
-
-    def run(self):
-        tmp = self._dest + ".part"
-        try:
-            with SESSION.get(self._url, stream=True, timeout=30, allow_redirects=True) as r:
-                if r.status_code != 200:
-                    self.finished_with.emit({"error": f"HTTP {r.status_code}"})
-                    return
-                total = int(r.headers.get("Content-Length") or 0)
-                got = 0
-                last_pct = -1
-                with open(tmp, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=64 * 1024):
-                        if self._cancel:
-                            try: os.remove(tmp)
-                            except Exception: pass
-                            self.finished_with.emit({"error": "CANCELLED"})
-                            return
-                        if not chunk:
-                            continue
-                        f.write(chunk)
-                        got += len(chunk)
-                        if total:
-                            pct = int(got * 100 / total)
-                            if pct != last_pct:
-                                self.progress.emit(pct)
-                                last_pct = pct
-            if os.path.exists(self._dest):
-                os.remove(self._dest)
-            os.rename(tmp, self._dest)
-            self.finished_with.emit({"path": self._dest})
-        except Exception as e:
-            try: os.remove(tmp)
-            except Exception: pass
-            self.finished_with.emit({"error": str(e)[:80]})
 
 
 # ════════════════════════════════════════════════════════════
@@ -653,6 +505,388 @@ def _toggle_style(theme: dict, scale: float = 1.0) -> str:
 
 
 # ════════════════════════════════════════════════════════════
+#  Detail-mode cards (mini ↔ full ↔ detail의 detail 영역)
+# ════════════════════════════════════════════════════════════
+# 로컬 jsonl 파싱(_shared.iter_usage_records) 결과를 카드 4개로 표시:
+#  1) 활성 5h 블록 (누적 USD + 최고 세션 대비)
+#  2) 경과 기간 (오늘 / 이번 주)
+#  3) 최근 5h 블록 6개
+#  4) 모델별 누적 (Opus/Sonnet/Haiku)
+# 카드 외관은 기존 "glassCard" objectName을 재사용해 테마/QSS 통일.
+
+DETAIL_RECENT_BLOCKS = 5
+
+
+def _fmt_tokens(n: int) -> str:
+    """1234567 → '1.23M' (K/M/G suffix)."""
+    if n >= 1_000_000_000:
+        return f"{n/1_000_000_000:.2f}G"
+    if n >= 1_000_000:
+        return f"{n/1_000_000:.2f}M"
+    if n >= 1_000:
+        return f"{n/1_000:.1f}K"
+    return str(n)
+
+
+def _fmt_duration(seconds: float) -> str:
+    s = max(0, int(seconds))
+    h, rem = divmod(s, 3600)
+    m, _ = divmod(rem, 60)
+    if h:
+        return f"{h}h {m}m"
+    return f"{m}m"
+
+
+def _model_family(m: str) -> str:
+    s = (m or "").lower()
+    if "opus" in s:   return "Opus"
+    if "sonnet" in s: return "Sonnet"
+    if "haiku" in s:  return "Haiku"
+    return m or "?"
+
+
+def _aggregate_detail() -> dict:
+    """jsonl 한 번 walk → detail 카드들이 쓰는 집계 dict.
+
+    추가 집계: yesterday/month/total/messages/avg block/cache hit.
+    """
+    records = list(iter_usage_records())
+    blocks = group_into_blocks(records)
+    active = find_active_block(blocks)
+    now_local = datetime.now(timezone.utc).astimezone()
+    today = now_local.date()
+    yesterday = today - timedelta(days=1)
+    week_start = today - timedelta(days=now_local.weekday())
+    month_start = today.replace(day=1)
+
+    today_cost = 0.0;     today_tokens = 0
+    yesterday_cost = 0.0; yesterday_tokens = 0
+    week_cost = 0.0;      week_tokens = 0
+    month_cost = 0.0;     month_tokens = 0
+
+    total_cost = 0.0
+    total_messages = 0
+    total_input_t = 0
+    total_cache_creation_t = 0
+    total_cache_read_t = 0
+
+    by_family: dict[str, dict] = defaultdict(lambda: {"cost": 0.0, "tokens": 0})
+
+    for r in records:
+        c = cost_usd(r["model"], r["usage"])
+        u = r["usage"]
+        i_t  = u.get("input_tokens") or 0
+        o_t  = u.get("output_tokens") or 0
+        cc_t = u.get("cache_creation_input_tokens") or 0
+        cr_t = u.get("cache_read_input_tokens") or 0
+        toks = i_t + o_t + cc_t + cr_t
+        ts = r.get("timestamp") or ""
+        fam = _model_family(r["model"])
+        by_family[fam]["cost"] += c
+        by_family[fam]["tokens"] += toks
+        total_cost += c
+        total_messages += 1
+        total_input_t += i_t
+        total_cache_creation_t += cc_t
+        total_cache_read_t += cr_t
+        try:
+            d = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone().date()
+        except Exception:
+            continue
+        if d == today:
+            today_cost += c; today_tokens += toks
+        if d == yesterday:
+            yesterday_cost += c; yesterday_tokens += toks
+        if d >= week_start:
+            week_cost += c; week_tokens += toks
+        if d >= month_start:
+            month_cost += c; month_tokens += toks
+
+    peak_block = max(blocks, key=lambda b: b["cost_usd"]) if blocks else None
+    recent_blocks = blocks[-DETAIL_RECENT_BLOCKS:][::-1]
+    avg_block_cost = (sum(b["cost_usd"] for b in blocks) / len(blocks)) if blocks else 0.0
+    # cache 활용률 = cache_read / (input + cache_creation + cache_read).
+    # output은 분모에서 제외 — output은 캐싱 대상이 아니라서 활용률 의미가 흐려짐.
+    billed_input = total_input_t + total_cache_creation_t + total_cache_read_t
+    cache_hit = (total_cache_read_t / billed_input * 100) if billed_input > 0 else 0.0
+
+    return {
+        "active": active,
+        "peak_block": peak_block,
+        "recent": recent_blocks,
+        "today_cost":     today_cost,     "today_tokens":     today_tokens,
+        "yesterday_cost": yesterday_cost, "yesterday_tokens": yesterday_tokens,
+        "week_cost":      week_cost,      "week_tokens":      week_tokens,
+        "month_cost":     month_cost,     "month_tokens":     month_tokens,
+        "by_family": dict(by_family),
+        "total_cost":     total_cost,
+        "total_messages": total_messages,
+        "avg_block_cost": avg_block_cost,
+        "cache_hit":      cache_hit,
+        "block_count":    len(blocks),
+    }
+
+
+def _detail_label(theme: dict, text: str, *, dim: bool = True, mono: bool = False,
+                  size: int = 11, weight: int = 400) -> QLabel:
+    lbl = QLabel(text)
+    color = theme["text_secondary"] if dim else theme["text_primary"]
+    family = "Consolas, 'Cascadia Mono', monospace" if mono else APP_FONT_FAMILY
+    lbl.setStyleSheet(
+        f"color: rgba({color.red()},{color.green()},{color.blue()},230); "
+        f"font-family: {family}; font-size: {size}px; font-weight: {weight};"
+    )
+    return lbl
+
+
+def _detail_thin_bar(theme: dict, h: int = 6, *, accent: str = "warm") -> QProgressBar:
+    """detail 카드 내부의 비교용 진행 막대.
+
+    임계치 색상 없이 카드 일관 색상으로 — 다만 단색 대신 따뜻한 톤의 가로
+    그라디언트(deep orange → bright orange)를 써서 평면적이지 않게.
+    accent="cool"이면 보라→핑크 톤으로 대조 (현재 미사용, 향후 카드별 변형 여지).
+    """
+    pb = QProgressBar()
+    pb.setRange(0, 100)
+    pb.setTextVisible(False)
+    pb.setFixedHeight(h)
+    bg = theme["progress_bg"]
+    radius = h // 2
+    if accent == "cool":
+        c1, c2 = "#7c3aed", "#ec4899"
+    else:
+        c1, c2 = "#c2410c", "#fb923c"  # deep orange → bright orange
+    pb.setStyleSheet(
+        f"QProgressBar {{ border: none; "
+        f"background: rgba({bg.red()},{bg.green()},{bg.blue()},{bg.alpha()}); "
+        f"border-radius: {radius}px; }}"
+        f"QProgressBar::chunk {{ "
+        f"background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+        f"stop:0 {c1}, stop:1 {c2}); "
+        f"border-radius: {radius}px; }}"
+    )
+    return pb
+
+
+def _detail_row(theme: dict, name: str):
+    """[라벨][막대][값] 한 행 — 카드 내부에서 반복 사용. tuple 반환."""
+    h = QHBoxLayout()
+    h.setSpacing(8)
+    name_lbl = _detail_label(theme, name, dim=False, size=12)
+    name_lbl.setMinimumWidth(56)
+    bar = _detail_thin_bar(theme)
+    bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    val = _detail_label(theme, "–", dim=False, mono=True, size=11)
+    val.setFixedWidth(160)  # layout이 minimumWidth를 무시하고 줄이는 것 방지
+    val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+    h.addWidget(name_lbl); h.addWidget(bar, 1); h.addWidget(val)
+    return h, name_lbl, bar, val
+
+
+class _DetailCardBase(QFrame):
+    def __init__(self, theme: dict):
+        super().__init__()
+        self.setObjectName("glassCard")
+        self._theme = theme
+        self._lay = QVBoxLayout(self)
+        # 카드 내부 padding을 줄여 row(이름+막대+값 라벨)에 더 많은 가용 폭 양보.
+        # 좌우 14 → 10, 상하 12/12 → 10/10.
+        self._lay.setContentsMargins(10, 10, 10, 10)
+        self._lay.setSpacing(8)
+
+
+class DetailActiveCard(_DetailCardBase):
+    def __init__(self, theme: dict, s: dict):
+        super().__init__(theme)
+        self._title_lbl = _detail_label(theme, s["detailActiveTitle"], dim=True, size=10, weight=600)
+        self._lay.addWidget(self._title_lbl)
+        self.lbl_status = _detail_label(theme, s["detailLoading"], dim=True, size=11)
+        self._lay.addWidget(self.lbl_status)
+        self.bar_time = _detail_thin_bar(theme, h=10)
+        self._lay.addWidget(self.bar_time)
+
+        cost_row = QHBoxLayout()
+        cost_row.setSpacing(8)
+        self.lbl_cost = _detail_label(theme, "$0", dim=False, mono=True, size=32, weight=700)
+        self.lbl_compare = _detail_label(theme, "—", dim=True, size=11)
+        self.lbl_compare.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+        cost_row.addWidget(self.lbl_cost)
+        cost_row.addStretch(1)
+        cost_row.addWidget(self.lbl_compare)
+        self._lay.addLayout(cost_row)
+
+        self.bar_compare = _detail_thin_bar(theme, h=4)
+        self._lay.addWidget(self.bar_compare)
+
+    def set_lang(self, s: dict):
+        self._title_lbl.setText(s["detailActiveTitle"])
+        # 동적 텍스트(status/compare)는 다음 update_data에서 새 lang 적용
+
+    def update_data(self, active, peak, s: dict):
+        if active is None:
+            self.lbl_status.setText(s["detailNoActive"])
+            self.lbl_cost.setText("$0")
+            self.bar_time.setValue(0)
+            self.bar_compare.setValue(0)
+            self.lbl_compare.setText("—")
+            return
+        now = datetime.now(timezone.utc)
+        elapsed = (now - active["start_dt"]).total_seconds()
+        total = SESSION_BLOCK_HOURS * 3600
+        remaining = max(0, total - elapsed)
+        pct_time = (elapsed / total) * 100
+        start_local = active["start_dt"].astimezone().strftime("%H:%M")
+        self.lbl_status.setText(s["detailStartElapsed"].format(
+            start=start_local,
+            elapsed=_fmt_duration(elapsed),
+            remaining=_fmt_duration(remaining),
+            pct=int(pct_time),
+        ))
+        self.bar_time.setValue(min(100, int(pct_time)))
+        self.lbl_cost.setText(f"${active['cost_usd']:.0f}")
+        if peak and peak["cost_usd"] > 0:
+            ratio = (active["cost_usd"] / peak["cost_usd"]) * 100
+            self.lbl_compare.setText(s["detailVsPeak"].format(ratio=int(ratio), peak=int(peak["cost_usd"])))
+            self.bar_compare.setValue(min(100, int(ratio)))
+        else:
+            self.lbl_compare.setText(s["detailPeakNone"])
+            self.bar_compare.setValue(0)
+
+
+class DetailPeriodsCard(_DetailCardBase):
+    def __init__(self, theme: dict, s: dict):
+        super().__init__(theme)
+        self._title_lbl = _detail_label(theme, s["detailPeriodsTitle"], dim=True, size=10, weight=600)
+        self._lay.addWidget(self._title_lbl)
+        h1, self._name_today,     self.bar_today,     self.val_today     = _detail_row(theme, s["detailToday"])
+        h2, self._name_yesterday, self.bar_yesterday, self.val_yesterday = _detail_row(theme, s["detailYesterday"])
+        h3, self._name_week,      self.bar_week,      self.val_week      = _detail_row(theme, s["detailWeek"])
+        h4, self._name_month,     self.bar_month,     self.val_month     = _detail_row(theme, s["detailMonth"])
+        for h in (h1, h2, h3, h4):
+            self._lay.addLayout(h)
+
+    def set_lang(self, s: dict):
+        self._title_lbl.setText(s["detailPeriodsTitle"])
+        self._name_today.setText(s["detailToday"])
+        self._name_yesterday.setText(s["detailYesterday"])
+        self._name_week.setText(s["detailWeek"])
+        self._name_month.setText(s["detailMonth"])
+
+    def update_data(self, agg, peak_cost, s: dict = None):
+        # peak_block(5h)을 단위 분모로 사용. 일=peak, 주=peak×5(영업일 5블록 추정),
+        # 월=peak×20. 정확한 utilization은 아니지만 시각적 페이스 비교용.
+        day_ref   = peak_cost
+        week_ref  = peak_cost * 5  if peak_cost > 0 else 0
+        month_ref = peak_cost * 20 if peak_cost > 0 else 0
+        rows = [
+            (agg["today_cost"],     agg["today_tokens"],     self.bar_today,     self.val_today,     day_ref),
+            (agg["yesterday_cost"], agg["yesterday_tokens"], self.bar_yesterday, self.val_yesterday, day_ref),
+            (agg["week_cost"],      agg["week_tokens"],      self.bar_week,      self.val_week,      week_ref),
+            (agg["month_cost"],     agg["month_tokens"],     self.bar_month,     self.val_month,     month_ref),
+        ]
+        for cost, toks, bar, val, ref in rows:
+            val.setText(f"${cost:.0f} | {_fmt_tokens(toks)}")
+            pct = (cost / ref * 100) if ref > 0 else 0
+            bar.setValue(min(100, int(pct)))
+
+
+class DetailRecentCard(_DetailCardBase):
+    def __init__(self, theme: dict, s: dict):
+        super().__init__(theme)
+        self._title_lbl = _detail_label(theme, s["detailRecentTitle"].format(n=DETAIL_RECENT_BLOCKS), dim=True, size=10, weight=600)
+        self._lay.addWidget(self._title_lbl)
+        self._rows: list[tuple[QLabel, QProgressBar, QLabel]] = []
+        for _ in range(DETAIL_RECENT_BLOCKS):
+            h = QHBoxLayout()
+            h.setSpacing(8)
+            t = _detail_label(theme, "—", dim=True, mono=True, size=11)
+            t.setMinimumWidth(80)
+            bar = _detail_thin_bar(theme, h=4)
+            bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            v = _detail_label(theme, "—", dim=False, mono=True, size=11)
+            v.setFixedWidth(160)
+            v.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            h.addWidget(t); h.addWidget(bar, 1); h.addWidget(v)
+            self._lay.addLayout(h)
+            self._rows.append((t, bar, v))
+
+    def set_lang(self, s: dict):
+        self._title_lbl.setText(s["detailRecentTitle"].format(n=DETAIL_RECENT_BLOCKS))
+
+    def update_data(self, recent, peak_cost, s: dict = None):
+        for i, (t, bar, v) in enumerate(self._rows):
+            if i < len(recent):
+                b = recent[i]
+                t.setText(b["start_dt"].astimezone().strftime("%m/%d %H:%M"))
+                v.setText(f"${b['cost_usd']:.0f} | {_fmt_tokens(b['total_tokens'])}")
+                pct = (b["cost_usd"] / peak_cost * 100) if peak_cost > 0 else 0
+                bar.setValue(min(100, int(pct)))
+            else:
+                t.setText("—"); v.setText("—"); bar.setValue(0)
+
+
+class DetailModelsCard(_DetailCardBase):
+    def __init__(self, theme: dict, s: dict):
+        super().__init__(theme)
+        self._title_lbl = _detail_label(theme, s["detailModelsTitle"], dim=True, size=10, weight=600)
+        self._lay.addWidget(self._title_lbl)
+        self._rows: dict[str, tuple[QProgressBar, QLabel]] = {}
+        # 모델 패밀리명(Opus/Sonnet/Haiku)은 다국어화 안 함 — 고유 이름.
+        for fam in ("Opus", "Sonnet", "Haiku"):
+            h, _, bar, val = _detail_row(theme, fam)
+            self._lay.addLayout(h)
+            self._rows[fam] = (bar, val)
+
+    def set_lang(self, s: dict):
+        self._title_lbl.setText(s["detailModelsTitle"])
+
+    def update_data(self, by_family, s: dict = None):
+        max_cost = max((v["cost"] for v in by_family.values()), default=0.0)
+        for fam, (bar, val) in self._rows.items():
+            d = by_family.get(fam, {"cost": 0.0, "tokens": 0})
+            val.setText(f"${d['cost']:.0f} | {_fmt_tokens(d['tokens'])}")
+            pct = (d["cost"] / max_cost * 100) if max_cost > 0 else 0
+            bar.setValue(min(100, int(pct)))
+
+
+class DetailStatsCard(_DetailCardBase):
+    """전체 기간 통계 — 누적 비용/메시지/블록 평균/캐시 활용률.
+
+    막대 없이 한 줄당 [라벨 ⋯ 값] 형태. 가벼운 metadata 영역.
+    """
+    _STAT_KEYS = ("total", "messages", "avgBlock", "cache")
+
+    def __init__(self, theme: dict, s: dict):
+        super().__init__(theme)
+        self._title_lbl = _detail_label(theme, s["detailStatsTitle"], dim=True, size=10, weight=600)
+        self._lay.addWidget(self._title_lbl)
+        self._rows: dict[str, tuple[QLabel, QLabel]] = {}
+        for key in self._STAT_KEYS:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            name = _detail_label(theme, s[f"detailStat_{key}"], dim=True, size=11)
+            name.setMinimumWidth(96)
+            val = _detail_label(theme, "—", dim=False, mono=True, size=12, weight=600)
+            val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            row.addWidget(name)
+            row.addStretch(1)
+            row.addWidget(val)
+            self._lay.addLayout(row)
+            self._rows[key] = (name, val)
+
+    def set_lang(self, s: dict):
+        self._title_lbl.setText(s["detailStatsTitle"])
+        for key in self._STAT_KEYS:
+            self._rows[key][0].setText(s[f"detailStat_{key}"])
+
+    def update_data(self, agg, s: dict = None):
+        self._rows["total"][1].setText(f"${agg['total_cost']:.0f}")
+        self._rows["messages"][1].setText(f"{agg['total_messages']:,}")
+        self._rows["avgBlock"][1].setText(f"${agg['avg_block_cost']:.0f}")
+        self._rows["cache"][1].setText(f"{agg['cache_hit']:.1f}%")
+
+
+# ════════════════════════════════════════════════════════════
 #  Main widget
 # ════════════════════════════════════════════════════════════
 class ClaudeWidget(QWidget):
@@ -688,7 +922,11 @@ class ClaudeWidget(QWidget):
             self._cfg.setValue("bg_opacity", raw_opacity)
         self._bg_opacity = raw_opacity
         self._bg_opacity = max(0, min(100, self._bg_opacity))
-        self._mini_mode = self._cfg.value("mini_mode", "false") == "true"
+        self._mini_mode   = self._cfg.value("mini_mode",   "false") == "true"
+        # detail 모드 — mini ↔ full ↔ detail 3-state. mini가 우선이라 mini=true면
+        # detail 값은 무시된다 (_apply_mini_mode 참고). _toggle_mini 진입 시 detail
+        # 자동 해제.
+        self._detail_mode = self._cfg.value("detail_mode", "false") == "true"
         self._theme    = THEMES["dark"] if self._dark else THEMES["light"]
         self._resize_border = 8
 
@@ -716,9 +954,7 @@ class ClaudeWidget(QWidget):
         # interpolated sizes don't overwrite the user's saved geometry.
         self._resize_anim = QPropertyAnimation(self, b"size", self)
         self._resize_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self._resize_anim.finished.connect(
-            lambda: setattr(self, "_internal_toggle_resize", False)
-        )
+        self._resize_anim.finished.connect(self._on_resize_anim_finished)
         # Single-shot timer re-armed by _schedule_next_sync() after each fetch.
         # This lets us apply jitter/backoff per-cycle instead of a fixed interval —
         # smooths out call timing and recovers gracefully from 429 responses.
@@ -898,6 +1134,11 @@ class ClaudeWidget(QWidget):
         cl.addWidget(session_card)
         cl.addWidget(weekly_card)
         pl.addWidget(self._content_wrapper)
+
+        # detail view (detail mode) — content_wrapper와 swap 관계, 시작 시 hide.
+        self._detail_wrapper = self._make_detail_view()
+        self._detail_wrapper.setVisible(False)
+        pl.addWidget(self._detail_wrapper)
 
         # mini view (mini mode) — hidden until enabled
         self._mini_view = self._make_mini_view()
@@ -1233,8 +1474,15 @@ class ClaudeWidget(QWidget):
         # Scale floor 0.85 — below this, fonts/borders/icons start to break.
         # Combined with mode-specific minimum sizes below, this guarantees
         # readable content at any user-chosen widget size.
-        raw = max(SCALE_FLOOR, min(SCALE_CEIL, self.width() / DEFAULT_WIDGET_WIDTH))
-        quantized = round(raw / SCALE_QUANTUM) * SCALE_QUANTUM
+        # detail 모드 예외: 카드 4개를 담느라 위젯 폭이 자연스럽게 커지는데
+        # 헤더/푸터까지 그 폭에 따라 scale-up하면 "Max" plan 배지가 길고 좁은
+        # 박스로 변형되고 제목이 비대해지는 등 비율이 깨진다. detail에서는
+        # scale 1.0으로 고정해 헤더/푸터는 일관, 카드는 자체 px 사이즈 유지.
+        if self._detail_mode and not self._mini_mode:
+            quantized = 1.0
+        else:
+            raw = max(SCALE_FLOOR, min(SCALE_CEIL, self.width() / DEFAULT_WIDGET_WIDTH))
+            quantized = round(raw / SCALE_QUANTUM) * SCALE_QUANTUM
         if getattr(self, "_widget_scale_applied", None) == quantized:
             return False
         self._widget_scale_applied = quantized
@@ -1247,11 +1495,24 @@ class ClaudeWidget(QWidget):
             self._drag_handle.setFixedHeight(self._sp(7))
             self._drag_handle_layout.setContentsMargins(0, self._sp(1), 0, self._sp(1))
             self._drag_bar.setFixedSize(self._sp(24), max(2, self._sp(2)))
+        elif self._detail_mode:
+            # detail 모드: 카드들의 작은 폰트와 비율 맞추려고 헤더/드래그 핸들
+            # 컴팩트화. mini만큼 빡빡하지는 않게 — 일반 chrome과 mini 사이 톤.
+            self._drag_handle.setFixedHeight(self._sp(13))
+            self._drag_handle_layout.setContentsMargins(0, self._sp(4), 0, self._sp(2))
+            self._drag_bar.setFixedSize(self._sp(28), max(2, self._sp(3)))
         else:
             self._drag_handle.setFixedHeight(self._sp(20))
             self._drag_handle_layout.setContentsMargins(0, self._sp(8), 0, self._sp(4))
             self._drag_bar.setFixedSize(self._sp(36), max(2, self._sp(4)))
-        self._header_layout.setContentsMargins(self._sp(14), self._sp(8), self._sp(14), self._sp(12))
+        if self._detail_mode and not self._mini_mode:
+            self._header_layout.setContentsMargins(self._sp(12), self._sp(4), self._sp(12), self._sp(6))
+            if hasattr(self, "_footer_layout"):
+                self._footer_layout.setContentsMargins(self._sp(12), self._sp(4), self._sp(12), self._sp(4))
+        else:
+            self._header_layout.setContentsMargins(self._sp(14), self._sp(8), self._sp(14), self._sp(12))
+            if hasattr(self, "_footer_layout"):
+                self._footer_layout.setContentsMargins(self._sp(14), self._sp(8), self._sp(14), self._sp(8))
         self._content_layout.setContentsMargins(self._sp(14), self._sp(14), self._sp(14), self._sp(14))
         self._content_layout.setSpacing(self._sp(12))
         self._settings_btn.setFixedSize(self._sp(28), self._sp(28))
@@ -1302,6 +1563,8 @@ class ClaudeWidget(QWidget):
         drag inward would jam mid-motion when height hit the new min."""
         if self._mini_mode:
             self.setMinimumSize(max(MINI_MIN_W, self._sp(MINI_MIN_W)), MINI_MIN_H)
+        elif self._detail_mode:
+            self.setMinimumSize(max(DETAIL_MIN_W, self._sp(DETAIL_MIN_W)), DETAIL_MIN_H)
         else:
             self.setMinimumSize(max(FULL_MIN_W, self._sp(FULL_MIN_W)), FULL_MIN_H)
 
@@ -1310,6 +1573,68 @@ class ClaudeWidget(QWidget):
         self._cfg.setValue("bg_opacity", self._bg_opacity)
         self._opacity_value.setText(f"{self._bg_opacity}%")
         self._apply_theme()
+
+    # detail view ──────────────────────────────────────────
+    def _make_detail_view(self) -> QWidget:
+        """detail 모드의 4개 카드 wrapper. content_wrapper와 swap 관계.
+
+        카드 데이터는 _refresh_detail()에서 jsonl 파싱 결과로 채운다 — 모드
+        진입 시 한 번 + sync timer 사이클마다 detail이 visible할 때만 갱신
+        (jsonl 풀스캔이 수십~수백 ms 걸리는 비싼 연산이라 절약).
+        """
+        w = QWidget()
+        w.setObjectName("detailView")
+        l = QVBoxLayout(w)
+        l.setContentsMargins(10, 10, 10, 10)
+        l.setSpacing(10)
+
+        s = I18N[self._lang]
+        self._detail_active   = DetailActiveCard(self._theme, s)
+        self._detail_periods  = DetailPeriodsCard(self._theme, s)
+        self._detail_recent   = DetailRecentCard(self._theme, s)
+        self._detail_models   = DetailModelsCard(self._theme, s)
+        self._detail_stats    = DetailStatsCard(self._theme, s)
+        for c in (self._detail_active, self._detail_periods,
+                  self._detail_recent, self._detail_models, self._detail_stats):
+            l.addWidget(c)
+        return w
+
+    def _refresh_detail(self):
+        """detail 카드 4개 전부 갱신. detail이 visible일 때만 호출."""
+        if not getattr(self, "_detail_wrapper", None):
+            return
+        try:
+            agg = _aggregate_detail()
+            peak = agg["peak_block"]
+            peak_cost = peak["cost_usd"] if peak else 0.0
+            s = I18N[self._lang]
+            self._detail_active.update_data(agg["active"], peak, s)
+            self._detail_periods.update_data(agg, peak_cost, s)
+            self._detail_recent.update_data(agg["recent"], peak_cost, s)
+            self._detail_models.update_data(agg["by_family"], s)
+            self._detail_stats.update_data(agg, s)
+        except Exception:
+            # jsonl 파싱/카드 갱신 중 어떤 에러든 silent로 무시 — 다음 sync
+            # 사이클에 다시 시도. detail 카드는 이전 값 유지.
+            pass
+
+    def _toggle_detail(self):
+        """트레이 메뉴/단축키에서 호출. mini ↔ detail 직접 전환은 mini 해제 경유.
+
+        모드 플립 직전에 *떠나는 모드*의 사이즈를 그 모드 키에 즉시 스냅샷.
+        """
+        if self._mini_mode:
+            # mini → detail: mini 해제하고 detail 진입
+            self._cfg.setValue("widget_size_mini", self.size())
+            self._mini_mode = False
+            self._cfg.setValue("mini_mode", "false")
+        else:
+            leaving_key = "widget_size_detail" if self._detail_mode else "widget_size"
+            self._cfg.setValue(leaving_key, self.size())
+        self._detail_mode = not self._detail_mode
+        self._cfg.setValue("detail_mode", "true" if self._detail_mode else "false")
+        self._apply_mini_mode()
+        self._rebuild_tray_menu()
 
     # mini view ────────────────────────────────────────────
     def _make_mini_view(self) -> QWidget:
@@ -1415,15 +1740,60 @@ class ClaudeWidget(QWidget):
             gap = int(tight_gap + (full_gap - tight_gap) * ratio)
         self._mini_grid.setHorizontalSpacing(gap)
 
+    def _on_resize_anim_finished(self):
+        """모드 전환 애니메이션 종료 시점.
+
+        _internal_toggle_resize 가드 해제 + scale/metric/theme 즉시 갱신.
+        _widget_scale_applied=None reset이 있어야 _apply_widget_scale가
+        early-return하지 않고 모드 분기(예: detail compact header) 적용.
+
+        mini 모드는 force update에서 제외 — mini grid는 width에 따라
+        adaptive spacing을 쓰므로 resize 끝난 후 resizeEvent의 정상 흐름에
+        맡겨야 라벨이 좁은 영역에 갇혀 잘리지 않는다.
+        """
+        self._internal_toggle_resize = False
+        if not self._mini_mode:
+            self._widget_scale_applied = None
+            self._apply_widget_scale()
+        self._theme_reapply_timer.stop()
+        self._apply_theme()
+
+    def _update_icon_tooltips(self):
+        """헤더/미니 아이콘 툴팁을 현재 모드에 맞춰 갱신.
+
+        - 오리지널: 헤더 아이콘 = "클릭: 미니 · 우클릭: 상세"
+        - 디테일:   헤더 아이콘 = "클릭: 오리지널 모드"
+        - 미니:     미니 아이콘 = "클릭: 오리지널 모드"
+        """
+        s = I18N[self._lang]
+        # mini 아이콘은 mini 모드에서만 보이지만 무해하게 항상 set.
+        self._mini_icon.setToolTip(s["miniExitTip"])
+        if self._detail_mode and not self._mini_mode:
+            self._header_icon.setToolTip(s["miniExitTip"])
+        else:
+            self._header_icon.setToolTip(s["miniEnterTip"])
+
     def _mini_icon_clicked(self, ev):
+        """미니 모드 아이콘 — 좌클릭으로 오리지널 복귀. 우클릭은 무반응."""
         if ev.button() == Qt.MouseButton.LeftButton:
             self._toggle_mini()
             ev.accept()
 
     def _header_icon_clicked(self, ev):
+        """헤더 아이콘 — 모드별 동작:
+        - 오리지널: 좌=미니 진입 / 우=디테일 진입
+        - 디테일:   좌=오리지널 복귀 / 우=무반응
+        """
         if ev.button() == Qt.MouseButton.LeftButton:
-            self._toggle_mini()
+            if self._detail_mode:
+                self._toggle_detail()   # detail → 오리지널
+            else:
+                self._toggle_mini()     # 오리지널 → mini
             ev.accept()
+        elif ev.button() == Qt.MouseButton.RightButton:
+            if not self._detail_mode:
+                self._toggle_detail()   # 오리지널 → detail
+                ev.accept()
 
     def _apply_mini_mode(self, initial: bool = False):
         """풀↔미니 모드 전환의 핵심 로직.
@@ -1437,6 +1807,8 @@ class ClaudeWidget(QWidget):
         본인이 직접 조정한 사이즈로 정확히 돌아간다.
         """
         is_mini = self._mini_mode
+        # detail은 mini가 우선 — mini=true면 detail 무시. mini 해제된 경우만 detail 평가.
+        is_detail = (not is_mini) and self._detail_mode
 
         # Auto-close settings when entering mini (settings is unreachable there).
         # Done before content-wrapper restoration so the in-memory full-size cache
@@ -1449,10 +1821,13 @@ class ClaudeWidget(QWidget):
             self._content_wrapper.setVisible(True)
             self._div_after_header.setVisible(True)
 
-        # Toggle visibility of full-mode chrome.
+        # Toggle visibility of full-mode chrome. detail 모드는 full chrome(header/
+        # footer/divider)은 그대로 유지하면서 content_wrapper만 detail_wrapper로 swap.
         self._header_widget.setVisible(not is_mini)
         self._div_after_header.setVisible(not is_mini)
-        self._content_wrapper.setVisible(not is_mini)
+        self._content_wrapper.setVisible(not is_mini and not is_detail)
+        if hasattr(self, "_detail_wrapper"):
+            self._detail_wrapper.setVisible(is_detail)
         self._div_before_footer.setVisible(not is_mini)
         self._footer_widget.setVisible(not is_mini)
         self._mini_view.setVisible(is_mini)
@@ -1461,6 +1836,14 @@ class ClaudeWidget(QWidget):
         # on subsequent resize events as the user drags).
         if is_mini:
             self._update_mini_grid_spacing()
+
+        # detail 진입 시 즉시 1회 갱신 — 빈 카드 보임 방지.
+        if is_detail:
+            self._refresh_detail()
+
+        # 모드별 아이콘 툴팁 갱신 (좌/우클릭 안내가 모드마다 다름)
+        if hasattr(self, "_header_icon"):
+            self._update_icon_tooltips()
 
         # Resize the window. Mini mode shrinks; full mode restores prior size.
         # Mode toggles use an animated tween (OutCubic, ~180ms) for a smooth
@@ -1471,6 +1854,14 @@ class ClaudeWidget(QWidget):
             self._apply_minimum_size()
             if is_mini:
                 target = self._cfg.value("widget_size_mini")
+            elif is_detail:
+                target = self._cfg.value("widget_size_detail")
+                # detail 모드는 첫 진입 시 adjustSize가 카드 4개 sizeHint 합산으로
+                # 위젯을 580×1100급으로 부풀려 저장한다 — 그러면 헤더 layout이
+                # 그 폭에 stretch되어 Max 배지가 외로워 보임. invalid이거나
+                # 비정상적으로 큰 값일 때 reasonable default로 정정.
+                if not (target and target.isValid()) or target.width() > 520:
+                    target = QSize(460, 820)
             else:
                 # widget_size is updated on every full-mode resizeEvent,
                 # so it always holds the last user-chosen full-mode geometry.
@@ -1489,6 +1880,16 @@ class ClaudeWidget(QWidget):
             # suppressed for the duration of the tween.
             if self._resize_anim.state() != QPropertyAnimation.State.Running:
                 self._internal_toggle_resize = False
+                # 즉시 resize 경로(initial 또는 동일 사이즈)에서도 모드 분기에
+                # 따른 chrome metric (header/footer/drag handle padding)과
+                # 폰트가 새 모드에 맞춰 즉시 갱신되도록 명시 호출.
+                # mini 모드 제외 — mini grid의 adaptive spacing은 정상 resize
+                # 흐름에서 처리되어야 라벨이 잘리지 않는다.
+                if not self._mini_mode:
+                    self._widget_scale_applied = None
+                    self._apply_widget_scale()
+                self._theme_reapply_timer.stop()
+                self._apply_theme()
 
     def _animate_resize_to(self, target: QSize, duration: int = 180):
         """Tween the window from its current size to `target` size."""
@@ -1506,11 +1907,22 @@ class ClaudeWidget(QWidget):
         resizeEvent가 평소엔 연속 저장하지만 옵션 패널 열림/programmatic resize
         등의 가드 케이스에서 누락될 수 있어 여기서 한 번 더 보장.
         """
-        leaving_key = "widget_size_mini" if self._mini_mode else "widget_size"
+        if self._mini_mode:
+            leaving_key = "widget_size_mini"
+        elif self._detail_mode:
+            leaving_key = "widget_size_detail"
+        else:
+            leaving_key = "widget_size"
         self._cfg.setValue(leaving_key, self.size())
 
         self._mini_mode = not self._mini_mode
         self._cfg.setValue("mini_mode", "true" if self._mini_mode else "false")
+        # mini 진입 시 detail은 자동 해제 — 두 모드 동시 활성 방지 (mini가 우선이라
+        # 레이아웃상 detail이 보이지 않지만, flag도 false로 동기화해 트레이 메뉴
+        # 체크 상태가 어긋나지 않게 함).
+        if self._mini_mode and self._detail_mode:
+            self._detail_mode = False
+            self._cfg.setValue("detail_mode", "false")
         self._apply_mini_mode()
         self._rebuild_tray_menu()
 
@@ -1518,6 +1930,8 @@ class ClaudeWidget(QWidget):
     def _make_footer(self) -> QWidget:
         w = QWidget()
         l = QHBoxLayout(w); l.setContentsMargins(14,8,14,8); l.setSpacing(8)
+        # detail 모드에서 컴팩트화하려고 _apply_widget_scale에서 다시 set한다.
+        self._footer_layout = l
         self._version_lbl = QLabel(APP_VERSION)
         self._version_lbl.setObjectName("footerVersion")
         self._last_sync_lbl = QLabel()
@@ -1750,9 +2164,18 @@ class ClaudeWidget(QWidget):
         self._mini_session_lbl.setText(s["miniSession"])
         self._mini_all_lbl.setText(s["miniAll"])
         self._mini_sonnet_lbl.setText(s["miniSonnet"])
-        self._mini_icon.setToolTip(s["miniExitTip"])
-        self._header_icon.setToolTip(s["miniEnterTip"])
+        self._update_icon_tooltips()
         self._sett_opacity_label.setText(s["bgOpacity"])
+        # detail 카드 라벨도 lang에 맞춰 갱신. detail이 visible이면 동적 텍스트도
+        # 즉시 새 lang으로 — _refresh_detail이 update_data에 새 strings 전달.
+        if hasattr(self, "_detail_active"):
+            self._detail_active.set_lang(s)
+            self._detail_periods.set_lang(s)
+            self._detail_recent.set_lang(s)
+            self._detail_models.set_lang(s)
+            self._detail_stats.set_lang(s)
+            if self._detail_mode and not self._mini_mode:
+                self._refresh_detail()
         self._opacity_value.setText(f"{self._bg_opacity}%")
         self._sett_update_label.setText(s["updateSection"])
         self._update_btn.setText(s["checkForUpdate"])
@@ -1806,18 +2229,27 @@ class ClaudeWidget(QWidget):
                 # Hide cards while settings is open so the panel takes the
                 # middle area cleanly — keeps top/middle/bottom proportions natural.
                 self._content_wrapper.setVisible(False)
+                if hasattr(self, "_detail_wrapper"):
+                    self._detail_wrapper.setVisible(False)
                 self._div_after_header.setVisible(False)
                 self._settings_panel.setVisible(True)
                 self.adjustSize()
                 self.resize(keep_w, self.height())
             else:
                 self._settings_panel.setVisible(False)
-                self._content_wrapper.setVisible(True)
+                # 닫을 때는 *현재 모드*에 맞는 wrapper만 다시 show. 무조건
+                # content_wrapper를 보이면 detail 모드일 때 오리진 카드가 노출됨.
+                if self._detail_mode:
+                    if hasattr(self, "_detail_wrapper"):
+                        self._detail_wrapper.setVisible(True)
+                else:
+                    self._content_wrapper.setVisible(True)
                 self._div_after_header.setVisible(True)
                 target_h = self._collapsed_height if self._collapsed_height is not None else self.height()
                 target_h = max(self.minimumHeight(), int(target_h))
                 self.resize(keep_w, target_h)
-                self._cfg.setValue("widget_size", self.size())
+                size_key = "widget_size_detail" if self._detail_mode else "widget_size"
+                self._cfg.setValue(size_key, self.size())
         finally:
             self._internal_toggle_resize = False
 
@@ -1834,7 +2266,12 @@ class ClaudeWidget(QWidget):
         # smoothly as the user drags the mini widget narrower.
         self._update_mini_grid_spacing()
         if not self._settings_panel.isVisible() and not self._internal_toggle_resize:
-            key = "widget_size_mini" if self._mini_mode else "widget_size"
+            if self._mini_mode:
+                key = "widget_size_mini"
+            elif self._detail_mode:
+                key = "widget_size_detail"
+            else:
+                key = "widget_size"
             self._cfg.setValue(key, self.size())
 
     # ── Update check / download ─────────────────────────────
@@ -2087,6 +2524,12 @@ class ClaudeWidget(QWidget):
         self._worker.result.connect(self._on_done)
         self._worker.finished.connect(self._worker.deleteLater)
         self._worker.start()
+
+        # detail 카드들도 sync 사이클에 맞춰 함께 갱신 — 단, detail이 visible
+        # 일 때만(jsonl 풀스캔 비용 절약). UI thread에서 inline 호출이라 잠시
+        # 멈춤이 있을 수 있음 (수만 records ≈ 수백 ms). 추후 worker로 분리 가능.
+        if self._detail_mode and not self._mini_mode:
+            self._refresh_detail()
 
     def _on_done(self, usage: dict):
         self._is_syncing = False
