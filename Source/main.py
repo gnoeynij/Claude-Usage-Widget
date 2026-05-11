@@ -642,9 +642,10 @@ def _detail_label(theme: dict, text: str, *, dim: bool = True, mono: bool = Fals
 def _detail_thin_bar(theme: dict, h: int = 6, *, accent: str = "warm") -> QProgressBar:
     """detail 카드 내부의 비교용 진행 막대.
 
-    임계치 색상 없이 카드 일관 색상으로 — 다만 단색 대신 따뜻한 톤의 가로
-    그라디언트(deep orange → bright orange)를 써서 평면적이지 않게.
-    accent="cool"이면 보라→핑크 톤으로 대조 (현재 미사용, 향후 카드별 변형 여지).
+    accent:
+      "warm" — 비용/사용량 막대 (deep orange → bright orange)
+      "time" — 시간 경과 막대 (blue → cyan). warm 톤과 의미 분리 (시간 ≠ 비용)
+      "cool" — 보조 강조 (purple → pink)
     """
     pb = QProgressBar()
     pb.setRange(0, 100)
@@ -654,6 +655,8 @@ def _detail_thin_bar(theme: dict, h: int = 6, *, accent: str = "warm") -> QProgr
     radius = h // 2
     if accent == "cool":
         c1, c2 = "#7c3aed", "#ec4899"
+    elif accent == "time":
+        c1, c2 = "#3b82f6", "#06b6d4"  # blue → cyan (시간이라는 metric 분리)
     else:
         c1, c2 = "#c2410c", "#fb923c"  # deep orange → bright orange
     pb.setStyleSheet(
@@ -677,7 +680,7 @@ def _detail_row(theme: dict, name: str):
     bar = _detail_thin_bar(theme)
     bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
     val = _detail_label(theme, "–", dim=False, mono=True, size=11)
-    val.setFixedWidth(160)  # layout이 minimumWidth를 무시하고 줄이는 것 방지
+    val.setFixedWidth(120)  # layout이 minimumWidth를 무시하고 줄이는 것 방지
     val.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
     h.addWidget(name_lbl); h.addWidget(bar, 1); h.addWidget(val)
     return h, name_lbl, bar, val
@@ -702,7 +705,7 @@ class DetailActiveCard(_DetailCardBase):
         self._lay.addWidget(self._title_lbl)
         self.lbl_status = _detail_label(theme, s["detailLoading"], dim=True, size=11)
         self._lay.addWidget(self.lbl_status)
-        self.bar_time = _detail_thin_bar(theme, h=10)
+        self.bar_time = _detail_thin_bar(theme, h=10, accent="time")
         self._lay.addWidget(self.bar_time)
 
         cost_row = QHBoxLayout()
@@ -804,7 +807,7 @@ class DetailRecentCard(_DetailCardBase):
             bar = _detail_thin_bar(theme, h=4)
             bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             v = _detail_label(theme, "—", dim=False, mono=True, size=11)
-            v.setFixedWidth(160)
+            v.setFixedWidth(120)
             v.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             h.addWidget(t); h.addWidget(bar, 1); h.addWidget(v)
             self._lay.addLayout(h)
@@ -1810,14 +1813,15 @@ class ClaudeWidget(QWidget):
         # detail은 mini가 우선 — mini=true면 detail 무시. mini 해제된 경우만 detail 평가.
         is_detail = (not is_mini) and self._detail_mode
 
-        # Auto-close settings when entering mini (settings is unreachable there).
-        # Done before content-wrapper restoration so the in-memory full-size cache
-        # — populated by the most recent full-mode resizeEvent — is what we restore from.
-        if is_mini and self._settings_panel.isVisible():
+        # 모드 전환 시 settings panel이 열려있으면 자동 닫기. 닫지 않으면
+        # 두 가지 회귀가 발생:
+        #  (1) settings + 새 모드 wrapper가 같이 보여 화면이 어수선
+        #  (2) _collapsed_height가 이전 모드의 height로 남아 다음 옵션
+        #      토글에서 잘못된 사이즈로 resize ("옵션 패널 동작 안 함" 보고)
+        # 이전엔 mini 진입에만 적용했으나 detail↔full 전환에서도 동일 문제.
+        if self._settings_panel.isVisible():
             self._settings_panel.setVisible(False)
             self._collapsed_height = None
-            # Re-show content_wrapper visibility flag to its full-mode state so
-            # the size cache reflects the user's chosen card-mode geometry.
             self._content_wrapper.setVisible(True)
             self._div_after_header.setVisible(True)
 
@@ -1854,6 +1858,14 @@ class ClaudeWidget(QWidget):
             self._apply_minimum_size()
             if is_mini:
                 target = self._cfg.value("widget_size_mini")
+                # mini 사이즈는 작아야 정상. 첫 mini 진입 시 widget_size_mini가
+                # invalid이면 adjustSize가 hidden full chrome의 sizeHint를 반환해
+                # 280x450 같은 큰 값이 저장되고 이후 mini가 그 사이즈로 stuck.
+                # 비정상 임계 초과 시 reasonable mini default로 정정.
+                if (not (target and target.isValid())
+                        or target.width() > MINI_MIN_W * 2
+                        or target.height() > MINI_MIN_H * 3):
+                    target = QSize(MINI_MIN_W + 50, MINI_MIN_H + 35)
             elif is_detail:
                 target = self._cfg.value("widget_size_detail")
                 # detail 모드는 첫 진입 시 adjustSize가 카드 4개 sizeHint 합산으로
