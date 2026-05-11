@@ -86,7 +86,11 @@ python -m PyInstaller claude_widget.spec --noconfirm --clean
 
 ## 📝 Change Log
 
-### v1.4.0 (current)
+### v1.5.0 (current)
+- Detail mode added (mini ↔ full ↔ detail 3-state) with local JSONL-based usage stats (cost, tokens, per-model)
+- Mode-switching fixes — settings panel auto-close on every transition; first-entry mini sizing no longer gets stuck oversized
+
+### v1.4.0
 - Auto-update (`Check for Updates` downloads the new release and restarts automatically)
 - Always-on-top now hides the widget from the taskbar / Alt+Tab
 - Smoother mode switching, size restore, font polish

@@ -56,7 +56,7 @@ from _shared import (
 from collections import defaultdict
 from datetime import timedelta
 
-APP_VERSION   = "v1.4.0"
+APP_VERSION   = "v1.5.0"
 LEARN_MORE_URL = "https://support.claude.com/ko/"
 
 
