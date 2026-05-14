@@ -86,7 +86,10 @@ python -m PyInstaller claude_widget.spec --noconfirm --clean
 
 ## 📝 Change Log
 
-### v1.5.0 (current)
+### v1.5.1 (current)
+- Token expiry handling — pre-check `expiresAt` to skip doomed GETs, and on a 401 retry once with freshly-read credentials (catches the race where Claude Code rotates the token mid-sync)
+
+### v1.5.0
 - Detail mode added (mini ↔ full ↔ detail 3-state) with local JSONL-based usage stats (cost, tokens, per-model)
 - Mode-switching fixes — settings panel auto-close on every transition; first-entry mini sizing no longer gets stuck oversized
 

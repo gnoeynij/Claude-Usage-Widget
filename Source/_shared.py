@@ -74,8 +74,32 @@ class FetchWorker(QThread):
         if not creds:
             return {"error": "NO_CREDENTIALS"}
 
+        # B. expiresAt 사전 체크 — 이미 만료된 토큰으로 GET을 보내봤자
+        # 401만 받고 끝나므로 호출 자체를 스킵. Claude Code는 expiresAt을
+        # ms epoch으로 기록 (필드가 없거나 0이면 사전 체크 생략 → 기존 동작).
+        exp = creds.get("expiresAt")
+        access = creds.get("accessToken")
+        if isinstance(exp, (int, float)) and exp > 0:
+            if datetime.now(timezone.utc).timestamp() * 1000 >= exp:
+                return {"error": "TOKEN_EXPIRED"}
+
+        result = self._call_usage(access)
+
+        # A. 401/403 시 1회 자동 retry — 첫 호출과 응답 사이에 Claude Code가
+        # 토큰을 갱신했을 수 있다 (위젯이 sync하는 그 순간 CLI가 동작 중일 때
+        # 흔히 발생). 토큰 파일을 다시 읽어 accessToken이 바뀌었으면 1회만
+        # 새 토큰으로 재시도. 같은 토큰이면 진짜 만료된 것 → 사용자에게 표시.
+        if result.get("error") == "TOKEN_EXPIRED":
+            fresh = self.read_credentials()
+            fresh_access = fresh.get("accessToken") if fresh else None
+            if fresh and fresh_access != access:
+                result = self._call_usage(fresh_access)
+
+        return result
+
+    def _call_usage(self, access_token: str) -> dict:
         headers = {
-            "Authorization": f"Bearer {creds['accessToken']}",
+            "Authorization": f"Bearer {access_token}",
             "anthropic-beta": "oauth-2025-04-20",
             "Accept": "application/json",
         }
