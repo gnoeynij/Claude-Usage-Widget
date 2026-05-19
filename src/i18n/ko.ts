@@ -1,0 +1,56 @@
+import type { Strings } from "./en";
+
+export const ko: Strings = {
+  session: "세션",
+  weekly: "주간 한도",
+  allModels: "전체 모델",
+  sonnetOnly: "Sonnet 전용",
+  resetsIn: (h, m) => `${h}시간 ${m}분 뒤 초기화`,
+  resetsOn: (s) => `${s} 초기화`,
+
+  syncNow: "지금 동기화",
+  settings: "설정",
+  language: "언어",
+  autoSync: "자동 동기화",
+  alwaysOnTop: "항상 위",
+  darkMode: "다크 모드",
+  opacity: "배경 투명도",
+
+  updateAvailable: "업데이트 있음",
+  checkForUpdates: "업데이트 확인",
+  noUpdates: "최신 버전",
+  quit: "종료",
+  show: "표시",
+
+  mini: "미니",
+  normal: "기본",
+  detail: "상세",
+
+  off: "끔",
+  m5: "5분",
+  m10: "10분",
+  m30: "30분",
+  h1: "1시간",
+
+  activeSession: "현재 세션",
+  fiveHourBlock: "5시간 블록",
+  periods: "기간별",
+  today: "오늘",
+  yesterday: "어제",
+  thisWeek: "이번 주",
+  thisMonth: "이번 달",
+  recent: "최근 블록",
+  models: "모델별",
+  stats: "통계",
+  cost: "비용",
+  messages: "메시지",
+  avgPerBlock: "블록당 평균",
+  cacheHit: "캐시 적중",
+  peak: "최고",
+  peakLabel: (pct, peak) => `피크 ${peak} 대비 ${pct}%`,
+
+  lastSync: "마지막 동기화",
+  never: "없음",
+  syncing: "동기화 중…",
+  syncFailed: "동기화 실패",
+};

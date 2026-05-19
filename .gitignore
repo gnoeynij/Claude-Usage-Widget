@@ -2,14 +2,23 @@
 .idea/
 .claude/
 
-# Python cache
+# Python cache (legacy PyQt6 stack — kept for reference until 2.0 ships)
 __pycache__/
 *.py[cod]
 
-# Local build artifacts
+# Local build artifacts (legacy PyInstaller)
 Source/build/
 Source/dist/
 Source/__pycache__/
+
+# Tauri / Node
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+
+# Logs
+*.log
 
 # Release archives (regenerated per release; .exe is the canonical artifact)
 Release/*.zip

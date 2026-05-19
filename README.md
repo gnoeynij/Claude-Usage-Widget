@@ -59,27 +59,31 @@ This is an unsigned personal open-source build, so Windows SmartScreen may warn 
 
 ## 🛠️ Build from Source
 
-Built with Python 3.10+ and PyQt6.
+> **v2.0+ uses Tauri 2 + Rust + SolidJS.** The legacy PyQt6 source remains in
+> `Source/` for reference only. The instructions below build the current
+> `main` branch (Liquid Glass rebuild).
+
+Requires Node ≥ 20, the Rust toolchain (`rustup`), and the Microsoft C++ Build
+Tools on Windows. WebView2 Runtime ships with Windows 11; on Windows 10 the
+installer bootstrapper fetches it automatically.
 
 ```bash
 # 1. Clone
 git clone https://github.com/gnoeynij/Claude-Usage-Widget.git
-cd Claude-Usage-Widget/Source
+cd Claude-Usage-Widget
 
 # 2. Install dependencies
-pip install -r requirements.txt
-pip install pyinstaller
+npm install
 
-# 3. (Optional) Bundle the SUIT SemiBold font
-#    Download from https://sun.fo/suit/
-#    and place SUIT-SemiBold.ttf in Source/assets/fonts/.
-#    Without it, the widget falls back to system SUIT → Segoe UI.
+# 3. Run in dev mode
+npm run tauri dev
 
-# 4. Build with PyInstaller
-python -m PyInstaller claude_widget.spec --noconfirm --clean
+# 4. Production build
+npm run tauri build
 
 # 5. Output
-# Source/dist/Claude-Widget.exe
+#   src-tauri/target/release/bundle/nsis/Claude Widget_<ver>_x64-setup.exe
+#   src-tauri/target/release/Claude Widget.exe   (portable)
 ```
 
 ---

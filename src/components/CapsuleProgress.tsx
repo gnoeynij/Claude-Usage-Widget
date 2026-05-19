@@ -1,0 +1,74 @@
+export type CapsuleTone = "threshold" | "accent" | "neutral";
+
+type Props = {
+  value: number;
+  size?: "sm" | "md";
+  /** "threshold" (default) = green/amber/red by value; "accent" = solid brand;
+   *  "neutral" = subtle gray. Used to separate limit-style gauges from
+   *  comparison-style bars (e.g. periods, models). */
+  tone?: CapsuleTone;
+  /** Explicit color override — takes precedence over tone. Used by the
+   *  Models card to color bars by model family. */
+  color?: string;
+};
+
+function clamp(n: number) {
+  if (Number.isNaN(n) || !Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, n));
+}
+
+function colorFor(v: number, tone: CapsuleTone, override?: string) {
+  if (override) return override;
+  if (tone === "accent") return "var(--accent)";
+  if (tone === "neutral") return "var(--label-tertiary)";
+  if (v >= 80) return "var(--danger)";
+  if (v >= 50) return "var(--warning)";
+  return "var(--success)";
+}
+
+export function CapsuleProgress(props: Props) {
+  const v = () => clamp(props.value);
+  const tone = () => props.tone ?? "threshold";
+  const h = () => (props.size === "sm" ? "var(--capsule-h-sm)" : "var(--capsule-h)");
+  const c = () => colorFor(v(), tone(), props.color);
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: h(),
+        "border-radius": "var(--r-pill)",
+        background: "var(--fill-2)",
+        "box-shadow": "inset 0 0 0 1px rgba(0,0,0,0.04)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: 0,
+          width: `${v()}%`,
+          "border-radius": "var(--r-pill)",
+          background: `linear-gradient(90deg, color-mix(in oklab, ${c()} 70%, transparent), ${c()})`,
+          transition:
+            "width var(--dur-xslow) var(--ease-swift), background var(--dur-base) var(--ease-smooth)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: `${v()}%`,
+          height: "1px",
+          background:
+            "linear-gradient(90deg, rgba(255,255,255,0.5), rgba(255,255,255,0) 70%)",
+          transition: "width var(--dur-xslow) var(--ease-swift)",
+        }}
+      />
+    </div>
+  );
+}

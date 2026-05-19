@@ -1,0 +1,164 @@
+/* Single source of truth for the visual system.
+   Components must read tokens via var(--*) — never hardcode colors or sizes. */
+
+:root {
+  /* ─── Brand ─────────────────────────────────────────────────────────── */
+  --accent: #d97757;
+  --accent-hover: #c5644a;
+  --accent-tint: rgba(217, 119, 87, 0.16);
+  --accent-tint-strong: rgba(217, 119, 87, 0.28);
+
+  /* ─── Status (Apple HIG–aligned) ─────────────────────────────────────── */
+  --success: #34c759;
+  --warning: #ff9f0a;
+  --danger: #ff453a;
+  /* status-dim: darker variant used by tiny indicators (header dot) on light
+     backgrounds where the system success green is too washed out. */
+  --success-dim: #1f9d55;
+
+  /* ─── Light theme labels (Apple's 4-tier) ────────────────────────────── */
+  --label: rgba(28, 28, 30, 1);
+  --label-secondary: rgba(60, 60, 67, 0.68);
+  --label-tertiary: rgba(60, 60, 67, 0.34);
+  --label-quaternary: rgba(60, 60, 67, 0.18);
+
+  /* ─── Light fills (4-tier) ───────────────────────────────────────────── */
+  --fill-1: rgba(120, 120, 128, 0.20);
+  --fill-2: rgba(120, 120, 128, 0.14);
+  --fill-3: rgba(120, 120, 128, 0.10);
+  --fill-4: rgba(120, 120, 128, 0.06);
+
+  --separator: rgba(60, 60, 67, 0.18);
+  --hairline: rgba(0, 0, 0, 0.08);
+
+  /* ─── Liquid Glass material (light) ──────────────────────────────────── */
+  /* RGB + alpha kept split so future overrides can dial either independently.
+     Whole-widget opacity is now an OS-level concern (Tauri's window
+     set_opacity) — CSS handles material identity, OS handles window fade. */
+  --glass-base-rgb: 255, 255, 255;
+  --glass-base-alpha: 0.55;
+  --glass-card-rgb: 255, 255, 255;
+  --glass-card-alpha: 0.66;
+  --glass-card-accent-rgb: 255, 255, 255;
+  --glass-card-accent-alpha: 0.80;
+
+  --glass-base: rgba(var(--glass-base-rgb), var(--glass-base-alpha));
+  --glass-base-blur: 40px;
+  --glass-card: rgba(var(--glass-card-rgb), var(--glass-card-alpha));
+  --glass-card-accent: rgba(var(--glass-card-accent-rgb), var(--glass-card-accent-alpha));
+  --glass-card-blur: 18px;
+  /* The Background-opacity slider lowers this from 1 toward 0 so blur weakens
+     as the widget fades — required to read as "transparent" not "blurry". */
+  --blur-mult: 1;
+  --specular: rgba(255, 255, 255, 0.85);
+  --specular-edge: rgba(255, 255, 255, 0.45);
+  --inner-glow: rgba(255, 255, 255, 0.55);
+
+  --shadow-soft: 0 12px 36px -8px rgba(15, 23, 42, 0.18),
+                 0 2px 8px -2px rgba(15, 23, 42, 0.10);
+  --shadow-card: 0 6px 18px -6px rgba(15, 23, 42, 0.18),
+                 0 1px 3px rgba(15, 23, 42, 0.08);
+
+  /* ─── Spacing — 4px grid ─────────────────────────────────────────────── */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+
+  /* ─── Radius ─────────────────────────────────────────────────────────── */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-window: 10px; /* matches Win11 DWMWCP_ROUND (~8-10px) to avoid corner halo */
+  --r-pill: 9999px;
+
+  /* ─── Typography scale ───────────────────────────────────────────────── */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+             "Inter Variable", Inter, "Segoe UI Variable",
+             "Segoe UI", system-ui, sans-serif;
+  --font-ko: "SUIT Variable", SUIT, -apple-system, system-ui, sans-serif;
+
+  --text-caption-size: 11px;
+  --text-caption-lh: 14px;
+  --text-body-size: 13px;
+  --text-body-lh: 18px;
+  --text-headline-size: 15px;
+  --text-headline-lh: 20px;
+  --text-title3-size: 19px;
+  --text-title3-lh: 24px;
+  --text-title2-size: 26px;
+  --text-title2-lh: 32px;
+  --text-title1-size: 34px;
+  --text-title1-lh: 40px;
+
+  /* SF Pro-style optical tightening */
+  --letter-tight: -0.012em;
+  --letter-display: -0.022em;
+
+  /* ─── Motion ─────────────────────────────────────────────────────────── */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-swift: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --dur-xfast: 120ms;
+  --dur-fast: 180ms;
+  --dur-base: 260ms;
+  --dur-slow: 420ms;
+  --dur-xslow: 600ms;
+
+  /* ─── Component metrics ──────────────────────────────────────────────── */
+  --capsule-h: 10px;
+  --capsule-h-sm: 6px;
+  --donut-stroke: 8px;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Dark theme — class-based, so we can also override per element when needed.
+   ────────────────────────────────────────────────────────────────────────── */
+:root.dark {
+  --label: rgba(255, 255, 255, 0.96);
+  --label-secondary: rgba(235, 235, 245, 0.72);
+  --label-tertiary: rgba(235, 235, 245, 0.50);
+  --label-quaternary: rgba(235, 235, 245, 0.28);
+
+  /* In dark mode the panel reads almost-black (Mica often can't punch through
+     to the desktop), so fills must be WHITE-based alpha to lift above the
+     panel — grey-based alpha just disappears into the background. */
+  --fill-1: rgba(235, 237, 250, 0.28);
+  --fill-2: rgba(235, 237, 250, 0.19);
+  --fill-3: rgba(235, 237, 250, 0.13);
+  --fill-4: rgba(235, 237, 250, 0.08);
+
+  --separator: rgba(235, 237, 250, 0.24);
+  --hairline: rgba(255, 255, 255, 0.16);
+
+  --glass-base-rgb: 38, 40, 52;
+  --glass-base-alpha: 0.56;
+  --glass-card-rgb: 58, 60, 74;
+  --glass-card-alpha: 0.66;
+  --glass-card-accent-rgb: 72, 76, 92;
+  --glass-card-accent-alpha: 0.74;
+  /* --glass-base / --glass-card / --glass-card-accent are derived from the
+     RGB/alpha pair in :root, so we don't need to redeclare them here. */
+  /* On dark backgrounds the system success green is plenty visible — keep
+     it as-is for the dot. */
+  --success-dim: #34c759;
+  /* Specular gradient is the top-edge "glow" on every glass surface. In dark
+     mode this needs to be SUBTLE — at full strength every card grows a bright
+     top line and the eye reads them as inconsistent stripes. */
+  --specular: rgba(255, 255, 255, 0.22);
+  --specular-edge: rgba(255, 255, 255, 0.12);
+  --inner-glow: rgba(255, 255, 255, 0.08);
+
+  --shadow-soft: 0 22px 56px -10px rgba(0, 0, 0, 0.66),
+                 0 4px 14px -2px rgba(0, 0, 0, 0.48);
+  --shadow-card: 0 10px 26px -6px rgba(0, 0, 0, 0.60),
+                 0 2px 4px rgba(0, 0, 0, 0.40);
+
+  --accent-tint: rgba(217, 119, 87, 0.26);
+  --accent-tint-strong: rgba(217, 119, 87, 0.40);
+}

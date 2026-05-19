@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Claude Widget",
+  "version": "2.0.0",
+  "identifier": "com.gnoeynij.claude-widget",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Claude Widget",
+        "width": 360,
+        "height": 420,
+        "minWidth": 280,
+        "minHeight": 240,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "resizable": true,
+        "center": false,
+        "skipTaskbar": false,
+        "fullscreen": false,
+        "alwaysOnTop": false,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "category": "Utility",
+    "copyright": "Copyright (c) 2026 gnoeynij",
+    "shortDescription": "Claude usage at a glance",
+    "longDescription": "A live widget showing Claude usage limits and detailed local statistics, with a Liquid Glass design.",
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/gnoeynij/Claude-Usage-Widget/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
+    }
+  }
+}

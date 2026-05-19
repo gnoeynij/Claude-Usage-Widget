@@ -1,0 +1,56 @@
+export const en = {
+  session: "Session",
+  weekly: "Weekly limits",
+  allModels: "All models",
+  sonnetOnly: "Sonnet only",
+  resetsIn: (h: number, m: number) => `Resets in ${h}h ${m}m`,
+  resetsOn: (s: string) => `Resets ${s}`,
+
+  syncNow: "Sync now",
+  settings: "Settings",
+  language: "Language",
+  autoSync: "Auto sync",
+  alwaysOnTop: "Always on top",
+  darkMode: "Dark mode",
+  opacity: "Background opacity",
+
+  updateAvailable: "Update available",
+  checkForUpdates: "Check for updates",
+  noUpdates: "Up to date",
+  quit: "Quit",
+  show: "Show",
+
+  mini: "Mini",
+  normal: "Normal",
+  detail: "Detail",
+
+  off: "Off",
+  m5: "5m",
+  m10: "10m",
+  m30: "30m",
+  h1: "1h",
+
+  activeSession: "Active session",
+  fiveHourBlock: "5h block",
+  periods: "Periods",
+  today: "Today",
+  yesterday: "Yesterday",
+  thisWeek: "This week",
+  thisMonth: "This month",
+  recent: "Recent blocks",
+  models: "Models",
+  stats: "Stats",
+  cost: "Cost",
+  messages: "Messages",
+  avgPerBlock: "Avg per block",
+  cacheHit: "Cache hit",
+  peak: "peak",
+  peakLabel: (pct: number, peak: string) => `${pct}% of ${peak} peak`,
+
+  lastSync: "last sync",
+  never: "never",
+  syncing: "Syncing…",
+  syncFailed: "Sync failed",
+};
+
+export type Strings = typeof en;

@@ -1,0 +1,204 @@
+/* Bundled Korean face. The English stack is OS-system: SF Pro on macOS,
+   Segoe UI Variable on Windows 11. */
+@font-face {
+  font-family: "SUIT Variable";
+  src: url("../assets/fonts/SUIT-SemiBold.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+/* Reset + base typography. Liquid Glass requires a fully transparent root
+   so the OS material (Mica/Acrylic on Windows, NSVisualEffect on macOS)
+   can show through the WebView. */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: transparent !important;
+}
+
+html {
+  font-family: var(--font-ui);
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-lh);
+  color: var(--label);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--letter-tight);
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+/* Korean glyphs cascade through the Korean stack first. */
+html:lang(ko) {
+  font-family: var(--font-ko), var(--font-ui);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: default;
+  letter-spacing: inherit;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Type scale utility classes — pair size, line-height, weight, and tracking
+   together so component code can just say `class="t-headline"`.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.t-caption {
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-lh);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.t-body {
+  font-size: var(--text-body-size);
+  line-height: var(--text-body-lh);
+  font-weight: 400;
+}
+
+.t-headline {
+  font-size: var(--text-headline-size);
+  line-height: var(--text-headline-lh);
+  font-weight: 600;
+  letter-spacing: var(--letter-tight);
+}
+
+.t-title3 {
+  font-size: var(--text-title3-size);
+  line-height: var(--text-title3-lh);
+  font-weight: 600;
+  letter-spacing: var(--letter-tight);
+}
+
+.t-title2 {
+  font-size: var(--text-title2-size);
+  line-height: var(--text-title2-lh);
+  font-weight: 700;
+  letter-spacing: var(--letter-display);
+}
+
+.t-title1 {
+  font-size: var(--text-title1-size);
+  line-height: var(--text-title1-lh);
+  font-weight: 700;
+  letter-spacing: var(--letter-display);
+}
+
+.label-secondary { color: var(--label-secondary); }
+.label-tertiary  { color: var(--label-tertiary); }
+
+/* Caption labels in uppercase, used in settings section headers (Apple Settings style). */
+.t-section {
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--label-tertiary);
+}
+
+/* Drag region for frameless window. */
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag, button, input, [role="button"] {
+  -webkit-app-region: no-drag;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Animations
+   ────────────────────────────────────────────────────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes panel-reveal {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.panel-reveal {
+  animation: panel-reveal var(--dur-base) var(--ease-swift);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.fade-in {
+  animation: fade-in var(--dur-fast) var(--ease-smooth);
+}
+
+/* Clickable donut hover lift — subtle scale signaling interactivity. */
+.donut-clickable:hover {
+  transform: scale(1.02);
+}
+.donut-clickable:active {
+  transform: scale(0.98);
+}
+
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.view-in {
+  animation: view-in var(--dur-base) var(--ease-swift);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Detail responsive grid — uses CSS container queries so the layout adapts
+   to the widget width, not the viewport.
+   ────────────────────────────────────────────────────────────────────────── */
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s-3);
+}
+@container (min-width: 560px) {
+  .detail-grid { grid-template-columns: 1fr 1fr; }
+  .detail-grid > :first-child { grid-column: span 2; }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Custom range input — Apple-flavored slider for opacity control.
+   ────────────────────────────────────────────────────────────────────────── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--fill-2);
+  border-radius: var(--r-pill);
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.18), 0 0 0 0.5px rgba(0,0,0,0.04);
+  cursor: default;
+}

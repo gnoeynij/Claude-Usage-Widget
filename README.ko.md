@@ -57,27 +57,31 @@ Claude Usage Widget은 바탕화면 한 구석에 띄워두고 Anthropic Claude 
 
 ## 🛠️ Build from Source
 
-Python 3.10 이상과 PyQt6로 제작되었습니다.
+> **v2.0+부터 Tauri 2 + Rust + SolidJS** 스택을 사용합니다. 기존 PyQt6 코드는
+> 참조용으로 `Source/`에 남겨져 있습니다. 아래는 현재 `main` 브랜치(Liquid
+> Glass 재설계 빌드) 기준입니다.
+
+사전 요구: Node ≥ 20, Rust 툴체인(`rustup`), Windows의 경우 Microsoft C++
+Build Tools. Windows 11에는 WebView2 런타임이 기본 탑재되어 있고, Windows 10에서는
+인스톨러 부트스트래퍼가 자동으로 받아옵니다.
 
 ```bash
 # 1. 저장소 클론
 git clone https://github.com/gnoeynij/Claude-Usage-Widget.git
-cd Claude-Usage-Widget/Source
+cd Claude-Usage-Widget
 
 # 2. 의존성 설치
-pip install -r requirements.txt
-pip install pyinstaller
+npm install
 
-# 3. (선택) SUIT SemiBold 폰트를 번들하려면
-#    https://sun.fo/suit/ 에서 다운로드 후
-#    SUIT-SemiBold.ttf 를 Source/assets/fonts/ 에 배치합니다.
-#    번들이 없으면 시스템 SUIT → Segoe UI 순으로 폴백됩니다.
+# 3. 개발 실행
+npm run tauri dev
 
-# 4. PyInstaller 빌드
-python -m PyInstaller claude_widget.spec --noconfirm --clean
+# 4. 프로덕션 빌드
+npm run tauri build
 
 # 5. 산출물
-# Source/dist/Claude-Widget.exe
+#   src-tauri/target/release/bundle/nsis/Claude Widget_<ver>_x64-setup.exe
+#   src-tauri/target/release/Claude Widget.exe   (포터블)
 ```
 
 ---

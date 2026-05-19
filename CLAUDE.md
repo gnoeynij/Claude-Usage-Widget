@@ -68,7 +68,10 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## Project-Specific Guidelines
 
-> **Note:** 이 프로젝트는 IntelliJ IDEA에서 열리지만 **Python(PyQt6)** 프로젝트입니다. 아래 항목들은 실제 도구·정책에 기반하며, Java/Kotlin 등가물이 아닙니다.
+> **Note:** v2.0부터 본 프로젝트는 **Tauri 2 (Rust + System WebView) + Vite +
+> SolidJS + TypeScript** 스택입니다. v1.5.x의 PyQt6 코드는 `Source/`에 참조용으로
+> 보존되어 있으나 새 코드 추가는 금지합니다. 아래 항목들은 실제 도구·정책에
+> 기반합니다.
 
 ### 응답 언어
 
@@ -77,25 +80,38 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### 빌드 도구 & 명령어
 
-- **패키저:** PyInstaller (설정: `Source/claude_widget.spec`)
-- **의존성 설치:** `pip install -r Source/requirements.txt` (PyQt6 ≥ 6.6, requests ≥ 2.31)
-- **빌드 명령** (`Source/` 디렉토리에서 실행):
-  ```bash
-  python -m PyInstaller claude_widget.spec --noconfirm --clean
-  ```
-- **산출물:** `Source/dist/Claude-Widget.exe`
+- **스택:** Tauri 2 (Rust + System WebView) + Vite + SolidJS + TypeScript +
+  UnoCSS + Motion One.
+- **사전 요구:**
+  - Node ≥ 20, npm
+  - Rust toolchain (`rustup` 권장)
+  - Windows: Microsoft C++ Build Tools (Visual Studio Build Tools,
+    "Desktop development with C++" 워크로드)
+  - WebView2 Runtime (Win11 기본 탑재, Win10은 빌드 시 bootstrapper로 자동 설치)
+- **최초 설치:** `npm install`
+- **개발 서버:** `npm run tauri dev`
+- **프로덕션 빌드:** `npm run tauri build`
+- **아이콘 일괄 생성 (자산 변경 시):** `npm run tauri icon path/to/source.png`
+- **타입 체크:** `npm run typecheck`
+- **산출물:**
+  - NSIS 인스톨러: `src-tauri/target/release/bundle/nsis/Claude Widget_<ver>_x64-setup.exe`
+  - 포터블 exe: `src-tauri/target/release/Claude Widget.exe`
+  - 자동 업데이트 매니페스트: `src-tauri/target/release/bundle/updater/latest.json`
 
 ### 빌드 후 동작 워크플로 (자동)
 
 코드를 수정했고 빌드가 필요한 경우, 다음 흐름을 **사용자 확인 없이 자동 수행**한다:
 
 1. 파일 수정
-2. PyInstaller 빌드 실행
-3. 실행 중인 `Claude-Widget.exe` 프로세스가 있으면 `taskkill //F //IM Claude-Widget.exe` 로 종료
-4. 새로 빌드된 `Source/dist/Claude-Widget.exe` 재실행
+2. 실행 중인 `Claude Widget.exe` 프로세스가 있으면
+   `Stop-Process -Name "Claude Widget" -Force -ErrorAction SilentlyContinue` 로 종료
+3. `npm run tauri build` 실행
+4. 새로 빌드된 `src-tauri/target/release/Claude Widget.exe` 재실행
 5. 결과(빌드 성공/재시작 PID 등) 한 번에 요약 보고
 
-**이유:** 빌드가 dist의 .exe 락(WinError 5)에 막히는 흐름을 매번 사용자에게 확인받지 않도록 한다. 단, 빌드와 무관한 다른 사용자 프로세스(브라우저, 에디터 등)는 절대 함부로 종료하지 않는다.
+**이유:** Windows의 .exe 락(WinError 5)에 빌드가 막히는 흐름을 매번 사용자에게
+확인받지 않도록 한다. 빌드와 무관한 다른 사용자 프로세스(브라우저, 에디터 등)는
+절대 함부로 종료하지 않는다.
 
 ### 테스트 프레임워크
 
@@ -103,26 +119,54 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - 검증은 수동(빌드된 .exe 실행 → UI 동작 확인)으로 한다.
 - 따라서 Karpathy §4의 "테스트 작성 후 통과시키기" 패턴은 **기본적으로 적용 불가**. 대안: PR/커밋 시 *어떤 시나리오를 손으로 확인했는지* 텍스트로 명시한다 (예: "AOT toggle on/off, 옵션 패널 열고 닫기, sync 1회").
 
-### 패키지 구조 & 단일 파일 유지 정책
+### 프로젝트 구조
 
-- **모든 애플리케이션 코드는 `Source/main.py` 한 파일에 있다** (≈ 2,200줄).
-  클래스 5개(`ProgressBar`, `FetchWorker`, `UpdateCheckWorker`, `UpdateDownloadWorker`, `ClaudeWidget`) 모두 이 파일에 정의되어 있다. 탐색 시 하나의 논리 단위로 다룬다 (라인 범위 로드맵은 `PROJECT_NOTES.md` 참고 — 이 문서는 gitignore되어 있음).
-- **유지 정책:** 신규 코드는 기본적으로 `Source/main.py` 안에 추가한다. 새 모듈/패키지를 만들지 않는다. 1인 개발 흐름에서 vibe-coded 컨텍스트를 유지하기 위함.
-- **분할을 *제안*하고 사용자 결정을 받아야 하는 트리거** (이 중 하나라도 만족 시):
-  - `main.py`가 **4,000줄을 초과**
-  - 외부에서 `import` 해 재사용해야 하는 코드가 새로 등장
-  - 새 클래스가 기존 클래스/함수와 import 의존성이 전혀 없는 독립 모듈
-  - 트리거 미충족 시에는 임의로 분할하지 않는다.
+```
+src/                    # SolidJS + TypeScript 프론트엔드
+  main.tsx              # 진입점
+  App.tsx               # 뷰 라우팅
+  components/           # 재사용 컴포넌트 (LiquidGlass, GlassCard, CapsuleProgress, …)
+  views/                # 3-mode 뷰 + Header/Footer/Settings
+  styles/               # tokens.css / base.css / glass.css (디자인 시스템 단일 진실 출처)
+  state/store.ts        # Solid signals
+  i18n/{en,ko}.ts       # 다국어 사전
+  assets/               # 폰트, SVG, PNG
+src-tauri/              # Rust 백엔드
+  Cargo.toml
+  tauri.conf.json       # 윈도우/번들 설정
+  capabilities/         # 권한 매니페스트
+  src/
+    lib.rs              # 앱 부트
+    commands.rs         # #[tauri::command] 노출
+    usage_api.rs        # OAuth 사용량 API
+    jsonl_aggregator.rs # JSONL 5h 블록·기간·모델별 집계
+    pricing.rs          # 모델 단가 테이블
+    tray.rs             # 시스템 트레이
+    migration.rs        # 레거시 QSettings → tauri-plugin-store 1회 이관
+    vibrancy_win.rs     # Win11 Mica/Acrylic
+  icons/icon.ico
+Source/                 # v1.5.x 레거시 PyQt6 (참조용, 새 코드 추가 금지)
+```
 
-### Python 스타일
+- **단일 파일 정책은 폐기**. Tauri 표준 다중 모듈 레이아웃을 따른다.
+- **디자인 토큰**: 모든 색·간격·타이포·모션 값은 `src/styles/tokens.css`에서
+  CSS Custom Property로 정의하고 컴포넌트는 `var(--*)`로만 참조 — 인라인 매직
+  넘버 금지.
+- **자산 갱신**: 아이콘 변경 시 `npm run tauri icon` 한 줄로 전 OS 사이즈 재생성.
+- **레거시 `Source/`는 새 코드 추가 금지** — 참조 후 단계적으로 삭제.
 
-- 베이스: **PEP 8** + **기존 `main.py` 스타일에 일치** (Karpathy §3 "Match existing style").
-- 들여쓰기: 4-space (기존 파일 일관).
-- 라인 길이: **100자 권장** (강제 X). 영문 주석/긴 URL 등 자연스럽게 길어지는 라인은 OK.
-- 따옴표: 기존 파일의 혼합 사용 패턴을 그대로 둔다 — 일괄 변환 금지.
-- 타입 힌트: **권장(강제 X)**. 새 함수 시그니처와 클래스 변수 선언에는 가능하면 추가한다 (예: `self._worker: FetchWorker | None = None` 패턴 유지).
-- 주석: 기본은 작성하지 않는다. *왜 이렇게 했는지*가 비자명한 경우(숨은 제약, 과거 버그 우회, Windows API 동작 차이 등)에만 짧게 추가한다.
-- 포매터/린터: 별도 강제 없음. `black` / `ruff` 같은 자동 포매터를 *기존 코드 전체에* 돌리지 말 것 (대량 diff 발생 → Karpathy §3 위반).
+### 코드 스타일 (TypeScript / Rust / CSS)
+
+- **TypeScript**: 들여쓰기 2-space, `strict: true`. 타입 힌트는 export되는 함수
+  시그니처와 컴포넌트 props에 필수, 내부는 추론 허용.
+- **Rust**: 표준 `cargo fmt` 기본값(4-space, 100 cols). `cargo clippy` 경고는
+  수정하지만 자동 포매터를 *기존 코드 전체에 강제 돌리지 말 것* (대량 diff 회피).
+- **CSS**: 모든 색·간격·모션 토큰은 `src/styles/tokens.css`에서 정의하고
+  컴포넌트는 `var(--*)`로만 참조 — 인라인 매직 넘버 금지.
+- **주석**: 기본은 작성하지 않는다. *왜 이렇게 했는지*가 비자명한 경우(숨은
+  제약, 과거 버그 우회, Win11 API 차이 등)에만 짧게 추가한다.
+- **포매터/린터**: 자동 포매터를 기존 코드 *전체에* 돌리지 말 것 ("Surgical
+  Changes" 위반).
 
 ### 릴리즈 정책 — 단일 레포
 
@@ -135,20 +179,30 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 # 1. 코드 변경 커밋·태그·푸시
 git push && git push origin vX.Y.Z
 
-# 2. 메인 레포 릴리즈
+# 2. Tauri 빌드 (Windows 빌더에서 실행)
+npm run tauri build
+
+# 3. 메인 레포 릴리즈 (NSIS 인스톨러 + updater 매니페스트)
 gh release create vX.Y.Z --repo gnoeynij/Claude-Usage-Widget \
-  --title "..." --notes "..." Release/Claude-Widget.exe
+  --title "..." --notes "..." \
+  "src-tauri/target/release/bundle/nsis/Claude Widget_X.Y.Z_x64-setup.exe" \
+  "src-tauri/target/release/bundle/updater/latest.json"
 ```
+
+`latest.json`은 tauri-plugin-updater가 발견하는 매니페스트 파일.
+메인 레포가 public인 한 자동 업데이트가 동작한다.
 
 ### 자동 업데이트 동작 조건
 
-`Source/main.py`의 `RELEASES_API_URL`은 메인 레포를 가리킨다. **익명 GitHub Releases API 호출은 메인 레포가 public일 때만 200을 반환**한다.
+`src-tauri/tauri.conf.json`의 `plugins.updater.endpoints`는 메인 레포의
+`releases/latest/download/latest.json`을 가리킨다. **익명 GitHub Releases 다운로드는
+메인 레포가 public일 때만 200을 반환**한다.
 
-| 메인 레포 visibility | 시작 시 1회 체크 | 수동 `Check for Updates` 버튼 |
-|---|---|---|
-| public | ✅ 동작 — `✓ 최신 버전` / `● 새 버전 vX.Y.Z` 표시 | ✅ 동작 |
-| private | 🔇 silent (오류 무시 — 사용자가 요청한 동작 아님) | ❌ "확인 실패: HTTP 404" 표시 |
+| 메인 레포 visibility | tauri-plugin-updater 체크 |
+|---|---|
+| public | ✅ 동작 — `latest.json`에 명시된 새 버전이 있을 때 알림 |
+| private | ❌ 404로 silent 실패 — 위젯 본체 및 사용량 동기화에는 영향 없음 |
 
-private 상태에서도 위젯 본체와 사용량 동기화는 정상 작동한다. 자동 업데이트만 영향받는다.
-
-> **토큰을 .exe에 임베드해 private 상태에서도 동작시키려는 시도는 금지.** PyInstaller 빌드는 `pyinstxtractor` + `decompyle3`로 거의 원본 복원이 가능해 어떤 토큰 암호화 방식도 보안적 의미가 없다.
+> **개인 토큰을 .exe에 임베드해 private 상태에서도 동작시키려는 시도는 금지.**
+> Tauri 빌드도 NSIS 인스톨러를 해체해 임베드된 문자열을 회수할 수 있어
+> 어떤 토큰 암호화 방식도 보안적 의미가 없다.

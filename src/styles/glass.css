@@ -1,0 +1,139 @@
+/* Liquid Glass material classes.
+   Three layers compose the look:
+     1. OS backdrop (Mica/Acrylic) — set by the Rust side, shows through
+        because <html>/<body> are transparent.
+     2. `.glass-panel` — root frame, second layer of blur + tint + specular
+        border.
+     3. `.glass-card` — content cards, a third layer that lifts slightly
+        above the panel.
+*/
+
+.glass-panel {
+  position: relative;
+  border-radius: var(--r-window);
+  background: var(--glass-base);
+  backdrop-filter: blur(var(--glass-base-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-base-blur)) saturate(180%);
+  box-shadow: var(--shadow-soft);
+  isolation: isolate;
+  overflow: hidden;
+}
+
+/* Outer 1px specular border drawn with a gradient so the top edge catches
+   more light than the bottom — gives the surface a sense of being lit. */
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    180deg,
+    var(--specular) 0%,
+    var(--specular-edge) 30%,
+    transparent 70%,
+    var(--specular-edge) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Subtle vertical wash inside the panel — the top is a touch brighter,
+   matching where visionOS surfaces catch ambient light. */
+.glass-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    var(--inner-glow) 0%,
+    transparent 30%
+  );
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Cards sit above both pseudo layers. */
+.glass-panel > * { position: relative; z-index: 3; }
+
+.glass-card {
+  position: relative;
+  border-radius: var(--r-lg);
+  background: var(--glass-card);
+  backdrop-filter: blur(var(--glass-card-blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--glass-card-blur)) saturate(160%);
+  box-shadow: var(--shadow-card);
+  padding: var(--s-4);
+  isolation: isolate;
+  overflow: hidden;
+  transition: background var(--dur-fast) var(--ease-smooth),
+              box-shadow var(--dur-fast) var(--ease-smooth);
+}
+
+.glass-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    180deg,
+    var(--specular) 0%,
+    var(--specular-edge) 40%,
+    transparent 80%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.glass-card > * { position: relative; z-index: 2; }
+
+/* Primary / accented card — lifts slightly above the default cards and adds
+   a 2px accent hairline at the top edge so the eye knows which card is hero. */
+.glass-card-accent {
+  background: var(--glass-card-accent);
+  box-shadow: var(--shadow-card),
+              inset 0 2px 0 0 rgba(217, 119, 87, 0.55);
+}
+
+/* Hairline separator used inside cards. */
+.hairline {
+  height: 1px;
+  background: var(--separator);
+  border: 0;
+  margin: var(--s-3) 0;
+}
+
+/* Accent badge / pill. */
+.pill-accent {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 14px;
+}
+
+/* Subtle hover ring used for icon-only buttons. */
+.ring-hover {
+  transition: background var(--dur-xfast) var(--ease-smooth);
+}
+.ring-hover:hover {
+  background: var(--fill-3);
+}
+.ring-hover:active {
+  background: var(--fill-2);
+}

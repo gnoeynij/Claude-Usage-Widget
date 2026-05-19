@@ -1,0 +1,97 @@
+import { Settings as SettingsIcon, RefreshCw } from "lucide-solid";
+import { store, syncNow, toggleSettings } from "../state/store";
+import { t } from "../i18n";
+
+function statusDotColor() {
+  // Touch tickMinute so the dot color recomputes every minute as the last
+  // sync drifts further into the past.
+  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+  store.tickMinute;
+  if (store.syncing) return "var(--accent)";
+  if (store.syncError) return "var(--danger)";
+  if (!store.lastSyncAt) return "var(--label-quaternary)";
+  const ageMin =
+    (Date.now() - new Date(store.lastSyncAt).getTime()) / 60_000;
+  if (ageMin < 5) return "var(--success-dim)";
+  if (ageMin < 30) return "var(--label-secondary)";
+  return "var(--label-tertiary)";
+}
+
+function statusTooltip() {
+  if (store.syncing) return t().syncing;
+  if (store.syncError) return t().syncFailed;
+  if (store.lastSyncAt) {
+    const d = new Date(store.lastSyncAt);
+    return `${t().lastSync} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  }
+  return t().never;
+}
+
+export function HeaderBar() {
+  return (
+    <header
+      class="drag"
+      style={{
+        display: "flex",
+        "align-items": "center",
+        gap: "var(--s-2)",
+        padding: "var(--s-1) var(--s-2)",
+        "min-height": "22px",
+      }}
+    >
+      <span
+        title={statusTooltip()}
+        style={{
+          width: "8px",
+          height: "8px",
+          "border-radius": "50%",
+          background: statusDotColor(),
+          "flex-shrink": 0,
+          transition: "background var(--dur-fast) var(--ease-smooth)",
+          "box-shadow": store.syncing
+            ? "0 0 0 4px rgba(217,119,87,0.20)"
+            : "none",
+        }}
+      />
+      <span
+        class="t-body label-secondary"
+        style={{ flex: 1, "font-weight": 500 }}
+      >
+        Claude
+      </span>
+      <button
+        class="no-drag ring-hover"
+        onClick={() => void syncNow()}
+        title={t().syncNow}
+        style={{
+          width: "20px",
+          height: "20px",
+          "border-radius": "6px",
+          display: "inline-flex",
+          "align-items": "center",
+          "justify-content": "center",
+          color: "var(--label-secondary)",
+        }}
+      >
+        <RefreshCw size={12} class={store.syncing ? "spin" : ""} />
+      </button>
+      <button
+        class="no-drag ring-hover"
+        onClick={toggleSettings}
+        title={t().settings}
+        style={{
+          width: "20px",
+          height: "20px",
+          "border-radius": "6px",
+          display: "inline-flex",
+          "align-items": "center",
+          "justify-content": "center",
+          color: store.settingsOpen ? "var(--accent)" : "var(--label-tertiary)",
+          background: store.settingsOpen ? "var(--accent-tint)" : undefined,
+        }}
+      >
+        <SettingsIcon size={12} />
+      </button>
+    </header>
+  );
+}
