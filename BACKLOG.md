@@ -13,7 +13,6 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
-| **자동 업데이트 매니페스트 (`latest.json`) 빌드 활성** | 릴리즈 인프라 | [tauri.conf.json:38](src-tauri/tauri.conf.json), [회귀 사례 §4](CLAUDE.md) | `bundle.targets`에 `"updater"` 추가 + `tauri signer generate`로 키 페어 발급 → `pubkey` 채움 + private key는 `TAURI_SIGNING_PRIVATE_KEY` 환경 변수로 빌드 시 주입. 누락 시 자동 업데이트 silent 실패. **always-spot-check** (비가역) |
 | **OAuth 토큰 자동 refresh 위젯 내장** | UX·인증 | [usage_api.rs:81-110](src-tauri/src/usage_api.rs), [회귀 사례 §2](CLAUDE.md) | 현재 `refreshToken`을 *읽기만* 함 — Claude Code CLI 갱신 의존. 만료 시 사용자는 "연결 안 됨"으로 인지. 최소: UI에 만료 상태 + "claude CLI 실행" 안내 노출. 이상: 위젯이 직접 refresh 호출. **always-spot-check** (인증) |
 
 ---
@@ -54,7 +53,8 @@
 |---|---|---|
 | v2.0.0-alpha — Tauri 2 + Liquid Glass 재작성 | `7d66dd4` | 2026-05-19 |
 | v2.0.0-alpha.1 — 버전 5곳 정렬 + `Source/` 레거시 제거 | `4aa3443` | 2026-05-19 |
-| 하네스 setup (CLAUDE.md 6개 섹션 + BACKLOG + docs/sessions) — 현재진행 스냅샷·UI SOP·회귀 사례·검토 워크플로·Session handover·출력 규약·**페르소나 자동 detect** | (진행 중) | 2026-05-19 |
+| 하네스 setup (CLAUDE.md 7개 섹션 + BACKLOG + docs/sessions) — 현재진행 스냅샷·UI SOP·회귀 사례·검토 워크플로·Session handover·출력 규약·페르소나 자동 detect | `5250c8a` | 2026-05-19 |
+| 자동 업데이트 매니페스트 (`latest.json`) 빌드 활성 — signing key 발급·`createUpdaterArtifacts: true`·`scripts/make-updater-manifest.mjs`·.gitignore signing key 패턴 | (진행 중) | 2026-05-20 |
 
 ---
 

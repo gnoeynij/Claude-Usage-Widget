@@ -36,6 +36,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
     "category": "Utility",
     "copyright": "Copyright (c) 2026 gnoeynij",
     "shortDescription": "Claude usage at a glance",
@@ -54,7 +55,7 @@
       "endpoints": [
         "https://github.com/gnoeynij/Claude-Usage-Widget/releases/latest/download/latest.json"
       ],
-      "pubkey": ""
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDIzOTY0N0NCRjEwRkM1QjUKUldTMXhRL3h5MGVXSS9aZ3RnUm5Oc24ySU5EOVIyZWUxY1gvbnR0Rm1Tc3FTU3BtSkNjTkFiV0oK"
     }
   }
 }

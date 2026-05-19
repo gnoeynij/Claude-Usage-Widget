@@ -13,3 +13,8 @@ src-tauri/gen/
 
 # Internal owner notes — not for distribution
 PROJECT_NOTES.md
+
+# Tauri signing keys — must never be committed (real key lives at ~/.tauri/)
+*.tauri.key
+*.tauri.key.pub
+.tauri/
