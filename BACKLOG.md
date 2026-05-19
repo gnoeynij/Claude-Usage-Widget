@@ -13,7 +13,8 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
-| **OAuth 토큰 자동 refresh 위젯 내장** | UX·인증 | [usage_api.rs:81-110](src-tauri/src/usage_api.rs), [회귀 사례 §2](CLAUDE.md) | 현재 `refreshToken`을 *읽기만* 함 — Claude Code CLI 갱신 의존. 만료 시 사용자는 "연결 안 됨"으로 인지. 최소: UI에 만료 상태 + "claude CLI 실행" 안내 노출. 이상: 위젯이 직접 refresh 호출. **always-spot-check** (인증) |
+| **OAuth 토큰 만료 회복 (A+D)** | UX | [docs/plans/2026-05-20-oauth-refresh.md](docs/plans/2026-05-20-oauth-refresh.md), [usage_api.rs:81-110](src-tauri/src/usage_api.rs) | 정밀 검토 결과 근본 원인은 `syncIntervalMin: 0` 디폴트로 auto-sync OFF. **A+D 결합 권장** (~70-100 LOC·1.5-2h·위험 낮음): error code 분기 + 만료 banner + auto-sync 5분 default + `.credentials.json` mtime polling. 인증 영역 안 건드림. |
+| ~~OAuth 직접 refresh (B)~~ → P1 격하 | UX·인증 | 같은 plan §"B 격하 근거" | Anthropic spec 미공개·cred 파일 race·client_id 폐기 위험. A+D로 80% 효과 달성 시 미진행. **always-spot-check** (진행 결정 시) |
 
 ---
 
