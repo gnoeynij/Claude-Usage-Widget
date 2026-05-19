@@ -58,7 +58,7 @@ Claude Usage Widget은 바탕화면 한 구석에 띄워두고 Anthropic Claude 
 ## 🛠️ Build from Source
 
 > **v2.0+부터 Tauri 2 + Rust + SolidJS** 스택을 사용합니다. 기존 PyQt6 코드는
-> 참조용으로 `Source/`에 남겨져 있습니다. 아래는 현재 `main` 브랜치(Liquid
+> `v1.5.1` 이하 태그에 보존되어 있으며, 아래는 현재 `main` 브랜치(Liquid
 > Glass 재설계 빌드) 기준입니다.
 
 사전 요구: Node ≥ 20, Rust 툴체인(`rustup`), Windows의 경우 Microsoft C++

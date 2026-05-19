@@ -59,8 +59,8 @@ This is an unsigned personal open-source build, so Windows SmartScreen may warn 
 
 ## 🛠️ Build from Source
 
-> **v2.0+ uses Tauri 2 + Rust + SolidJS.** The legacy PyQt6 source remains in
-> `Source/` for reference only. The instructions below build the current
+> **v2.0+ uses Tauri 2 + Rust + SolidJS.** The legacy PyQt6 source is preserved
+> on the `v1.5.1` tag and earlier; the instructions below build the current
 > `main` branch (Liquid Glass rebuild).
 
 Requires Node ≥ 20, the Rust toolchain (`rustup`), and the Microsoft C++ Build
