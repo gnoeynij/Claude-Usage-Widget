@@ -21,6 +21,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::fetch_usage,
+            commands::credentials_mtime,
             commands::aggregate_detail,
             commands::set_always_on_top,
             commands::set_window_opacity,

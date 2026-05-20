@@ -4,6 +4,12 @@ import { listen } from "@tauri-apps/api/event";
 
 export type Mode = "mini" | "normal" | "detail";
 export type Lang = "en" | "ko";
+export type ErrorCode =
+  | "TOKEN_EXPIRED"
+  | "NO_CREDENTIALS"
+  | "RATE_LIMITED"
+  | "NETWORK"
+  | null;
 
 export type UsagePayload = {
   five_hour: number;
@@ -68,6 +74,7 @@ type StoreShape = {
   lastSyncAt: string | null;
   syncing: boolean;
   syncError: string | null;
+  errorCode: ErrorCode;
   version: string;
   /** Increments every 60s so reactive consumers (e.g. the header status
    *  dot) can fade based on the age of `lastSyncAt` without needing their
@@ -80,7 +87,7 @@ const [store, setStore] = createStore<StoreShape>({
   lang: "en",
   dark: false,
   alwaysOnTop: false,
-  syncIntervalMin: 0,
+  syncIntervalMin: 5,
   opacity: 0,
   settingsOpen: false,
   usage: { five_hour: 0, seven_day: 0, seven_day_sonnet: 0 },
@@ -88,6 +95,7 @@ const [store, setStore] = createStore<StoreShape>({
   lastSyncAt: null,
   syncing: false,
   syncError: null,
+  errorCode: null,
   version: "2.0.0-alpha.1",
   tickMinute: 0,
 });
@@ -95,6 +103,24 @@ const [store, setStore] = createStore<StoreShape>({
 export { store, setStore };
 
 let syncTimer: number | null = null;
+let lastCredentialsMtime: number | null = null;
+
+function parseErrorCode(message: string): ErrorCode {
+  // Rust errors come through as `String(e)` — e.g. `"TOKEN_EXPIRED"`. anyhow's
+  // Display preserves the bare message we set in usage_api.rs, but be lenient
+  // about leading namespace prefixes that some Tauri builds prepend.
+  if (message.includes("TOKEN_EXPIRED")) return "TOKEN_EXPIRED";
+  if (message.includes("NO_CREDENTIALS")) return "NO_CREDENTIALS";
+  if (message.includes("RATE_LIMITED")) return "RATE_LIMITED";
+  if (
+    message.includes("network error") ||
+    message.includes("timeout") ||
+    message.includes("dns")
+  ) {
+    return "NETWORK";
+  }
+  return null;
+}
 
 export async function initStore() {
   // Best-effort one-shot migration from the legacy QSettings registry keys.
@@ -119,14 +145,42 @@ export async function initStore() {
   // labels). Independent of sync — never causes network traffic.
   window.setInterval(() => setStore("tickMinute", (v) => v + 1), 60_000);
 
+  // Watch `.credentials.json` for refresh events. When Claude Code CLI
+  // rotates the token, mtime changes — that's our signal to retry a failed
+  // sync without waiting for the next auto-sync interval. Read-only.
+  window.setInterval(() => void pollCredentialsMtime(), 60_000);
+  void pollCredentialsMtime(true);
+
   await syncNow();
   scheduleAutoSync();
+}
+
+async function pollCredentialsMtime(initial = false) {
+  try {
+    const mtime = await invoke<number | null>("credentials_mtime");
+    if (mtime == null) return;
+    if (initial) {
+      lastCredentialsMtime = mtime;
+      return;
+    }
+    if (lastCredentialsMtime != null && mtime > lastCredentialsMtime) {
+      lastCredentialsMtime = mtime;
+      // Token file was refreshed — retry immediately even if the prior sync
+      // had failed with TOKEN_EXPIRED.
+      void syncNow();
+    } else {
+      lastCredentialsMtime = mtime;
+    }
+  } catch {
+    /* polling is best-effort */
+  }
 }
 
 export async function syncNow() {
   if (store.syncing) return;
   setStore("syncing", true);
   setStore("syncError", null);
+  setStore("errorCode", null);
   try {
     const usage = await invoke<UsagePayload>("fetch_usage");
     setStore("usage", usage);
@@ -135,7 +189,9 @@ export async function syncNow() {
       await refreshDetail();
     }
   } catch (e) {
-    setStore("syncError", String(e));
+    const msg = String(e);
+    setStore("syncError", msg);
+    setStore("errorCode", parseErrorCode(msg));
   } finally {
     setStore("syncing", false);
   }

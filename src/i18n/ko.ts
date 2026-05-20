@@ -53,4 +53,7 @@ export const ko: Strings = {
   never: "없음",
   syncing: "동기화 중…",
   syncFailed: "동기화 실패",
+
+  tokenExpired: "인증 토큰 만료",
+  tokenExpiredHint: "터미널에서 `claude` 한 번 실행하면 위젯이 자동 복구돼요.",
 };

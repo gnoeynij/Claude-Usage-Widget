@@ -51,6 +51,9 @@ export const en = {
   never: "never",
   syncing: "Syncing…",
   syncFailed: "Sync failed",
+
+  tokenExpired: "Auth token expired",
+  tokenExpiredHint: "Run `claude` once — the widget will recover automatically.",
 };
 
 export type Strings = typeof en;

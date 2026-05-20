@@ -1,5 +1,6 @@
 import { onMount, Show } from "solid-js";
 import { LiquidGlass } from "./components/LiquidGlass";
+import { ErrorBanner } from "./components/ErrorBanner";
 import { HeaderBar } from "./views/HeaderBar";
 import { FooterBar } from "./views/FooterBar";
 import { NormalView } from "./views/NormalView";
@@ -16,6 +17,7 @@ export function App() {
   return (
     <LiquidGlass>
       {store.mode !== "mini" && <HeaderBar />}
+      {store.mode !== "mini" && <ErrorBanner />}
       {store.mode === "mini" && <MiniView />}
       {store.mode === "normal" && <NormalView />}
       {store.mode === "detail" && <DetailView />}

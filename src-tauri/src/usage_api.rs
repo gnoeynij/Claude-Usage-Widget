@@ -22,6 +22,19 @@ fn credentials_path() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".claude").join(".credentials.json"))
 }
 
+/// Last-modified time of `~/.claude/.credentials.json` in ms since UNIX epoch,
+/// or `None` if the file is missing/unreadable. Used by the frontend to detect
+/// when Claude Code CLI has refreshed the token so the widget can auto-retry
+/// after a `TOKEN_EXPIRED` state.
+pub fn credentials_mtime_ms() -> Option<f64> {
+    use std::time::UNIX_EPOCH;
+    let path = credentials_path()?;
+    let meta = std::fs::metadata(path).ok()?;
+    let modified = meta.modified().ok()?;
+    let dur = modified.duration_since(UNIX_EPOCH).ok()?;
+    Some(dur.as_secs_f64() * 1000.0)
+}
+
 fn read_credentials() -> Option<OAuthBlock> {
     let path = credentials_path()?;
     let raw = std::fs::read_to_string(path).ok()?;

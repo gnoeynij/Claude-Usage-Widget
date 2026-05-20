@@ -7,6 +7,11 @@ pub async fn fetch_usage() -> Result<usage_api::UsageOutput, String> {
 }
 
 #[tauri::command]
+pub fn credentials_mtime() -> Option<f64> {
+    usage_api::credentials_mtime_ms()
+}
+
+#[tauri::command]
 pub async fn aggregate_detail() -> Result<jsonl_aggregator::AggregateOut, String> {
     match tauri::async_runtime::spawn_blocking(jsonl_aggregator::aggregate).await {
         Ok(Ok(out)) => Ok(out),
