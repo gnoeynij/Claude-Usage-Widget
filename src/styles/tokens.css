@@ -17,10 +17,15 @@
   --success-dim: #1f9d55;
 
   /* ─── Light theme labels (Apple's 4-tier) ────────────────────────────── */
-  --label: rgba(28, 28, 30, 1);
-  --label-secondary: rgba(60, 60, 67, 0.68);
-  --label-tertiary: rgba(60, 60, 67, 0.34);
-  --label-quaternary: rgba(60, 60, 67, 0.18);
+  /* Pure black RGB so that as the panel fades (opacity slider) the label
+     stays legible against a dark desktop showing through. Previous greys
+     (60,60,67) blended into anything darker than light grey and went
+     unreadable past ~30% transparency. Alpha boosted slightly to keep the
+     4-tier hierarchy distinguishable at high transparency. */
+  --label: rgba(0, 0, 0, 0.96);
+  --label-secondary: rgba(0, 0, 0, 0.72);
+  --label-tertiary: rgba(0, 0, 0, 0.42);
+  --label-quaternary: rgba(0, 0, 0, 0.22);
 
   /* ─── Light fills (4-tier) ───────────────────────────────────────────── */
   --fill-1: rgba(120, 120, 128, 0.20);
