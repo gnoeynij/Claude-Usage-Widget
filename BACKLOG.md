@@ -22,8 +22,6 @@
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
 | **버전 단일 출처 헬퍼** | 인프라 | [회귀 사례 §3](CLAUDE.md) | `package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml` / `src-tauri/Cargo.lock` / `src/state/store.ts` 5곳 동시 bump. `scripts/bump-version.mjs` 또는 README 체크리스트 중 택1. 4aa3443에서 한 번 손으로 정렬 — 다음 bump 전엔 자동화. |
-| **CLAUDE.md "사전 요구"에 `link.exe` 충돌 메모 추가** | 문서 | [회귀 사례 §1](CLAUDE.md) | MSVC `link.exe` 가 PATH 우선이 아니거나 vcvars64.bat 미소싱 시 GNU `link.exe`(Git for Windows)가 호출되어 misleading 에러. 새 머신 첫 빌드 함정. |
-| **빌드 산출물 이름 vs `productName` 불일치** | 문서·인프라 | [회귀 사례 부산물](CLAUDE.md) | `tauri.conf.json` `productName` 은 "Claude Widget"이지만 빌드 산출물은 `claude-widget.exe` (Cargo `[package] name`). CLAUDE.md "산출물" / "빌드 후 동작 워크플로" 항목에 *Claude Widget.exe* 라고 적혀있어 실제와 어긋남. 문서 갱신 또는 conf 양쪽 정렬. |
 
 ---
 
@@ -55,7 +53,8 @@
 | 하네스 setup (CLAUDE.md 7개 섹션 + BACKLOG + docs/sessions) — 현재진행 스냅샷·UI SOP·회귀 사례·검토 워크플로·Session handover·출력 규약·페르소나 자동 detect | `5250c8a` | 2026-05-19 |
 | 자동 업데이트 매니페스트 (`latest.json`) 빌드 활성 — signing key 발급·`createUpdaterArtifacts: true`·`scripts/make-updater-manifest.mjs`·.gitignore signing key 패턴 | `b937337` | 2026-05-20 |
 | **OAuth 토큰 만료 회복 (A+D)** — `usage_api.rs` TOKEN_EXPIRED 응답·errorCode 파생 store·hero 위 ErrorBanner i18n(ko/en)·auto-sync 5분 default·`.credentials.json` mtime polling. 수동 재현(expiresAt=1) → banner 렌더 + 백업 복구 후 polling cycle 내 syncNow 자동 호출 확인 | `3d1e899` + `266405b` | 2026-05-20 |
-| `pricing.rs:9 cache_write_1h` dead field — `#[allow(dead_code)]` + 주석 보존 (Anthropic 공식 가격 테이블·향후 1h cache 구분 시 0비용 활성화) | (본 커밋) | 2026-05-20 |
+| `pricing.rs:9 cache_write_1h` dead field — `#[allow(dead_code)]` + 주석 보존 (Anthropic 공식 가격 테이블·향후 1h cache 구분 시 0비용 활성화) | `01942b0` | 2026-05-20 |
+| CLAUDE.md 문서 정렬 — "사전 요구"에 `link.exe` PATH 충돌 회피 메모 + "빌드 후 동작 워크플로"의 산출물 이름 `Claude Widget.exe` → `claude-widget.exe` (Cargo `[package] name` 이 진실 출처) | (본 커밋) | 2026-05-20 |
 
 ---
 

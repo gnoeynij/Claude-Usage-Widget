@@ -88,6 +88,11 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
   - Windows: Microsoft C++ Build Tools (Visual Studio Build Tools,
     "Desktop development with C++" 워크로드)
   - WebView2 Runtime (Win11 기본 탑재, Win10은 빌드 시 bootstrapper로 자동 설치)
+  - 새 머신 첫 빌드 전 `where.exe link` 로 MSVC `link.exe` 가 먼저
+    나오는지 확인. Git for Windows의 `link.exe`(coreutils)가 PATH
+    앞쪽에 있으면 cargo가 그걸 호출해 *"Try 'link --help' for more
+    information"* 같은 misleading 에러로 실패한다. 회피: vcvars64.bat
+    소싱 또는 MSVC 경로 우선화 (회귀 사례 §1).
 - **최초 설치:** `npm install`
 - **개발 서버:** `npm run tauri dev`
 - **프로덕션 빌드:** `npm run tauri build`
@@ -108,11 +113,15 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 코드를 수정했고 빌드가 필요한 경우, 다음 흐름을 **사용자 확인 없이 자동 수행**한다:
 
 1. 파일 수정
-2. 실행 중인 `Claude Widget.exe` 프로세스가 있으면
-   `Stop-Process -Name "Claude Widget" -Force -ErrorAction SilentlyContinue` 로 종료
+2. 실행 중인 `claude-widget.exe` 프로세스가 있으면
+   `Stop-Process -Name "claude-widget" -Force -ErrorAction SilentlyContinue` 로 종료
 3. `npm run tauri build` 실행
-4. 새로 빌드된 `src-tauri/target/release/Claude Widget.exe` 재실행
+4. 새로 빌드된 `src-tauri/target/release/claude-widget.exe` 재실행
 5. 결과(빌드 성공/재시작 PID 등) 한 번에 요약 보고
+
+> Cargo `[package] name = "claude-widget"` 이 산출물 이름의 진실
+> 출처. `tauri.conf.json` `productName: "Claude Widget"` 은 NSIS
+> 인스톨러 표시 이름·창 제목에만 적용된다.
 
 **이유:** Windows의 .exe 락(WinError 5)에 빌드가 막히는 흐름을 매번 사용자에게
 확인받지 않도록 한다. 빌드와 무관한 다른 사용자 프로세스(브라우저, 에디터 등)는
