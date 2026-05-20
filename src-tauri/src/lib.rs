@@ -1,4 +1,5 @@
 mod commands;
+mod icon_render;
 mod jsonl_aggregator;
 mod migration;
 mod pricing;
@@ -46,6 +47,7 @@ pub fn run() {
             commands::set_always_on_top,
             commands::set_window_opacity,
             commands::set_mica_enabled,
+            commands::set_usage_icon,
             commands::set_window_size,
             commands::quit_app,
             commands::run_migration,

@@ -314,6 +314,10 @@ export async function syncNow() {
     if (store.mode === "detail") {
       await refreshDetail();
     }
+    // Re-paint tray + taskbar icon with the fresh 5-hour session percent so
+    // the gauge in the tray matches the one in the widget. Best-effort —
+    // failure is non-fatal (icon stays on previous render).
+    void invoke("set_usage_icon", { pct: usage.five_hour }).catch(() => {});
     void info(`sync ok ${Date.now() - t0}ms`);
   } catch (e) {
     const msg = toErrorMessage(e);

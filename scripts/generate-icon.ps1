@@ -1,21 +1,31 @@
 # generate-icon.ps1 — render the source icon as 1024×1024 PNG.
-# Concept: iOS-style rounded square + Claude orange donut (the widget's
-# defining visual). Output is then fed to `npm run tauri icon` to produce
-# every platform-specific size in one pass.
+# Concept: iOS-style rounded square + analog gauge (track + filled arc +
+# needle + hub). Static icon shows a 50% baseline so the metaphor reads
+# even at small sizes; the runtime tray/taskbar icon is regenerated on
+# every usage fetch (see src-tauri/src/tray.rs render_gauge_icon).
+# Output is fed to `npm run tauri icon` to produce every platform size.
 #
 # Usage:
 #   pwsh scripts/generate-icon.ps1
-#
-# Output: src-tauri/icons/source.png
 
 param([string]$OutPath = "src-tauri/icons/source.png")
 
 Add-Type -AssemblyName System.Drawing
 
 $size = 1024
-$radius = 220        # iOS-like corner radius (~21.5% of size)
-$ringR = 290         # donut outer radius
-$strokeW = 88        # donut stroke width
+$radius = 220                          # iOS-like corner radius
+$strokeW = 96                          # thicker than v1's donut for readability
+$gaugeR = 320                          # arc radius
+$cx = $size / 2
+$gaugeCy = ($size / 2) + 60            # shift down to leave room for sweep top
+$baselinePct = 0.50                    # static icon shows 50% baseline
+
+$accent = [System.Drawing.Color]::FromArgb(255, 217, 119, 87)
+$accentDim = [System.Drawing.Color]::FromArgb(255, 197, 100, 74)
+$bg1 = [System.Drawing.Color]::FromArgb(255, 28, 28, 32)
+$bg2 = [System.Drawing.Color]::FromArgb(255, 18, 18, 22)
+$track = [System.Drawing.Color]::FromArgb(255, 70, 70, 76)
+$white = [System.Drawing.Color]::White
 
 $bmp = New-Object System.Drawing.Bitmap $size, $size
 $g = [System.Drawing.Graphics]::FromImage($bmp)
@@ -23,8 +33,7 @@ $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
 $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
 $g.Clear([System.Drawing.Color]::Transparent)
 
-# Rounded-rectangle background — slight gradient to read as a Liquid Glass
-# surface rather than a flat tile.
+# Rounded-rectangle background — vertical gradient for depth.
 $path = New-Object System.Drawing.Drawing2D.GraphicsPath
 $d = $radius * 2
 $path.AddArc(0, 0, $d, $d, 180, 90)
@@ -35,54 +44,50 @@ $path.CloseAllFigures()
 
 $bgRect = New-Object System.Drawing.Rectangle 0, 0, $size, $size
 $bgBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
-    $bgRect,
-    [System.Drawing.Color]::FromArgb(255, 255, 252, 248),
-    [System.Drawing.Color]::FromArgb(255, 240, 232, 222),
+    $bgRect, $bg1, $bg2,
     [System.Drawing.Drawing2D.LinearGradientMode]::Vertical
 )
 $g.FillPath($bgBrush, $path)
 
-# Subtle inner edge so the icon doesn't read as flat at small sizes.
-$edgePen = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(40, 0, 0, 0)), 2
-$g.DrawPath($edgePen, $path)
-
-# Donut track — a near-full ring at low contrast establishes the gauge metaphor.
-$cx = $size / 2
-$cy = $size / 2
-$trackColor = [System.Drawing.Color]::FromArgb(255, 220, 218, 212)
-$trackPen = New-Object System.Drawing.Pen $trackColor, $strokeW
+# Gauge track — full half-circle, low contrast.
+$arcRect = New-Object System.Drawing.RectangleF (
+    [float]($cx - $gaugeR),
+    [float]($gaugeCy - $gaugeR),
+    [float]($gaugeR * 2),
+    [float]($gaugeR * 2)
+)
+$trackPen = New-Object System.Drawing.Pen $track, $strokeW
 $trackPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
 $trackPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-$ringRect = New-Object System.Drawing.RectangleF (
-    [float]($cx - $ringR),
-    [float]($cy - $ringR),
-    [float]($ringR * 2),
-    [float]($ringR * 2)
-)
-$g.DrawEllipse($trackPen, $ringRect)
+$g.DrawArc($trackPen, $arcRect, 180, 180)
 
-# Donut progress — Claude orange gradient, 72% arc, starting from 12 o'clock
-# clockwise (matches the in-app Donut component).
-$arcRect = New-Object System.Drawing.Rectangle (
-    [int]($cx - $ringR - $strokeW / 2),
-    [int]($cy - $ringR - $strokeW / 2),
-    [int]($ringR * 2 + $strokeW),
-    [int]($ringR * 2 + $strokeW)
-)
+# Gauge fill — accent gradient, baseline percent of the 180° sweep.
+$sweep = 180 * $baselinePct
 $arcGrad = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
-    $arcRect,
-    [System.Drawing.Color]::FromArgb(255, 217, 119, 87),
-    [System.Drawing.Color]::FromArgb(255, 197, 100, 74),
+    $bgRect, $accent, $accentDim,
     [System.Drawing.Drawing2D.LinearGradientMode]::ForwardDiagonal
 )
-$arcPen = New-Object System.Drawing.Pen $arcGrad, $strokeW
-$arcPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-$arcPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-# DrawArc uses GDI angles: 0° = 3 o'clock, positive = clockwise.
-# 12 o'clock = -90°. 72% of 360 = 259.2°. Start at -90, sweep 259.
-$g.DrawArc($arcPen, $ringRect, -90, 259)
+$fillPen = New-Object System.Drawing.Pen $arcGrad, $strokeW
+$fillPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+$fillPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+$g.DrawArc($fillPen, $arcRect, 180, $sweep)
 
-# Save
+# Needle — white, from hub to fill endpoint.
+$needleLen = $gaugeR - 20
+$angle = 180 + $sweep
+$rad = $angle * [Math]::PI / 180
+$nx = $cx + $needleLen * [Math]::Cos($rad)
+$ny = $gaugeCy + $needleLen * [Math]::Sin($rad)
+$needlePen = New-Object System.Drawing.Pen $white, 28
+$needlePen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+$needlePen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+$g.DrawLine($needlePen, [float]$cx, [float]$gaugeCy, [float]$nx, [float]$ny)
+
+# Hub — small white disk on the pivot.
+$hubR = 42
+$hubBrush = New-Object System.Drawing.SolidBrush $white
+$g.FillEllipse($hubBrush, [float]($cx - $hubR), [float]($gaugeCy - $hubR), [float]($hubR * 2), [float]($hubR * 2))
+
 $dir = Split-Path $OutPath -Parent
 if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
 $bmp.Save($OutPath, [System.Drawing.Imaging.ImageFormat]::Png)

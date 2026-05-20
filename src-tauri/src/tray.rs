@@ -2,6 +2,8 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{App, Emitter, Manager};
 
+pub const TRAY_ID: &str = "main-tray";
+
 pub fn setup(app: &mut App) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Show / Hide", true, None::<&str>)?;
     let mode_mini = MenuItem::with_id(app, "mode_mini", "Mini mode", true, None::<&str>)?;
@@ -20,7 +22,7 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
         .default_window_icon()
         .expect("default window icon missing")
         .clone();
-    let _ = TrayIconBuilder::new()
+    let _ = TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .menu(&menu)
         .show_menu_on_left_click(false)

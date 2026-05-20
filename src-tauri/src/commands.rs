@@ -108,6 +108,26 @@ pub async fn set_mica_enabled(window: tauri::WebviewWindow, enabled: bool) -> Re
     Ok(())
 }
 
+/// Re-render the tray + main-window icon to reflect the current 5-hour
+/// session usage. Called from the frontend after every successful
+/// `fetch_usage`. Threshold colors match the in-app CapsuleProgress tokens
+/// (accent / warning / danger).
+#[tauri::command]
+pub async fn set_usage_icon(app: tauri::AppHandle, pct: f64) -> Result<(), String> {
+    use tauri::Manager;
+    let (rgba, w, h) = crate::icon_render::render_gauge_rgba(pct);
+    // Two clones because the tray and the window each take ownership.
+    let img_tray = tauri::image::Image::new_owned(rgba.clone(), w, h);
+    let img_win = tauri::image::Image::new_owned(rgba, w, h);
+    if let Some(tray) = app.tray_by_id(crate::tray::TRAY_ID) {
+        tray.set_icon(Some(img_tray)).map_err(|e| e.to_string())?;
+    }
+    if let Some(win) = app.get_webview_window("main") {
+        win.set_icon(img_win).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
