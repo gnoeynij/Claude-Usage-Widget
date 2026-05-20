@@ -16,7 +16,12 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
         &[&show, &mode_mini, &mode_normal, &mode_detail, &sync, &quit],
     )?;
 
+    let icon = app
+        .default_window_icon()
+        .expect("default window icon missing")
+        .clone();
     let _ = TrayIconBuilder::new()
+        .icon(icon)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {

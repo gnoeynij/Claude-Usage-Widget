@@ -1,4 +1,4 @@
-import { Maximize2 } from "lucide-solid";
+import { createSignal } from "solid-js";
 import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
 import { store, setMode } from "../state/store";
@@ -28,6 +28,7 @@ function MiniRow(props: { label: string; value: number }) {
 }
 
 export function MiniView() {
+  const [expandHover, setExpandHover] = createSignal(false);
   return (
     <main
       class="drag view-in"
@@ -35,33 +36,53 @@ export function MiniView() {
         position: "relative",
         display: "flex",
         "align-items": "center",
-        gap: "var(--s-3)",
-        padding: "var(--s-3)",
+        gap: "var(--s-2)",
+        padding: "var(--s-2)",
         flex: 1,
       }}
       ondblclick={() => setMode("normal")}
     >
+      {/* visionOS-style sheet handle: thin bar at top-center hints "drag-down
+          to dismiss" affordance. Default opacity is just visible enough to
+          register; hover expands width + opacity to make the affordance
+          unambiguous. Clicking returns to normal mode. */}
       <button
-        class="no-drag ring-hover"
+        class="no-drag"
         onClick={(e) => {
           e.stopPropagation();
           setMode("normal");
         }}
-        title={t().normal}
+        onMouseEnter={() => setExpandHover(true)}
+        onMouseLeave={() => setExpandHover(false)}
+        title={t().miniExpand}
         style={{
           position: "absolute",
-          top: "6px",
-          right: "6px",
-          width: "22px",
-          height: "22px",
-          "border-radius": "6px",
-          display: "inline-flex",
+          top: 0,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "56px",
+          height: "14px",
+          padding: 0,
+          background: "transparent",
+          border: "none",
+          display: "flex",
           "align-items": "center",
           "justify-content": "center",
-          color: "var(--label-tertiary)",
+          cursor: "pointer",
         }}
       >
-        <Maximize2 size={12} />
+        <span
+          style={{
+            display: "block",
+            width: expandHover() ? "44px" : "32px",
+            height: "4px",
+            "border-radius": "2px",
+            background: "var(--label-tertiary)",
+            opacity: expandHover() ? 0.7 : 0.3,
+            transition:
+              "opacity var(--dur-fast) var(--ease-smooth), width var(--dur-fast) var(--ease-swift)",
+          }}
+        />
       </button>
       <Donut
         value={store.usage.five_hour}
@@ -72,9 +93,14 @@ export function MiniView() {
       <div
         style={{
           flex: 1,
+          "align-self": "stretch",
           display: "flex",
           "flex-direction": "column",
-          gap: "var(--s-2)",
+          // space-evenly distributes the two MiniRows across the full donut
+          // height (96px) instead of collapsing them to their content height
+          // and centering — which read as top-heavy because text weight
+          // dominates capsule weight.
+          "justify-content": "space-evenly",
         }}
       >
         <MiniRow label={t().allModels} value={store.usage.seven_day} />

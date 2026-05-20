@@ -20,5 +20,8 @@ export default defineConfig({
     target: "esnext",
     minify: "esbuild",
     sourcemap: false,
+    // Print gzip sizes during build so we notice bundle bloat without
+    // having to inspect `dist/` manually.
+    reportCompressedSize: true,
   },
 });

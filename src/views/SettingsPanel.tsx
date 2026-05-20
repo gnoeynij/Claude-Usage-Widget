@@ -1,6 +1,6 @@
-import { onCleanup, onMount } from "solid-js";
+import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import type { JSX } from "solid-js";
-import { X } from "lucide-solid";
+import { RefreshCw, X } from "lucide-solid";
 import { Switch } from "../components/Switch";
 import { SegmentedControl } from "../components/SegmentedControl";
 import {
@@ -13,6 +13,7 @@ import {
   setOpacity,
   type Lang,
 } from "../state/store";
+import { checkForUpdate, installUpdate } from "../state/updater";
 import { t } from "../i18n";
 
 function Section(props: { label: string; children: JSX.Element }) {
@@ -51,6 +52,167 @@ function SwitchRow(props: {
 
 function close() {
   setStore("settingsOpen", false);
+}
+
+function UpdateSection() {
+  // Ephemeral "최신 버전입니다" toast — only after a manual check finds nothing.
+  // The persistent updateStatus reverts to "idle" so we need a local flash
+  // to confirm the click actually checked.
+  const [flash, setFlash] = createSignal<null | "up_to_date" | "error">(null);
+  let flashTimer: number | null = null;
+  onCleanup(() => {
+    if (flashTimer != null) window.clearTimeout(flashTimer);
+  });
+
+  async function onClickCheck() {
+    const result = await checkForUpdate(true);
+    if (result === "up_to_date" || result === "error") {
+      setFlash(result);
+      if (flashTimer != null) window.clearTimeout(flashTimer);
+      flashTimer = window.setTimeout(() => setFlash(null), 3000);
+    }
+  }
+
+  return (
+    <Section label={t().checkForUpdates}>
+      <Show when={store.updateStatus === "idle"}>
+        <button
+          class="ring-hover"
+          onClick={() => void onClickCheck()}
+          style={{
+            display: "inline-flex",
+            "align-items": "center",
+            "justify-content": "center",
+            gap: "6px",
+            padding: "6px 10px",
+            "border-radius": "8px",
+            background: "var(--accent-tint)",
+            color: "var(--accent)",
+            "font-weight": 500,
+            "align-self": "flex-start",
+          }}
+        >
+          <RefreshCw size={12} />
+          <span class="t-body">{t().checkForUpdates}</span>
+        </button>
+        <Show when={flash() === "up_to_date"}>
+          <span class="t-body label-secondary">{t().updateUpToDate}</span>
+        </Show>
+        <Show when={flash() === "error"}>
+          <span class="t-body" style={{ color: "var(--danger)" }}>
+            {t().updateError}
+          </span>
+        </Show>
+      </Show>
+
+      <Show when={store.updateStatus === "checking"}>
+        <span
+          class="t-body label-secondary"
+          style={{
+            display: "inline-flex",
+            "align-items": "center",
+            gap: "6px",
+          }}
+        >
+          <RefreshCw size={12} class="spin" />
+          {t().updateChecking}
+        </span>
+      </Show>
+
+      <Show
+        when={
+          store.updateStatus === "available" ||
+          store.updateStatus === "downloading"
+        }
+      >
+        <div style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>
+          <span class="t-body">
+            {store.updateInfo
+              ? t().updateNewVersion(store.updateInfo.version)
+              : t().updateAvailable}
+          </span>
+          <div
+            style={{
+              position: "relative",
+              height: "4px",
+              "border-radius": "2px",
+              background: "var(--fill-tertiary, rgba(255,255,255,0.08))",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                bottom: 0,
+                width: `${store.updateDownloadPct}%`,
+                background: "var(--accent)",
+                transition: "width var(--dur-fast) var(--ease-smooth)",
+              }}
+            />
+          </div>
+          <span class="t-caption label-tertiary">
+            {t().updateDownloading} {store.updateDownloadPct}%
+          </span>
+        </div>
+      </Show>
+
+      <Show when={store.updateStatus === "ready"}>
+        <div style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>
+          <span class="t-body">
+            {store.updateInfo
+              ? t().updateNewVersion(store.updateInfo.version)
+              : t().updateReady}
+          </span>
+          <button
+            class="ring-hover"
+            onClick={() => void installUpdate()}
+            style={{
+              display: "inline-flex",
+              "align-items": "center",
+              "justify-content": "center",
+              padding: "6px 10px",
+              "border-radius": "8px",
+              background: "var(--accent)",
+              color: "white",
+              "font-weight": 500,
+              "align-self": "flex-start",
+            }}
+          >
+            <span class="t-body">{t().updateRestart}</span>
+          </button>
+        </div>
+      </Show>
+
+      <Show when={store.updateStatus === "error"}>
+        <div style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>
+          <span class="t-body" style={{ color: "var(--danger)" }}>
+            {t().updateError}
+          </span>
+          <button
+            class="ring-hover"
+            onClick={() => void onClickCheck()}
+            style={{
+              display: "inline-flex",
+              "align-items": "center",
+              "justify-content": "center",
+              gap: "6px",
+              padding: "6px 10px",
+              "border-radius": "8px",
+              background: "var(--accent-tint)",
+              color: "var(--accent)",
+              "font-weight": 500,
+              "align-self": "flex-start",
+            }}
+          >
+            <RefreshCw size={12} />
+            <span class="t-body">{t().checkForUpdates}</span>
+          </button>
+        </div>
+      </Show>
+    </Section>
+  );
 }
 
 export function SettingsPanel() {
@@ -169,6 +331,7 @@ export function SettingsPanel() {
             onInput={(e) => setOpacity(Number(e.currentTarget.value))}
           />
         </Section>
+        <UpdateSection />
       </div>
     </div>
   );

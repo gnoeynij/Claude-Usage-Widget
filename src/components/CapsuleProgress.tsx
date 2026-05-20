@@ -1,3 +1,6 @@
+import { clamp } from "../utils/math";
+import { thresholdColor } from "../utils/color";
+
 export type CapsuleTone = "threshold" | "accent" | "neutral";
 
 type Props = {
@@ -12,18 +15,11 @@ type Props = {
   color?: string;
 };
 
-function clamp(n: number) {
-  if (Number.isNaN(n) || !Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(100, n));
-}
-
 function colorFor(v: number, tone: CapsuleTone, override?: string) {
   if (override) return override;
   if (tone === "accent") return "var(--accent)";
   if (tone === "neutral") return "var(--label-tertiary)";
-  if (v >= 80) return "var(--danger)";
-  if (v >= 50) return "var(--warning)";
-  return "var(--success)";
+  return thresholdColor(v);
 }
 
 export function CapsuleProgress(props: Props) {

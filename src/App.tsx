@@ -15,7 +15,7 @@ export function App() {
   });
 
   return (
-    <LiquidGlass>
+    <LiquidGlass padding={store.mode === "mini" ? "0" : undefined}>
       {store.mode !== "mini" && <HeaderBar />}
       {store.mode !== "mini" && <ErrorBanner />}
       {store.mode === "mini" && <MiniView />}

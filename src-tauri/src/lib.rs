@@ -12,6 +12,26 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            // File logger so users can attach `widget.log` to bug reports.
+            // INFO covers the failure modes that users actually report
+            // (network drop, TOKEN_EXPIRED, RATE_LIMITED) without flooding
+            // the file with per-frame chatter. Bumped to DEBUG only when
+            // chasing a specific issue.
+            tauri_plugin_log::Builder::default()
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("widget".into()),
+                    },
+                ))
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::Stdout,
+                ))
+                .level(log::LevelFilter::Info)
+                .max_file_size(1_000_000) // 1 MB rotation
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                .build(),
+        )
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
@@ -25,19 +45,32 @@ pub fn run() {
             commands::aggregate_detail,
             commands::set_always_on_top,
             commands::set_window_opacity,
+            commands::set_window_size,
             commands::quit_app,
             commands::run_migration,
+            commands::open_log_dir,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").expect("main window missing");
 
             #[cfg(target_os = "windows")]
             {
-                let _ = vibrancy_win::apply_mica(&window);
+                match vibrancy_win::apply_mica(&window) {
+                    Ok(()) => log::info!("setup: Mica applied"),
+                    Err(e) => log::warn!("setup: Mica failed: {}", e),
+                }
             }
 
-            tray::setup(app)?;
-            let _ = migration::run_once(app);
+            if let Err(e) = tray::setup(app) {
+                log::error!("setup: tray init failed: {}", e);
+                return Err(e.into());
+            }
+            log::info!("setup: tray ready");
+
+            match migration::run_once(app) {
+                Ok(()) => log::info!("setup: migration done"),
+                Err(e) => log::warn!("setup: migration failed: {}", e),
+            }
 
             // Silence unused-variable warning on platforms without vibrancy.
             let _ = &window;

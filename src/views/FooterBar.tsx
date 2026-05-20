@@ -1,5 +1,5 @@
 import { X } from "lucide-solid";
-import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SegmentedControl } from "../components/SegmentedControl";
 import { store, setMode, type Mode } from "../state/store";
 import { t } from "../i18n";
@@ -15,11 +15,19 @@ export function FooterBar() {
         "min-height": "32px",
       }}
     >
-      <span class="t-caption label-tertiary">v{store.version}</span>
+      <span
+        class="t-caption label-tertiary"
+        style={{ "white-space": "nowrap", "flex-shrink": 0 }}
+      >
+        v{store.version}
+      </span>
       <div style={{ flex: 1 }} />
       {/* Explicit width — without it, SegmentedControl's flex children fall
-          back to intrinsic content widths and lose equal sizing. */}
-      <div style={{ width: "192px", "flex-shrink": 0 }}>
+          back to intrinsic content widths and lose equal sizing. 168px gives
+          each button ~54px so the 6-letter labels (Normal/Detail) breathe
+          inside their pill, while still leaving room for the full version
+          string left of it. */}
+      <div style={{ width: "168px", "flex-shrink": 0 }}>
         <SegmentedControl<Mode>
           value={store.mode}
           onChange={setMode}
@@ -32,8 +40,8 @@ export function FooterBar() {
       </div>
       <button
         class="ring-hover"
-        onClick={() => invoke("quit_app").catch(() => {})}
-        title={t().quit}
+        onClick={() => void getCurrentWindow().hide()}
+        title={t().show}
         style={{
           width: "26px",
           height: "26px",

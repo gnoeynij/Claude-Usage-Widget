@@ -1,6 +1,15 @@
 import { Settings as SettingsIcon, RefreshCw } from "lucide-solid";
+import { Show } from "solid-js";
 import { store, syncNow, toggleSettings } from "../state/store";
 import { t } from "../i18n";
+
+function updateDotLabel() {
+  const v = store.updateInfo?.version;
+  if (store.updateStatus === "ready" && v) return t().updateReady;
+  if (store.updateStatus === "downloading" && v) return t().updateDownloading;
+  if (v) return t().updateNewVersion(v);
+  return t().updateAvailable;
+}
 
 function statusDotColor() {
   // Touch tickMinute so the dot color recomputes every minute as the last
@@ -80,6 +89,7 @@ export function HeaderBar() {
         onClick={toggleSettings}
         title={t().settings}
         style={{
+          position: "relative",
           width: "20px",
           height: "20px",
           "border-radius": "6px",
@@ -91,6 +101,28 @@ export function HeaderBar() {
         }}
       >
         <SettingsIcon size={12} />
+        <Show
+          when={
+            store.updateStatus === "available" ||
+            store.updateStatus === "downloading" ||
+            store.updateStatus === "ready"
+          }
+        >
+          <span
+            title={updateDotLabel()}
+            style={{
+              position: "absolute",
+              top: "2px",
+              right: "2px",
+              width: "6px",
+              height: "6px",
+              "border-radius": "50%",
+              background: "var(--accent)",
+              "box-shadow": "0 0 0 1.5px var(--bg-elevated, rgba(0,0,0,0.4))",
+              "pointer-events": "none",
+            }}
+          />
+        </Show>
       </button>
     </header>
   );

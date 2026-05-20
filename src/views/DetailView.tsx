@@ -1,16 +1,10 @@
-import { Show, For } from "solid-js";
+import { Show, For, createMemo } from "solid-js";
 import { GlassCard } from "../components/GlassCard";
 import { CapsuleProgress } from "../components/CapsuleProgress";
 import { Donut } from "../components/Donut";
 import { store } from "../state/store";
 import { t } from "../i18n";
-
-function formatCost(n: number) {
-  return `$${n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
+import { formatCost } from "../utils/format";
 
 function formatTimestamp(iso: string) {
   const d = new Date(iso);
@@ -160,7 +154,9 @@ function PeriodsCard() {
 
 function RecentCard() {
   const r = () => store.detail?.recent ?? [];
-  const maxIdx = () => {
+  // Memoize so the For loop's O(n) `i() === maxIdx()` comparison doesn't
+  // re-scan the entire list on every iteration (was effectively O(n²)).
+  const maxIdx = createMemo(() => {
     const list = r();
     if (list.length === 0) return -1;
     let mi = 0;
@@ -172,7 +168,7 @@ function RecentCard() {
       }
     });
     return mi;
-  };
+  });
   return (
     <GlassCard>
       <div class="t-section" style={{ "margin-bottom": "var(--s-3)" }}>
@@ -224,7 +220,9 @@ function RecentCard() {
 
 function ModelsCard() {
   const fams = () => store.detail?.by_family ?? [];
-  const peak = () => Math.max(...fams().map((f) => f.cost), 0.01);
+  // Memoize: `Math.max(...arr.map(...))` allocates a fresh array and spreads
+  // it every time, called from the inner For. Cache until `fams()` invalidates.
+  const peak = createMemo(() => Math.max(...fams().map((f) => f.cost), 0.01));
   return (
     <GlassCard>
       <div class="t-section" style={{ "margin-bottom": "var(--s-3)" }}>

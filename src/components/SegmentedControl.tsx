@@ -59,7 +59,12 @@ export function SegmentedControl<T extends string>(props: Props<T>) {
       ref={(el) => (containerEl = el)}
       style={{
         position: "relative",
-        display: "flex",
+        // Grid (not flex) so each segment is exactly 1fr — flex would shrink
+        // shorter labels (e.g. "Mini" vs "Normal") less than longer ones,
+        // making the thumb travel asymmetric and the left/right padding of
+        // the floating pill unequal.
+        display: "grid",
+        "grid-template-columns": `repeat(${props.options.length}, 1fr)`,
         padding: "2px",
         background: "var(--fill-3)",
         "border-radius": "var(--r-pill)",
@@ -96,15 +101,11 @@ export function SegmentedControl<T extends string>(props: Props<T>) {
               style={{
                 position: "relative",
                 "z-index": 1,
-                flex: "1 1 0",
-                // Equal button floor. Set low enough that 5-segment controls
-                // (AutoSync's Off/5m/10m/30m/1h) still fit inside the settings
-                // panel without overflowing. The caller is responsible for
-                // giving the SegmentedControl a parent with a defined width
-                // (Footer uses an explicit 192px wrapper; Settings stretches
-                // to the Section's full width automatically).
-                "min-width": "48px",
-                padding: "4px 10px",
+                // Grid handles equal-width distribution; no flex/min-width
+                // hack needed. The caller still controls the SegmentedControl
+                // wrapper width (Footer uses 168px, Settings stretches to the
+                // Section's full width automatically).
+                padding: "4px 6px",
                 "border-radius": "var(--r-pill)",
                 background: "transparent",
                 color: selected() ? "var(--label)" : "var(--label-secondary)",

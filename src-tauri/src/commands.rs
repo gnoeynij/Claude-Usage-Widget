@@ -1,6 +1,13 @@
 use crate::jsonl_aggregator;
 use crate::usage_api;
 
+/// At or above this alpha, treat the window as fully opaque and strip the
+/// layered-window bit so DWM Mica/Acrylic resumes painting. Picked just
+/// below 1.0 so the round-trip 100% slider value (1.0 exact in JS) lands
+/// here even after f64 rounding.
+#[cfg(target_os = "windows")]
+const FULL_OPACITY_THRESHOLD: f64 = 0.999;
+
 #[tauri::command]
 pub async fn fetch_usage() -> Result<usage_api::UsageOutput, String> {
     usage_api::fetch_usage().await.map_err(|e| e.to_string())
@@ -39,7 +46,9 @@ pub async fn set_window_opacity(window: tauri::Window, value: f64) -> Result<(),
     let alpha = (clamped * 255.0).round() as u8;
     #[cfg(target_os = "windows")]
     {
-        apply_opacity_win(&window, alpha, clamped >= 0.999).map_err(|e| e.to_string())?;
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+        apply_opacity_win(hwnd, alpha, clamped >= FULL_OPACITY_THRESHOLD)
+            .map_err(|e| e.to_string())?;
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -49,14 +58,17 @@ pub async fn set_window_opacity(window: tauri::Window, value: f64) -> Result<(),
 }
 
 #[cfg(target_os = "windows")]
-fn apply_opacity_win(window: &tauri::Window, alpha: u8, fully_opaque: bool) -> windows::core::Result<()> {
+fn apply_opacity_win(
+    hwnd: windows::Win32::Foundation::HWND,
+    alpha: u8,
+    fully_opaque: bool,
+) -> windows::core::Result<()> {
     use windows::Win32::Foundation::COLORREF;
     use windows::Win32::UI::WindowsAndMessaging::{
         GetWindowLongPtrW, SetLayeredWindowAttributes, SetWindowLongPtrW,
         GWL_EXSTYLE, LWA_ALPHA, WS_EX_LAYERED,
     };
 
-    let hwnd = window.hwnd().expect("main window has an HWND");
     let layered_bit = WS_EX_LAYERED.0 as isize;
     unsafe {
         let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
@@ -80,7 +92,65 @@ pub fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// Apply a mode-specific window size + minimum size in one shot. Order
+/// matters: `set_min_size` first so the subsequent `set_size` isn't clamped
+/// by the *previous* mode's minimum.
+#[tauri::command]
+pub async fn set_window_size(
+    window: tauri::Window,
+    width: u32,
+    height: u32,
+    min_width: u32,
+    min_height: u32,
+) -> Result<(), String> {
+    use tauri::LogicalSize;
+    window
+        .set_min_size(Some(LogicalSize::new(min_width, min_height)))
+        .map_err(|e| e.to_string())?;
+    window
+        .set_size(LogicalSize::new(width, height))
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn run_migration() -> Result<bool, String> {
     crate::migration::run_once_invoked().map_err(|e| e.to_string())
+}
+
+/// Open the OS file explorer at the app's log directory. Used by the
+/// "Open logs folder" button in Settings so users can attach `widget.log`
+/// to a bug report without hunting through %LOCALAPPDATA%.
+#[tauri::command]
+pub fn open_log_dir(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let log_dir = app
+        .path()
+        .app_log_dir()
+        .map_err(|e| e.to_string())?;
+    // Make sure it exists — first call before any log line is written would
+    // otherwise hand explorer an invalid path.
+    std::fs::create_dir_all(&log_dir).map_err(|e| e.to_string())?;
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&log_dir)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&log_dir)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&log_dir)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }

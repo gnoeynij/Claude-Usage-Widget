@@ -18,7 +18,7 @@ const MARKER_FILENAME: &str = ".migrated_from_pyqt6";
 pub fn run_once(app: &App) -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {
-        return run_windows(&app.handle().clone());
+        run_windows(&app.handle().clone())
     }
     #[cfg(not(target_os = "windows"))]
     {

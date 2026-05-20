@@ -16,8 +16,8 @@
         "title": "Claude Widget",
         "width": 360,
         "height": 420,
-        "minWidth": 280,
-        "minHeight": 240,
+        "minWidth": 240,
+        "minHeight": 160,
         "decorations": false,
         "transparent": true,
         "shadow": false,
@@ -42,6 +42,11 @@
     "shortDescription": "Claude usage at a glance",
     "longDescription": "A live widget showing Claude usage limits and detailed local statistics, with a Liquid Glass design.",
     "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
       "icons/icon.ico"
     ],
     "windows": {

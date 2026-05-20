@@ -1,8 +1,20 @@
 use anyhow::{anyhow, Context, Result};
+use log::{info, warn};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
+
+/// Shared HTTP client — reqwest's connection pool only kicks in when the same
+/// Client is reused across requests. Building fresh each call defeats the
+/// pool and triggers a full TLS handshake every time.
+static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .expect("reqwest::Client build (rustls)")
+});
 
 #[derive(Deserialize, Debug)]
 struct Credentials {
@@ -123,21 +135,28 @@ pub async fn fetch_usage() -> Result<UsageOutput> {
 }
 
 async fn call_usage(access_token: &str) -> Result<UsageOutput> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .context("client build")?;
-
-    let resp = client
+    let start = std::time::Instant::now();
+    let resp = match HTTP_CLIENT
         .get(USAGE_URL)
         .bearer_auth(access_token)
         .header("anthropic-beta", "oauth-2025-04-20")
         .header("Accept", "application/json")
         .send()
         .await
-        .context("network error")?;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            // Distinguish DNS/network failures from API-side errors so users
+            // attaching widget.log can answer the "is it the API or my net?"
+            // question without us having to guess.
+            warn!("usage_api: network error ({}ms): {}", start.elapsed().as_millis(), e);
+            return Err(anyhow::Error::from(e).context("network error"));
+        }
+    };
 
     let status = resp.status();
+    let elapsed = start.elapsed().as_millis();
+    info!("usage_api: HTTP {} in {}ms", status.as_u16(), elapsed);
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
         return Err(anyhow!("TOKEN_EXPIRED"));
     }

@@ -32,23 +32,32 @@
   --hairline: rgba(0, 0, 0, 0.08);
 
   /* ─── Liquid Glass material (light) ──────────────────────────────────── */
-  /* RGB + alpha kept split so future overrides can dial either independently.
-     Whole-widget opacity is now an OS-level concern (Tauri's window
-     set_opacity) — CSS handles material identity, OS handles window fade. */
+  /* RGB + alpha kept split so opacity-mult can dial alpha independently.
+     Alphas tuned higher (0.55→0.78, 0.66→0.85, 0.80→0.92) because Mica
+     already provides a translucent base — the previous values left the
+     panel barely distinguishable from the Mica wash, so dialing the
+     opacity slider produced almost no visible change. Stronger fill makes
+     the slider's effect obvious without losing the glass character. */
   --glass-base-rgb: 255, 255, 255;
-  --glass-base-alpha: 0.55;
+  --glass-base-alpha: 0.78;
   --glass-card-rgb: 255, 255, 255;
-  --glass-card-alpha: 0.66;
+  --glass-card-alpha: 0.85;
   --glass-card-accent-rgb: 255, 255, 255;
-  --glass-card-accent-alpha: 0.80;
+  --glass-card-accent-alpha: 0.92;
 
-  --glass-base: rgba(var(--glass-base-rgb), var(--glass-base-alpha));
+  /* Background-opacity slider lowers this from 1 toward 0 so only the glass
+     fill fades — content (text, donut stroke, capsule fill) stays opaque.
+     At mult=0 the panel/card surfaces vanish and Mica/Acrylic shows through
+     unchanged behind the widgets. */
+  --bg-alpha-mult: 1;
+  --glass-base: rgba(var(--glass-base-rgb), calc(var(--glass-base-alpha) * var(--bg-alpha-mult)));
   --glass-base-blur: 40px;
-  --glass-card: rgba(var(--glass-card-rgb), var(--glass-card-alpha));
-  --glass-card-accent: rgba(var(--glass-card-accent-rgb), var(--glass-card-accent-alpha));
+  --glass-card: rgba(var(--glass-card-rgb), calc(var(--glass-card-alpha) * var(--bg-alpha-mult)));
+  --glass-card-accent: rgba(var(--glass-card-accent-rgb), calc(var(--glass-card-accent-alpha) * var(--bg-alpha-mult)));
   --glass-card-blur: 18px;
-  /* The Background-opacity slider lowers this from 1 toward 0 so blur weakens
-     as the widget fades — required to read as "transparent" not "blurry". */
+  /* Legacy from the v1.5 OS-level fade path. Kept at 1 so blur stays
+     consistent across opacity settings — fading blur as well made the widget
+     read as "smudged" instead of "transparent". */
   --blur-mult: 1;
   --specular: rgba(255, 255, 255, 0.85);
   --specular-edge: rgba(255, 255, 255, 0.45);
@@ -136,12 +145,13 @@
   --separator: rgba(235, 237, 250, 0.24);
   --hairline: rgba(255, 255, 255, 0.16);
 
+  /* Stronger fills than v1 — slider needs a clearly visible top end. */
   --glass-base-rgb: 38, 40, 52;
-  --glass-base-alpha: 0.56;
+  --glass-base-alpha: 0.78;
   --glass-card-rgb: 58, 60, 74;
-  --glass-card-alpha: 0.66;
+  --glass-card-alpha: 0.85;
   --glass-card-accent-rgb: 72, 76, 92;
-  --glass-card-accent-alpha: 0.74;
+  --glass-card-accent-alpha: 0.92;
   /* --glass-base / --glass-card / --glass-card-accent are derived from the
      RGB/alpha pair in :root, so we don't need to redeclare them here. */
   /* On dark backgrounds the system success green is plenty visible — keep

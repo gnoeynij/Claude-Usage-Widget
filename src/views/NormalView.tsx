@@ -3,11 +3,7 @@ import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
 import { store, syncNow } from "../state/store";
 import { t } from "../i18n";
-
-function clamp(n: number) {
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(100, n));
-}
+import { clamp } from "../utils/math";
 
 function formatResetsIn(iso?: string | null) {
   if (!iso) return null;

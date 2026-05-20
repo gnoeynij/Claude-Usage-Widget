@@ -1,4 +1,6 @@
 import { Show } from "solid-js";
+import { clamp } from "../utils/math";
+import { thresholdColor } from "../utils/color";
 
 type Props = {
   value: number;
@@ -12,17 +14,6 @@ type Props = {
   onClick?: () => void;
 };
 
-function clamp(n: number) {
-  if (Number.isNaN(n) || !Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(100, n));
-}
-
-function colorFor(v: number) {
-  if (v >= 80) return "var(--danger)";
-  if (v >= 50) return "var(--warning)";
-  return "var(--success)";
-}
-
 export function Donut(props: Props) {
   const size = () => props.size ?? 96;
   const stroke = () => props.stroke ?? 8;
@@ -34,10 +25,20 @@ export function Donut(props: Props) {
   // render as a stray dot at the 12 o'clock position.
   const fillVisible = () => v() >= 1;
 
+  const handleKey = (e: KeyboardEvent) => {
+    if (!props.onClick) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      props.onClick();
+    }
+  };
   return (
     <div
       class={props.onClick ? "donut-clickable" : ""}
       onClick={props.onClick}
+      onKeyDown={props.onClick ? handleKey : undefined}
+      role={props.onClick ? "button" : undefined}
+      tabIndex={props.onClick ? 0 : undefined}
       style={{
         position: "relative",
         width: `${size()}px`,
@@ -66,7 +67,7 @@ export function Donut(props: Props) {
           cy={size() / 2}
           r={r()}
           fill="none"
-          stroke={colorFor(v())}
+          stroke={thresholdColor(v())}
           stroke-width={stroke()}
           stroke-linecap="round"
           stroke-dasharray={String(circ())}

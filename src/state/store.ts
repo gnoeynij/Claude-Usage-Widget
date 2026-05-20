@@ -1,6 +1,11 @@
 import { createStore } from "solid-js/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Store as TauriStore } from "@tauri-apps/plugin-store";
+import { info, warn } from "@tauri-apps/plugin-log";
+import { checkForUpdate } from "./updater";
+import { toErrorMessage } from "../utils/error";
 
 export type Mode = "mini" | "normal" | "detail";
 export type Lang = "en" | "ko";
@@ -61,6 +66,32 @@ export type DetailPayload = {
   stats: DetailStats;
 };
 
+export type UpdateStatus =
+  | "idle"
+  | "checking"
+  | "available"
+  | "downloading"
+  | "ready"
+  | "error";
+
+export type UpdateInfo = {
+  version: string;
+  notes?: string;
+  date?: string;
+};
+
+export type ModeSize = { w: number; h: number };
+export type ModeSizes = Record<Mode, ModeSize | null>;
+
+/** Per-mode default (w, h, minW, minH). Mini covers donut + 2 capsule rows.
+ *  Normal keeps the historical 360×420. Detail's width clears the 560px
+ *  container-query breakpoint that switches the detail grid to 2 columns. */
+const MODE_DEFAULTS: Record<Mode, [number, number, number, number]> = {
+  mini: [240, 112, 240, 112],
+  normal: [360, 420, 320, 360],
+  detail: [600, 680, 520, 520],
+};
+
 type StoreShape = {
   mode: Mode;
   lang: Lang;
@@ -80,6 +111,10 @@ type StoreShape = {
    *  dot) can fade based on the age of `lastSyncAt` without needing their
    *  own timer. */
   tickMinute: number;
+  updateStatus: UpdateStatus;
+  updateInfo: UpdateInfo | null;
+  updateDownloadPct: number;
+  modeSizes: ModeSizes;
 };
 
 const [store, setStore] = createStore<StoreShape>({
@@ -98,12 +133,69 @@ const [store, setStore] = createStore<StoreShape>({
   errorCode: null,
   version: "2.0.0-alpha.1",
   tickMinute: 0,
+  updateStatus: "idle",
+  updateInfo: null,
+  updateDownloadPct: 0,
+  modeSizes: { mini: null, normal: null, detail: null },
 });
 
 export { store, setStore };
 
 let syncTimer: number | null = null;
 let lastCredentialsMtime: number | null = null;
+// While we're applying a programmatic resize via setMode, suppress the
+// onResized listener — otherwise we'd record the *new* mode's auto-resize as
+// if the user had dragged the window to that size.
+let resizeSuppressUntil = 0;
+let resizeDebounce: number | null = null;
+let persistStorePromise: Promise<TauriStore> | null = null;
+
+function getPersistStore(): Promise<TauriStore> {
+  if (!persistStorePromise) {
+    persistStorePromise = TauriStore.load("widget-settings.json");
+  }
+  return persistStorePromise;
+}
+
+async function persistModeSizes() {
+  try {
+    const ps = await getPersistStore();
+    await ps.set("modeSizes", store.modeSizes);
+    await ps.save();
+  } catch (e) {
+    console.error("persist modeSizes failed", e);
+  }
+}
+
+async function loadModeSizes() {
+  try {
+    const ps = await getPersistStore();
+    const v = await ps.get<ModeSizes>("modeSizes");
+    if (v && typeof v === "object") {
+      setStore("modeSizes", {
+        mini: v.mini ?? null,
+        normal: v.normal ?? null,
+        detail: v.detail ?? null,
+      });
+    }
+  } catch (e) {
+    console.error("load modeSizes failed", e);
+  }
+}
+
+function applyModeSize(mode: Mode) {
+  const saved = store.modeSizes[mode];
+  const [dw, dh, mw, mh] = MODE_DEFAULTS[mode];
+  const w = saved?.w ?? dw;
+  const h = saved?.h ?? dh;
+  resizeSuppressUntil = Date.now() + 1000;
+  void invoke("set_window_size", {
+    width: w,
+    height: h,
+    minWidth: mw,
+    minHeight: mh,
+  }).catch((e) => console.error("set_window_size failed", e));
+}
 
 function parseErrorCode(message: string): ErrorCode {
   // Rust errors come through as `String(e)` — e.g. `"TOKEN_EXPIRED"`. anyhow's
@@ -132,6 +224,31 @@ export async function initStore() {
   applyDarkClass(store.dark);
   document.documentElement.lang = store.lang;
 
+  // Restore per-mode sizes from disk before wiring the resize listener — we
+  // don't want our own load to be picked up as a "user resize".
+  await loadModeSizes();
+
+  // Watch user-driven resizes. Debounce so a drag doesn't write 100 times,
+  // and ignore any change within ~1s of a programmatic setMode invoke.
+  const win = getCurrentWindow();
+  await win.onResized(({ payload }) => {
+    if (Date.now() < resizeSuppressUntil) return;
+    if (resizeDebounce != null) window.clearTimeout(resizeDebounce);
+    resizeDebounce = window.setTimeout(async () => {
+      try {
+        const scale = await win.scaleFactor();
+        const w = Math.round(payload.width / scale);
+        const h = Math.round(payload.height / scale);
+        // Ignore degenerate sizes from minimize/maximize edge events.
+        if (w < 100 || h < 100) return;
+        setStore("modeSizes", store.mode, { w, h });
+        void persistModeSizes();
+      } catch (e) {
+        console.error("onResized handler failed", e);
+      }
+    }, 500);
+  });
+
   // Tray menu → frontend bridge
   await listen<string>("tray://mode", (e) => {
     const v = e.payload;
@@ -153,6 +270,10 @@ export async function initStore() {
 
   await syncNow();
   scheduleAutoSync();
+
+  // Silent auto-check 3s after boot — avoids racing the first usage sync and
+  // keeps perceived startup snappy. Errors and "no update" stay silent.
+  window.setTimeout(() => void checkForUpdate(false), 3000);
 }
 
 async function pollCredentialsMtime(initial = false) {
@@ -181,6 +302,7 @@ export async function syncNow() {
   setStore("syncing", true);
   setStore("syncError", null);
   setStore("errorCode", null);
+  const t0 = Date.now();
   try {
     const usage = await invoke<UsagePayload>("fetch_usage");
     setStore("usage", usage);
@@ -188,10 +310,13 @@ export async function syncNow() {
     if (store.mode === "detail") {
       await refreshDetail();
     }
+    void info(`sync ok ${Date.now() - t0}ms`);
   } catch (e) {
-    const msg = String(e);
+    const msg = toErrorMessage(e);
     setStore("syncError", msg);
-    setStore("errorCode", parseErrorCode(msg));
+    const code = parseErrorCode(msg);
+    setStore("errorCode", code);
+    void warn(`sync failed ${Date.now() - t0}ms code=${code ?? "UNKNOWN"} msg=${msg}`);
   } finally {
     setStore("syncing", false);
   }
@@ -199,6 +324,7 @@ export async function syncNow() {
 
 export function setMode(mode: Mode) {
   setStore("mode", mode);
+  applyModeSize(mode);
   if (mode === "detail") {
     void refreshDetail();
   }
@@ -209,7 +335,7 @@ export async function refreshDetail() {
     const detail = await invoke<DetailPayload>("aggregate_detail");
     setStore("detail", detail);
   } catch (e) {
-    setStore("syncError", String(e));
+    setStore("syncError", toErrorMessage(e));
   }
 }
 
@@ -244,11 +370,15 @@ export function setSyncIntervalMin(minutes: number) {
 export function setOpacity(opacityPct: number) {
   const clamped = Math.max(0, Math.min(100, opacityPct));
   setStore("opacity", clamped);
-  // OS-level whole-window alpha — same behavior as v1.5.x setWindowOpacity.
-  // The Rust side toggles WS_EX_LAYERED + SetLayeredWindowAttributes; at 0%
-  // the layered bit is removed so Mica/Acrylic vibrancy paints normally.
-  const alpha = Math.max(0.15, 1 - clamped / 100);
-  void invoke("set_window_opacity", { value: alpha }).catch(() => {});
+  // Background-only fade: drive the --bg-alpha-mult CSS variable so glass
+  // material surfaces (panel + cards) thin out while text/donut/capsule
+  // stay fully opaque. At 100% slider the surfaces vanish entirely and
+  // Mica/Acrylic shows through the widget unchanged.
+  const mult = 1 - clamped / 100;
+  document.documentElement.style.setProperty("--bg-alpha-mult", String(mult));
+  // Make sure the legacy OS-level alpha (set in v1.5.x and earlier v2 builds)
+  // is reset to fully opaque so the new CSS-only path isn't double-dimmed.
+  void invoke("set_window_opacity", { value: 1.0 }).catch(() => {});
   // Clean up any css-level fallbacks from previous builds.
   document.documentElement.style.opacity = "";
   document.documentElement.style.removeProperty("--blur-mult");
