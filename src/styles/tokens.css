@@ -33,13 +33,15 @@
 
   /* ─── Liquid Glass material (light) ──────────────────────────────────── */
   /* RGB + alpha kept split so opacity-mult can dial alpha independently.
-     Alphas tuned higher (0.55→0.78, 0.66→0.85, 0.80→0.92) because Mica
-     already provides a translucent base — the previous values left the
-     panel barely distinguishable from the Mica wash, so dialing the
-     opacity slider produced almost no visible change. Stronger fill makes
-     the slider's effect obvious without losing the glass character. */
+     `--glass-base-alpha = 1` so that at slider 0% the panel reads as fully
+     opaque (matching the user's "opacity 0% = solid" mental model). Mica
+     is also re-enabled at 0% from the Rust side, so the Liquid Glass look
+     still composes — once the slider moves off 0% Mica is cleared and the
+     alpha mult drives a real fade. Cards keep 0.85/0.92 because they sit
+     above the panel and need to lift visually even when the panel is
+     fully opaque. */
   --glass-base-rgb: 255, 255, 255;
-  --glass-base-alpha: 0.78;
+  --glass-base-alpha: 1;
   --glass-card-rgb: 255, 255, 255;
   --glass-card-alpha: 0.85;
   --glass-card-accent-rgb: 255, 255, 255;
@@ -145,9 +147,10 @@
   --separator: rgba(235, 237, 250, 0.24);
   --hairline: rgba(255, 255, 255, 0.16);
 
-  /* Stronger fills than v1 — slider needs a clearly visible top end. */
+  /* Stronger fills than v1 — slider needs a clearly visible top end.
+     base-alpha = 1 so slider 0% reads as fully opaque (see :root note). */
   --glass-base-rgb: 38, 40, 52;
-  --glass-base-alpha: 0.78;
+  --glass-base-alpha: 1;
   --glass-card-rgb: 58, 60, 74;
   --glass-card-alpha: 0.85;
   --glass-card-accent-rgb: 72, 76, 92;

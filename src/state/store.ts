@@ -271,6 +271,10 @@ export async function initStore() {
   await syncNow();
   scheduleAutoSync();
 
+  // Apply persisted opacity once on boot so Mica state + CSS mult are in sync
+  // with the slider value the user left things at last time.
+  setOpacity(store.opacity);
+
   // Silent auto-check 3s after boot — avoids racing the first usage sync and
   // keeps perceived startup snappy. Errors and "no update" stay silent.
   window.setTimeout(() => void checkForUpdate(false), 3000);
@@ -370,16 +374,15 @@ export function setSyncIntervalMin(minutes: number) {
 export function setOpacity(opacityPct: number) {
   const clamped = Math.max(0, Math.min(100, opacityPct));
   setStore("opacity", clamped);
-  // Background-only fade: drive the --bg-alpha-mult CSS variable so glass
-  // material surfaces (panel + cards) thin out while text/donut/capsule
-  // stay fully opaque. At 100% slider the surfaces vanish entirely and
-  // Mica/Acrylic shows through the widget unchanged.
+  // Background-only fade: drive --bg-alpha-mult so glass panel/cards thin
+  // out while text/donut/capsule stay fully opaque. Mica toggles in tandem
+  // — kept on at 0% (full Liquid Glass) and cleared as soon as the user
+  // dials any transparency, otherwise Mica paints the panel white-ish on
+  // bright desktops and masks the fade entirely (see 23222cf retro).
   const mult = 1 - clamped / 100;
   document.documentElement.style.setProperty("--bg-alpha-mult", String(mult));
-  // Make sure the legacy OS-level alpha (set in v1.5.x and earlier v2 builds)
-  // is reset to fully opaque so the new CSS-only path isn't double-dimmed.
-  void invoke("set_window_opacity", { value: 1.0 }).catch(() => {});
-  // Clean up any css-level fallbacks from previous builds.
+  void invoke("set_mica_enabled", { enabled: clamped === 0 }).catch(() => {});
+  // Legacy paths cleaned up (v1.5 CSS opacity + OS-level layered alpha).
   document.documentElement.style.opacity = "";
   document.documentElement.style.removeProperty("--blur-mult");
 }

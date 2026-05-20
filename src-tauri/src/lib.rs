@@ -45,6 +45,7 @@ pub fn run() {
             commands::aggregate_detail,
             commands::set_always_on_top,
             commands::set_window_opacity,
+            commands::set_mica_enabled,
             commands::set_window_size,
             commands::quit_app,
             commands::run_migration,

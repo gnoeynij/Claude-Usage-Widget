@@ -87,6 +87,27 @@ fn apply_opacity_win(
     Ok(())
 }
 
+/// Toggle the Mica/Acrylic backdrop at runtime. The frontend calls this from
+/// `setOpacity` so that the backdrop only paints when the slider is at 0% —
+/// otherwise the system-painted Mica wash masks the CSS-driven panel fade
+/// (the 23222cf "5x retry" trail diagnosed the wrong layer for this reason).
+#[tauri::command]
+pub async fn set_mica_enabled(window: tauri::WebviewWindow, enabled: bool) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        if enabled {
+            crate::vibrancy_win::apply_mica(&window)?;
+        } else {
+            crate::vibrancy_win::clear_vibrancy(&window)?;
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (window, enabled);
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
