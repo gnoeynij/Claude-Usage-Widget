@@ -13,8 +13,7 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
-| **OAuth 토큰 만료 회복 (A+D)** | UX | [docs/plans/2026-05-20-oauth-refresh.md](docs/plans/2026-05-20-oauth-refresh.md), [usage_api.rs:81-110](src-tauri/src/usage_api.rs) | 정밀 검토 결과 근본 원인은 `syncIntervalMin: 0` 디폴트로 auto-sync OFF. **A+D 결합 권장** (~70-100 LOC·1.5-2h·위험 낮음): error code 분기 + 만료 banner + auto-sync 5분 default + `.credentials.json` mtime polling. 인증 영역 안 건드림. |
-| ~~OAuth 직접 refresh (B)~~ → P1 격하 | UX·인증 | 같은 plan §"B 격하 근거" | Anthropic spec 미공개·cred 파일 race·client_id 폐기 위험. A+D로 80% 효과 달성 시 미진행. **always-spot-check** (진행 결정 시) |
+| ~~OAuth 직접 refresh (B)~~ → P1 격하 | UX·인증 | [docs/plans/2026-05-20-oauth-refresh.md](docs/plans/2026-05-20-oauth-refresh.md) §"B 격하 근거" | Anthropic spec 미공개·cred 파일 race·client_id 폐기 위험. A+D로 80% 효과 달성. **always-spot-check** (진행 결정 시) |
 
 ---
 
@@ -55,7 +54,8 @@
 | v2.0.0-alpha — Tauri 2 + Liquid Glass 재작성 | `7d66dd4` | 2026-05-19 |
 | v2.0.0-alpha.1 — 버전 5곳 정렬 + `Source/` 레거시 제거 | `4aa3443` | 2026-05-19 |
 | 하네스 setup (CLAUDE.md 7개 섹션 + BACKLOG + docs/sessions) — 현재진행 스냅샷·UI SOP·회귀 사례·검토 워크플로·Session handover·출력 규약·페르소나 자동 detect | `5250c8a` | 2026-05-19 |
-| 자동 업데이트 매니페스트 (`latest.json`) 빌드 활성 — signing key 발급·`createUpdaterArtifacts: true`·`scripts/make-updater-manifest.mjs`·.gitignore signing key 패턴 | (진행 중) | 2026-05-20 |
+| 자동 업데이트 매니페스트 (`latest.json`) 빌드 활성 — signing key 발급·`createUpdaterArtifacts: true`·`scripts/make-updater-manifest.mjs`·.gitignore signing key 패턴 | `b937337` | 2026-05-20 |
+| **OAuth 토큰 만료 회복 (A+D)** — `usage_api.rs` TOKEN_EXPIRED 응답·errorCode 파생 store·hero 위 ErrorBanner i18n(ko/en)·auto-sync 5분 default·`.credentials.json` mtime polling. 수동 재현(expiresAt=1) → banner 렌더 + 백업 복구 후 polling cycle 내 syncNow 자동 호출 확인 | `3d1e899` + 본 커밋 | 2026-05-20 |
 
 ---
 
