@@ -6,6 +6,10 @@ pub struct Pricing {
     pub input: f64,
     pub output: f64,
     pub cache_write_5m: f64,
+    // 현재 `cost_usd`는 cache_creation을 모두 5m 단가로 계산. 1h 단가는
+    // Anthropic 공식 가격 테이블의 일부로 보존 — jsonl에 1h/5m 구분이
+    // 들어오면 활성화.
+    #[allow(dead_code)]
     pub cache_write_1h: f64,
     pub cache_read: f64,
 }
