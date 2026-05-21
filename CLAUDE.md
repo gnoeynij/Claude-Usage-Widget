@@ -93,6 +93,9 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
     앞쪽에 있으면 cargo가 그걸 호출해 *"Try 'link --help' for more
     information"* 같은 misleading 에러로 실패한다. 회피: vcvars64.bat
     소싱 또는 MSVC 경로 우선화 (회귀 사례 §1).
+  - macOS: Xcode Command Line Tools (`xcode-select --install`). 순정 머신
+    setup·미구현 영역·작업 흐름은 [`docs/macos-setup.md`](docs/macos-setup.md)
+    참조. v2.0.1 기준 macOS 분기는 *cfg 분기는 대부분 OK·실 구현은 미완*.
 - **최초 설치:** `npm install`
 - **개발 서버:** `npm run tauri dev`
 - **프로덕션 빌드:** `npm run tauri build`

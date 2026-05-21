@@ -31,7 +31,8 @@
 |---|---|---|---|
 | **자동화 테스트 도입 검토** | 인프라·품질 | [CLAUDE.md "테스트 프레임워크"](CLAUDE.md) | 현재 0%. 후보: (a) Rust 단위 테스트 — `jsonl_aggregator`·`pricing`·`migration`이 순수 함수 비중 커서 ROI 높음. (b) Vitest — `src/state/store.ts` Solid 신호 로직. (c) Playwright — Tauri WebView 한정이라 dev URL에서만, 실 .exe 시각 회귀는 여전히 `capture-widget.ps1` 의존. 1인 사이드 프로젝트 ROI 고려해 (a)부터. |
 | **Win10 호환 검증** | 시각 회귀 | [vibrancy_win.rs](src-tauri/src/vibrancy_win.rs) | Mica/Acrylic은 Win11 전제. Win10에서 fallback이 정상인지 실 머신 확인 필요. |
-| **모바일 외 OS 지원** | 인프라 | (없음) | macOS·Linux는 Tauri 2가 지원하나 OAuth 사용량 API + `.credentials.json` 경로·vibrancy_win 분기·NSIS만 빌드 등 다수 작업 필요. 수요 신호 있을 때만. |
+| **macOS 지원 작업 진입** | 인프라 | [`docs/macos-setup.md`](docs/macos-setup.md) | 순정 맥북 setup 가이드 작성 완료. cfg 분기 대부분 OK ([lib.rs](src-tauri/src/lib.rs)·[migration.rs](src-tauri/src/migration.rs)·[Cargo.toml](src-tauri/Cargo.toml)). 미구현: `vibrancy_mac` (NSVisualEffectView) / 자동 시작 (LaunchAgent) / [tauri.conf.json](src-tauri/tauri.conf.json) `bundle.targets` macOS 분기 / [tray.rs](src-tauri/src/tray.rs) 메뉴바 동작 검증 / `.credentials.json` 경로 확인. 첫 빌드 시도로 실 깨짐 영역 회수 권장. |
+| **Linux 지원** | 인프라 | (없음) | Tauri 2가 지원하나 OAuth + `.credentials.json` 경로 + vibrancy 미구현 + AppImage·deb 분기 등 macOS와 별개. 수요 신호 있을 때만. |
 
 ---
 
