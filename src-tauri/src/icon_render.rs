@@ -101,8 +101,9 @@ fn render_pixel_halo(pct: f64, alpha_factor: f32) -> Vec<u8> {
     let core_alpha = (235.0 * alpha_factor) as u8;
     draw_halo(&mut pixmap, r, g, b, core_alpha);
 
-    // Crab cap 250 — halo 와 같이 가시성 ↑.
-    let crab_alpha = (250.0 * (0.7 + 0.3 * alpha_factor)) as u8;
+    // Crab + stroke 정적 유지 — halo 만 호흡. brand identity 가 매 frame
+    // 명확. (사용자 1번 옵션 시험)
+    let crab_alpha = 250u8;
     let crab_x = (SIZE - CRAB_W) / 2;
     let crab_y = (SIZE - CRAB_H) / 2;
     // Stroke 먼저 (검정) → 흰 crab 이 본체 영역 덮어 외곽 1px 만 stroke 남음
@@ -119,7 +120,8 @@ fn render_error(alpha_factor: f32) -> Vec<u8> {
     let core_alpha = (220.0 * alpha_factor) as u8;
     draw_halo(&mut pixmap, 140, 140, 150, core_alpha);
 
-    let crab_alpha = (180.0 * (0.7 + 0.3 * alpha_factor)) as u8;
+    // Error 상태에서도 crab 정적 — 일관성
+    let crab_alpha = 180u8;
     let crab_x = (SIZE - CRAB_W) / 2;
     let crab_y = (SIZE - CRAB_H) / 2;
     blit_stroke(&mut pixmap, crab_x, crab_y, crab_alpha);
