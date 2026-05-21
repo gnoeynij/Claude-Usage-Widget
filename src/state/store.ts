@@ -299,6 +299,12 @@ export async function initStore() {
   await loadModeSizes();
   await loadBreatheEnabled();
 
+  // Apply current mode's size on boot — otherwise tauri.conf.json 의 초기
+  // 사이즈가 그대로 보임 (사용자 신고: "처음 Normal 화면이 옛 사이즈, 모드
+  // 전환해야 정상"). onResized listener 등록 *전*이라 이 호출은 자기 자신을
+  // user-resize 로 잘못 기록하지 않음.
+  applyModeSize(store.mode);
+
   // Watch user-driven resizes. Debounce so a drag doesn't write 100 times,
   // and ignore any change within ~1s of a programmatic setMode invoke.
   const win = getCurrentWindow();

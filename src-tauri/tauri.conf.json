@@ -14,10 +14,10 @@
       {
         "label": "main",
         "title": "Claude Widget",
-        "width": 360,
-        "height": 420,
+        "width": 320,
+        "height": 360,
         "minWidth": 240,
-        "minHeight": 160,
+        "minHeight": 112,
         "decorations": false,
         "transparent": true,
         "shadow": false,
