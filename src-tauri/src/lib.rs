@@ -75,21 +75,17 @@ pub fn run() {
                 Err(e) => log::warn!("setup: migration failed: {}", e),
             }
 
-            // Boot 시점에 halo icon 으로 window + tray 즉시 갱신 — 그렇지
-            // 않으면 첫 sync(0.5~1초) 까지 .exe 기본 icon(crab outline) 이
-            // 작업표시줄에 보임. 사용자 신고: "작업표시줄이 .exe icon 그대로".
-            // 0% 녹색 halo (정상 상태) — 첫 sync 후 진짜 pct 로 덮어씀.
+            // Boot 시점에 tray icon 즉시 halo 로 — 첫 sync 까지 .ico 기본
+            // 이 트레이에 보이는 걸 방지. 작업표시줄 item icon 은 *.exe
+            // icon 그대로* (window 와 작업표시줄 = .exe icon, tray 별도 정책).
             let (rgba, w, h) = icon_render::render_gauge_rgba(0.0, 1.0);
-            let img_win = tauri::image::Image::new_owned(rgba.clone(), w, h);
             let img_tray = tauri::image::Image::new_owned(rgba, w, h);
-            if let Err(e) = window.set_icon(img_win) {
-                log::warn!("setup: initial window icon failed: {}", e);
-            }
             if let Some(tray) = app.tray_by_id(crate::tray::TRAY_ID) {
                 if let Err(e) = tray.set_icon(Some(img_tray)) {
                     log::warn!("setup: initial tray icon failed: {}", e);
                 }
             }
+            let _ = &window;
 
             Ok(())
         })

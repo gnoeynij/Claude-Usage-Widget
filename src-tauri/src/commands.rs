@@ -118,17 +118,13 @@ pub async fn set_usage_icon(
     pct: f64,
     alpha: Option<f32>,
 ) -> Result<(), String> {
-    use tauri::Manager;
     let alpha = alpha.unwrap_or(1.0);
     let (rgba, w, h) = crate::icon_render::render_gauge_rgba(pct, alpha);
-    // Two clones because the tray and the window each take ownership.
-    let img_tray = tauri::image::Image::new_owned(rgba.clone(), w, h);
-    let img_win = tauri::image::Image::new_owned(rgba, w, h);
+    // 트레이만 동적 갱신. 작업표시줄 item icon = .exe icon 정적
+    // (사용자 정책: "작업표시줄 = 윈도우 icon ≠ 시스템 트레이").
+    let img_tray = tauri::image::Image::new_owned(rgba, w, h);
     if let Some(tray) = app.tray_by_id(crate::tray::TRAY_ID) {
         tray.set_icon(Some(img_tray)).map_err(|e| e.to_string())?;
-    }
-    if let Some(win) = app.get_webview_window("main") {
-        win.set_icon(img_win).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
