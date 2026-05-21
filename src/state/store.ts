@@ -208,10 +208,11 @@ function startBreathing() {
     const t = ((Date.now() - t0) % BREATH_CYCLE_MS) / BREATH_CYCLE_MS;
     // sine wave: starts at min, peaks at mid-cycle, back to min
     const sine = 0.5 - 0.5 * Math.cos(t * Math.PI * 2);
-    // Range 0.7 → 1.0. Swing 폭 0.3 → 은은한 호흡(사용자 표현). min phase 가
-    // 너무 dim 되지 않아 가시성 보존. Rust 측 cap 220 과 곱해져 실제 시각
-    // alpha 는 154/255~220/255 (≈ 60%~86%).
-    const alpha = 0.7 + 0.3 * sine;
+    // Range 0.5 → 1.0. Swing 폭 0.5 — "호흡이 너무 은은하다" 피드백.
+    // Rust 측 cap 235 + crab 외곽 stroke 덕에 min phase(46%) 에서도 픽셀
+    // 형태 인지 가능. 실 alpha range 117/255~235/255 (≈ 46%~92%) 라
+    // 호흡감 또렷.
+    const alpha = 0.5 + 0.5 * sine;
     void invoke("set_usage_icon", { pct: lastUsagePct, alpha }).catch(() => {});
   }, BREATH_TICK_MS);
 }
