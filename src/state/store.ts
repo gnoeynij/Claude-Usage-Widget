@@ -473,9 +473,6 @@ export function setOpacity(opacityPct: number) {
   const mult = 1 - clamped / 100;
   document.documentElement.style.setProperty("--bg-alpha-mult", String(mult));
   void invoke("set_mica_enabled", { enabled: clamped === 0 }).catch(() => {});
-  // Legacy paths cleaned up (v1.5 CSS opacity + OS-level layered alpha).
-  document.documentElement.style.opacity = "";
-  document.documentElement.style.removeProperty("--blur-mult");
 }
 
 function applyDarkClass(dark: boolean) {

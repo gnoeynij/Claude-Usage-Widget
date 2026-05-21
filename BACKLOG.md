@@ -22,7 +22,6 @@
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
 | **버전 단일 출처 헬퍼** | 인프라 | [회귀 사례 §3](CLAUDE.md) | `package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml` / `src-tauri/Cargo.lock` / `src/state/store.ts` 5곳 동시 bump. `scripts/bump-version.mjs` 또는 README 체크리스트 중 택1. 4aa3443에서 한 번 손으로 정렬 — 다음 bump 전엔 자동화. |
-| **`set_window_opacity` 명령 dead code 제거** | 코드 위생 | [commands.rs:43](src-tauri/src/commands.rs) | opacity fix를 Mica 토글 + CSS mult로 옮긴 뒤 frontend 호출자 0건. `apply_opacity_win` + `FULL_OPACITY_THRESHOLD` + `set_window_opacity` 모두 dead. lib.rs `invoke_handler` 등록도 같이 제거. 다음 청소 사이클. |
 
 ---
 
@@ -60,6 +59,7 @@
 | CLAUDE.md 문서 정렬 — "사전 요구"에 `link.exe` PATH 충돌 회피 메모 + "빌드 후 동작 워크플로"의 산출물 이름 `Claude Widget.exe` → `claude-widget.exe` (Cargo `[package] name` 이 진실 출처) | (본 커밋) | 2026-05-20 |
 | **opacity slider fix (5번 실패 영역)** — 진짜 원인은 Mica vibrancy가 panel fade를 시각적으로 묻힘. fix: `vibrancy_win::clear_vibrancy` + `set_mica_enabled` command + setOpacity가 opacity 0/>0 에 따라 Mica 토글. `--glass-base-alpha` 1.0 (light/dark 모두). 검증: 0% Mica on alpha 1.0·50% Mica off alpha 0.5 (뒤 GitHub README 비침)·100% Mica off alpha 0 (panel 완전 투명) 3컷 캡처 확인 | (본 커밋) | 2026-05-20 |
 | **v2.0.0 stable** — 자동 업데이트 frontend (3s silent + manual button + restart) + 모드별 리사이즈 (mini/normal/detail + persist) + UI 폴리시 (Mini visionOS handle + SegmentedControl grid) + 로그 진단 (`widget.log` + open log dir 버튼은 backlog로 제거) + 리팩토링 (utils/{math,format,color,error} + createMemo + 일부 dead code) + 트레이/태스크바 아이콘 v2 (radial halo + Gaussian gradient 5-stop + 흰 crab + 1px 검은 stroke + 호흡 + Settings toggle + error 우상단 빨간 dot). 버전 6곳(`package.json`/`package-lock.json`/`tauri.conf.json`/`Cargo.toml`/`Cargo.lock`/`store.ts`) `2.0.0-alpha.1` → `2.0.0`. | (이번 세션) | 2026-05-21 |
+| **v2.0.1 dead code 청소** — `set_window_opacity` + `apply_opacity_win` + `FULL_OPACITY_THRESHOLD` (commands.rs) + lib.rs invoke_handler 등록 + Cargo.toml `Win32_UI_WindowsAndMessaging` feature + `--blur-mult` (tokens.css 정의 + store.ts removeProperty) + store.ts `style.opacity = ""` legacy cleanup 한 묶음 제거. opacity 처리가 v2.0 Mica 토글 + CSS mult로 옮긴 뒤 잔존이었음. typecheck + cargo check exit 0. | (이번 세션) | 2026-05-21 |
 
 ---
 

@@ -1,13 +1,6 @@
 use crate::jsonl_aggregator;
 use crate::usage_api;
 
-/// At or above this alpha, treat the window as fully opaque and strip the
-/// layered-window bit so DWM Mica/Acrylic resumes painting. Picked just
-/// below 1.0 so the round-trip 100% slider value (1.0 exact in JS) lands
-/// here even after f64 rounding.
-#[cfg(target_os = "windows")]
-const FULL_OPACITY_THRESHOLD: f64 = 0.999;
-
 #[tauri::command]
 pub async fn fetch_usage() -> Result<usage_api::UsageOutput, String> {
     usage_api::fetch_usage().await.map_err(|e| e.to_string())
@@ -33,57 +26,6 @@ pub async fn set_always_on_top(window: tauri::Window, value: bool) -> Result<(),
     // When pinned on top, also hide from taskbar / Alt-Tab — matches the
     // v1.5.x behavior users expect from a "stay out of the way" widget.
     window.set_skip_taskbar(value).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-/// OS-level whole-window alpha — matches PyQt6 setWindowOpacity from v1.5.x.
-/// At alpha 1.0 the layered-window bit is removed so Mica vibrancy can paint
-/// through; at any lower value the window becomes a layered window so the
-/// entire surface (Mica included) fades together.
-#[tauri::command]
-pub async fn set_window_opacity(window: tauri::Window, value: f64) -> Result<(), String> {
-    let clamped = value.clamp(0.10_f64, 1.0_f64);
-    let alpha = (clamped * 255.0).round() as u8;
-    #[cfg(target_os = "windows")]
-    {
-        let hwnd = window.hwnd().map_err(|e| e.to_string())?;
-        apply_opacity_win(hwnd, alpha, clamped >= FULL_OPACITY_THRESHOLD)
-            .map_err(|e| e.to_string())?;
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = (window, alpha);
-    }
-    Ok(())
-}
-
-#[cfg(target_os = "windows")]
-fn apply_opacity_win(
-    hwnd: windows::Win32::Foundation::HWND,
-    alpha: u8,
-    fully_opaque: bool,
-) -> windows::core::Result<()> {
-    use windows::Win32::Foundation::COLORREF;
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GetWindowLongPtrW, SetLayeredWindowAttributes, SetWindowLongPtrW,
-        GWL_EXSTYLE, LWA_ALPHA, WS_EX_LAYERED,
-    };
-
-    let layered_bit = WS_EX_LAYERED.0 as isize;
-    unsafe {
-        let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-        if fully_opaque {
-            // Strip the layered bit so DWM Mica/Acrylic resumes painting.
-            if ex_style & layered_bit != 0 {
-                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style & !layered_bit);
-            }
-        } else {
-            if ex_style & layered_bit == 0 {
-                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style | layered_bit);
-            }
-            SetLayeredWindowAttributes(hwnd, COLORREF(0), alpha, LWA_ALPHA)?;
-        }
-    }
     Ok(())
 }
 

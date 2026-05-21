@@ -45,7 +45,6 @@ pub fn run() {
             commands::credentials_mtime,
             commands::aggregate_detail,
             commands::set_always_on_top,
-            commands::set_window_opacity,
             commands::set_mica_enabled,
             commands::set_usage_icon,
             commands::set_window_size,
