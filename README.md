@@ -63,7 +63,14 @@ Settings → "Open logs folder" reveals `widget.log` with timestamped entries fo
    - **Settings** — `⚙` button in the header
 5. **Auto-sync** — Settings → Auto sync (`Off / 5m / 10m / 30m / 1h`, default `5m`).
 
-> Screenshots will be refreshed for v2.0.x — the previous shots in `docs/` were from the v1.5.x PyQt6 build.
+<p align="center">
+  <img src="docs/screenshots/normal.png" alt="Normal mode" width="280" />
+  &nbsp;
+  <img src="docs/screenshots/detail.png" alt="Detail mode" width="420" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/mini.png" alt="Mini mode" width="320" />
+</p>
 
 This is an unsigned-installer personal open-source build, so Windows SmartScreen may warn you on first launch. It is not malware — click `More info → Run anyway` to proceed.
 

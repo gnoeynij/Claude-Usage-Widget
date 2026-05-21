@@ -63,7 +63,14 @@ Settings → "로그 폴더 열기" 버튼이 `widget.log`를 보여줌. 모든 
    - **설정** — 헤더 `⚙` 버튼
 5. **자동 동기화** — Settings → Auto sync (`Off / 5m / 10m / 30m / 1h`, default `5m`).
 
-> 스크린샷은 v2.0.x로 곧 갱신 예정 — `docs/` 폴더의 기존 캡처는 v1.5.x PyQt6 시점입니다.
+<p align="center">
+  <img src="docs/screenshots/normal.png" alt="Normal 모드" width="280" />
+  &nbsp;
+  <img src="docs/screenshots/detail.png" alt="Detail 모드" width="420" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/mini.png" alt="Mini 모드" width="320" />
+</p>
 
 본 프로그램은 개인 오픈소스 빌드로 인스톨러에 디지털 서명이 되어 있지 않아 Windows SmartScreen 경고가 표시될 수 있습니다. 악성코드가 아니므로 `추가 정보 → 실행`을 눌러 진행하시면 됩니다.
 
