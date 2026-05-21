@@ -13,6 +13,7 @@ export const en = {
   alwaysOnTop: "Always on top",
   darkMode: "Dark mode",
   opacity: "Background opacity",
+  breathe: "Tray icon breathing",
 
   updateAvailable: "Update available",
   checkForUpdates: "Check for updates",

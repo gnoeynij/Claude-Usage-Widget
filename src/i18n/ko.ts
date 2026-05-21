@@ -15,6 +15,7 @@ export const ko: Strings = {
   alwaysOnTop: "항상 위",
   darkMode: "다크 모드",
   opacity: "배경 투명도",
+  breathe: "트레이 아이콘 호흡",
 
   updateAvailable: "업데이트 있음",
   checkForUpdates: "업데이트 확인",

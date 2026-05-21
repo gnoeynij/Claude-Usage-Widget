@@ -8,54 +8,73 @@
 //! 배경 색 자체가 threshold 신호(녹/주/적, Apple stoplight). 외곽은 alpha 0으로
 //! fade out 되어 사각형 윤곽 없이 자연스레 OS 합성과 어우러짐.
 //!
-//! Source PNG는 `src/assets/claude-header.png` (256×160), 컴파일 타임 embed.
+//! `alpha_factor` 는 0.0~1.0 범위의 전체 alpha 곱. frontend 의 breathing tick
+//! 이 매 100ms 마다 sine wave 값을 보내 발광체가 호흡하는 효과.
 
 use image::imageops::FilterType;
+use once_cell::sync::Lazy;
 use tiny_skia::{
     Color, FillRule, GradientStop, Paint, PathBuilder, Pixmap, Point, RadialGradient, Rect,
     SpreadMode, Transform,
 };
 
 const SIZE: u32 = 128;
+const CRAB_W: u32 = 90;
+// 90 * 160 / 256 = 56.25 → 56. const fn 산술이 제한적이라 하드코딩.
+const CRAB_H: u32 = 56;
 
 /// Anthropic pixel mark, embedded so the tray icon ships in the .exe.
 const CRAB_PNG: &[u8] = include_bytes!("../../src/assets/claude-header.png");
 
-pub fn render_gauge_rgba(pct: f64) -> (Vec<u8>, u32, u32) {
+/// Pre-decoded + resized crab. PNG decode + Lanczos3 resize 는 무거워서
+/// breathing(100ms tick) 시점에 매번 하면 CPU 부담이 누적된다. 캐시로
+/// 한 번만 처리하고 blit 시점에는 byte 복사 + alpha 합성만.
+static CACHED_CRAB: Lazy<Vec<u8>> = Lazy::new(|| {
+    let img = image::load_from_memory_with_format(CRAB_PNG, image::ImageFormat::Png)
+        .expect("decode crab");
+    let resized = img.resize_exact(CRAB_W, CRAB_H, FilterType::Lanczos3);
+    resized.to_rgba8().into_raw()
+});
+
+pub fn render_gauge_rgba(pct: f64, alpha_factor: f32) -> (Vec<u8>, u32, u32) {
     let bytes = if pct < 0.0 {
-        render_error()
+        render_error(alpha_factor)
     } else {
-        render_pixel_halo(pct)
+        render_pixel_halo(pct, alpha_factor)
     };
     (bytes, SIZE, SIZE)
 }
 
-fn render_pixel_halo(pct: f64) -> Vec<u8> {
+fn render_pixel_halo(pct: f64, alpha_factor: f32) -> Vec<u8> {
     let pct = pct.clamp(0.0, 100.0) as f32;
+    let alpha_factor = alpha_factor.clamp(0.0, 1.0);
     let mut pixmap = Pixmap::new(SIZE, SIZE).expect("pixmap alloc");
 
     let (r, g, b) = threshold_rgb(pct);
-    draw_halo(&mut pixmap, r, g, b, 255);
+    let core_alpha = (255.0 * alpha_factor) as u8;
+    draw_halo(&mut pixmap, r, g, b, core_alpha);
 
-    let crab_w = 90u32;
-    let crab_h = (crab_w as f32 * 160.0 / 256.0) as u32;
-    let crab_x = (SIZE - crab_w) / 2;
-    let crab_y = (SIZE - crab_h) / 2;
-    blit_png_tinted(&mut pixmap, CRAB_PNG, crab_x, crab_y, crab_w, crab_h, 255, 255, 255, 255);
+    // Crab 도 살짝 호흡 — 단 완전히 사라지지 않도록 0.7~1.0 range 로 잡아
+    // brand identity 가 매 frame 인식되도록 유지.
+    let crab_alpha = (255.0 * (0.7 + 0.3 * alpha_factor)) as u8;
+    let crab_x = (SIZE - CRAB_W) / 2;
+    let crab_y = (SIZE - CRAB_H) / 2;
+    blit_crab_tinted(&mut pixmap, crab_x, crab_y, 255, 255, 255, crab_alpha);
 
     pixmap.take()
 }
 
-fn render_error() -> Vec<u8> {
+fn render_error(alpha_factor: f32) -> Vec<u8> {
+    let alpha_factor = alpha_factor.clamp(0.0, 1.0);
     let mut pixmap = Pixmap::new(SIZE, SIZE).expect("pixmap alloc");
     // Neutral grey halo — 색 신호 부재 = "데이터 없음"
-    draw_halo(&mut pixmap, 140, 140, 150, 220);
+    let core_alpha = (220.0 * alpha_factor) as u8;
+    draw_halo(&mut pixmap, 140, 140, 150, core_alpha);
 
-    let crab_w = 90u32;
-    let crab_h = (crab_w as f32 * 160.0 / 256.0) as u32;
-    let crab_x = (SIZE - crab_w) / 2;
-    let crab_y = (SIZE - crab_h) / 2;
-    blit_png_tinted(&mut pixmap, CRAB_PNG, crab_x, crab_y, crab_w, crab_h, 255, 255, 255, 180);
+    let crab_alpha = (180.0 * (0.7 + 0.3 * alpha_factor)) as u8;
+    let crab_x = (SIZE - CRAB_W) / 2;
+    let crab_y = (SIZE - CRAB_H) / 2;
+    blit_crab_tinted(&mut pixmap, crab_x, crab_y, 255, 255, 255, crab_alpha);
 
     pixmap.take()
 }
@@ -95,37 +114,27 @@ fn draw_halo(pixmap: &mut Pixmap, r: u8, g: u8, b: u8, core_alpha: u8) {
     pixmap.fill_path(&rect_path, &paint, FillRule::Winding, Transform::identity(), None);
 }
 
-/// Decode PNG, resize with Lanczos3, *tint* RGB to (tr, tg, tb), preserve alpha
-/// (multiplied by `alpha_mult/255`), premultiply, and source-over composite
-/// into pixmap. tiny-skia stores premultiplied RGBA; image crate returns
-/// straight RGBA, so we both premultiply *and* blend manually.
+/// Source-over composite of cached crab buffer onto pixmap, with RGB tinted to
+/// (tr, tg, tb) and alpha multiplied by `alpha_mult/255`. tiny-skia stores
+/// premultiplied RGBA; image crate returns straight RGBA, so we both
+/// premultiply *and* blend manually.
 #[allow(clippy::too_many_arguments)]
-fn blit_png_tinted(
+fn blit_crab_tinted(
     pixmap: &mut Pixmap,
-    png: &[u8],
     dx: u32,
     dy: u32,
-    w: u32,
-    h: u32,
     tr: u8,
     tg: u8,
     tb: u8,
     alpha_mult: u8,
 ) {
-    let img = match image::load_from_memory_with_format(png, image::ImageFormat::Png) {
-        Ok(i) => i,
-        Err(_) => return,
-    };
-    let resized = img.resize_exact(w, h, FilterType::Lanczos3);
-    let rgba_img = resized.to_rgba8();
-    let (iw, ih) = rgba_img.dimensions();
-    let rgba = rgba_img.as_raw();
+    let rgba = &*CACHED_CRAB;
     let canvas_w = pixmap.width();
     let canvas_h = pixmap.height();
     let canvas_bytes = pixmap.data_mut();
-    for y in 0..ih {
-        for x in 0..iw {
-            let src_idx = ((y * iw + x) * 4) as usize;
+    for y in 0..CRAB_H {
+        for x in 0..CRAB_W {
+            let src_idx = ((y * CRAB_W + x) * 4) as usize;
             let src_a = rgba[src_idx + 3];
             if src_a == 0 {
                 continue;

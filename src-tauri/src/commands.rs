@@ -113,9 +113,14 @@ pub async fn set_mica_enabled(window: tauri::WebviewWindow, enabled: bool) -> Re
 /// `fetch_usage`. Threshold colors match the in-app CapsuleProgress tokens
 /// (accent / warning / danger).
 #[tauri::command]
-pub async fn set_usage_icon(app: tauri::AppHandle, pct: f64) -> Result<(), String> {
+pub async fn set_usage_icon(
+    app: tauri::AppHandle,
+    pct: f64,
+    alpha: Option<f32>,
+) -> Result<(), String> {
     use tauri::Manager;
-    let (rgba, w, h) = crate::icon_render::render_gauge_rgba(pct);
+    let alpha = alpha.unwrap_or(1.0);
+    let (rgba, w, h) = crate::icon_render::render_gauge_rgba(pct, alpha);
     // Two clones because the tray and the window each take ownership.
     let img_tray = tauri::image::Image::new_owned(rgba.clone(), w, h);
     let img_win = tauri::image::Image::new_owned(rgba, w, h);

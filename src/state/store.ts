@@ -115,6 +115,8 @@ type StoreShape = {
   updateInfo: UpdateInfo | null;
   updateDownloadPct: number;
   modeSizes: ModeSizes;
+  /** Tray icon breathing pulse. Default ON; toggle from Settings. */
+  breatheEnabled: boolean;
 };
 
 const [store, setStore] = createStore<StoreShape>({
@@ -137,6 +139,7 @@ const [store, setStore] = createStore<StoreShape>({
   updateInfo: null,
   updateDownloadPct: 0,
   modeSizes: { mini: null, normal: null, detail: null },
+  breatheEnabled: true,
 });
 
 export { store, setStore };
@@ -149,6 +152,17 @@ let lastCredentialsMtime: number | null = null;
 let resizeSuppressUntil = 0;
 let resizeDebounce: number | null = null;
 let persistStorePromise: Promise<TauriStore> | null = null;
+// Last known 5-hour usage pct. The breathing tick re-renders the tray icon
+// every 100ms with this value + a sine-modulated alpha, so we need to keep it
+// outside the store (Solid signals are overkill for a render-loop scalar).
+// `-1` means error state — keep static, don't breathe (info beats animation).
+let lastUsagePct = 0;
+let breathTimer: number | null = null;
+const BREATH_CYCLE_MS = 3000;
+// Slower than 100ms — Windows shell appears to throttle very fast tray-icon
+// updates, flattening the visible alpha swing. 200ms (5fps) still reads as
+// smooth breathing and leaves the OS room to actually repaint each frame.
+const BREATH_TICK_MS = 200;
 
 function getPersistStore(): Promise<TauriStore> {
   if (!persistStorePromise) {
@@ -164,6 +178,62 @@ async function persistModeSizes() {
     await ps.save();
   } catch (e) {
     console.error("persist modeSizes failed", e);
+  }
+}
+
+async function persistBreatheEnabled(v: boolean) {
+  try {
+    const ps = await getPersistStore();
+    await ps.set("breatheEnabled", v);
+    await ps.save();
+  } catch (e) {
+    console.error("persist breatheEnabled failed", e);
+  }
+}
+
+async function loadBreatheEnabled() {
+  try {
+    const ps = await getPersistStore();
+    const v = await ps.get<boolean>("breatheEnabled");
+    if (typeof v === "boolean") setStore("breatheEnabled", v);
+  } catch (e) {
+    console.error("load breatheEnabled failed", e);
+  }
+}
+
+function startBreathing() {
+  if (breathTimer !== null) return;
+  const t0 = Date.now();
+  breathTimer = window.setInterval(() => {
+    const t = ((Date.now() - t0) % BREATH_CYCLE_MS) / BREATH_CYCLE_MS;
+    // sine wave: starts at min, peaks at mid-cycle, back to min
+    const sine = 0.5 - 0.5 * Math.cos(t * Math.PI * 2);
+    // Range 0.4 → 1.0. At 22px tray size, alpha differences compress visually
+    // (Weber's law on small areas), so the swing needs to be wider than feels
+    // necessary in a 256×256 preview. 0.4 still keeps the color signal legible.
+    const alpha = 0.4 + 0.6 * sine;
+    void invoke("set_usage_icon", { pct: lastUsagePct, alpha }).catch(() => {});
+  }, BREATH_TICK_MS);
+}
+
+function stopBreathing() {
+  if (breathTimer !== null) {
+    window.clearInterval(breathTimer);
+    breathTimer = null;
+  }
+}
+
+export function setBreatheEnabled(value: boolean) {
+  setStore("breatheEnabled", value);
+  void persistBreatheEnabled(value);
+  if (value && lastUsagePct >= 0) {
+    startBreathing();
+  } else {
+    stopBreathing();
+    // Restore static full-opacity icon so the user immediately sees the
+    // toggle take effect (otherwise the tray sits at whatever alpha the last
+    // breath tick left).
+    void invoke("set_usage_icon", { pct: lastUsagePct, alpha: 1.0 }).catch(() => {});
   }
 }
 
@@ -227,6 +297,7 @@ export async function initStore() {
   // Restore per-mode sizes from disk before wiring the resize listener — we
   // don't want our own load to be picked up as a "user resize".
   await loadModeSizes();
+  await loadBreatheEnabled();
 
   // Watch user-driven resizes. Debounce so a drag doesn't write 100 times,
   // and ignore any change within ~1s of a programmatic setMode invoke.
@@ -317,7 +388,12 @@ export async function syncNow() {
     // Re-paint tray + taskbar icon with the fresh 5-hour session percent so
     // the gauge in the tray matches the one in the widget. Best-effort —
     // failure is non-fatal (icon stays on previous render).
-    void invoke("set_usage_icon", { pct: usage.five_hour }).catch(() => {});
+    lastUsagePct = usage.five_hour;
+    if (store.breatheEnabled) {
+      startBreathing();
+    } else {
+      void invoke("set_usage_icon", { pct: usage.five_hour }).catch(() => {});
+    }
     void info(`sync ok ${Date.now() - t0}ms`);
   } catch (e) {
     const msg = toErrorMessage(e);
@@ -325,9 +401,10 @@ export async function syncNow() {
     const code = parseErrorCode(msg);
     setStore("errorCode", code);
     void warn(`sync failed ${Date.now() - t0}ms code=${code ?? "UNKNOWN"} msg=${msg}`);
-    // Swap the tray icon to the error state (grey outline + red "!") so the
-    // user sees "disconnected" at a glance instead of a stale usage gauge.
-    // -1 is the sentinel for render_error() on the Rust side.
+    // Swap the tray icon to the error state (grey halo) and stop the breath —
+    // a pulsing error icon distracts more than it informs.
+    lastUsagePct = -1;
+    stopBreathing();
     void invoke("set_usage_icon", { pct: -1 }).catch(() => {});
   } finally {
     setStore("syncing", false);

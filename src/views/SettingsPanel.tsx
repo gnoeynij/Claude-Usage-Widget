@@ -11,6 +11,7 @@ import {
   setAlwaysOnTop,
   setSyncIntervalMin,
   setOpacity,
+  setBreatheEnabled,
   type Lang,
 } from "../state/store";
 import { checkForUpdate, installUpdate } from "../state/updater";
@@ -320,6 +321,11 @@ export function SettingsPanel() {
           label={t().darkMode}
           checked={store.dark}
           onChange={setDark}
+        />
+        <SwitchRow
+          label={t().breathe}
+          checked={store.breatheEnabled}
+          onChange={setBreatheEnabled}
         />
         <Section label={t().opacity}>
           <input
