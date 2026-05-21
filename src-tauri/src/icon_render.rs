@@ -51,16 +51,14 @@ fn render_pixel_halo(pct: f64, alpha_factor: f32) -> Vec<u8> {
     let mut pixmap = Pixmap::new(SIZE, SIZE).expect("pixmap alloc");
 
     let (r, g, b) = threshold_rgb(pct);
-    // Cap halo core alpha at 200 (~78%) — full 255 가 트레이에서 *너무 진해*
-    // 라는 피드백. 78% 까지 내려도 색 신호는 인지 가능하면서 발광체 톤이
-    // 한결 부드러워짐.
-    let core_alpha = (200.0 * alpha_factor) as u8;
+    // Cap halo core alpha at 235 (~92%). 가시성 부족 피드백에 따라 ↑.
+    // 100% 보단 여전히 부드러움 보존. swing 0.7~1.0 와 곱해져 실제
+    // 시각 core alpha 는 164~235 (≈ 64%~92%) 라 항상 인지 가능.
+    let core_alpha = (235.0 * alpha_factor) as u8;
     draw_halo(&mut pixmap, r, g, b, core_alpha);
 
-    // Crab 도 살짝 호흡 — 단 완전히 사라지지 않도록 0.7~1.0 range 로 잡아
-    // brand identity 가 매 frame 인식되도록 유지. 220 cap 으로 halo 와
-    // 톤 균형.
-    let crab_alpha = (220.0 * (0.7 + 0.3 * alpha_factor)) as u8;
+    // Crab cap 250 — halo 와 같이 가시성 ↑.
+    let crab_alpha = (250.0 * (0.7 + 0.3 * alpha_factor)) as u8;
     let crab_x = (SIZE - CRAB_W) / 2;
     let crab_y = (SIZE - CRAB_H) / 2;
     blit_crab_tinted(&mut pixmap, crab_x, crab_y, 255, 255, 255, crab_alpha);
@@ -92,11 +90,14 @@ fn draw_halo(pixmap: &mut Pixmap, r: u8, g: u8, b: u8, core_alpha: u8) {
     let halo_r = 62.0;
 
     let core = core_alpha as f32;
+    // Stops 분포: core 영역을 두텁게(0.3 까지 90%) 유지해 *면적 평균 alpha*
+    // 가 충분하고, 0.55→0.8 사이만 본격 falloff. 단 stops 5 개 분포라
+    // 단일 sharp drop 없어 edge 가 명확히 안 보임 (이전 4-stop 회귀 방어).
     let stops = vec![
         GradientStop::new(0.0, Color::from_rgba8(r, g, b, core_alpha)),
-        GradientStop::new(0.25, Color::from_rgba8(r, g, b, (core * 0.82) as u8)),
-        GradientStop::new(0.5, Color::from_rgba8(r, g, b, (core * 0.46) as u8)),
-        GradientStop::new(0.75, Color::from_rgba8(r, g, b, (core * 0.17) as u8)),
+        GradientStop::new(0.3, Color::from_rgba8(r, g, b, (core * 0.9) as u8)),
+        GradientStop::new(0.55, Color::from_rgba8(r, g, b, (core * 0.65) as u8)),
+        GradientStop::new(0.8, Color::from_rgba8(r, g, b, (core * 0.3) as u8)),
         GradientStop::new(1.0, Color::from_rgba8(r, g, b, 0)),
     ];
     let shader = RadialGradient::new(
