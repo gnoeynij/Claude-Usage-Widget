@@ -325,6 +325,10 @@ export async function syncNow() {
     const code = parseErrorCode(msg);
     setStore("errorCode", code);
     void warn(`sync failed ${Date.now() - t0}ms code=${code ?? "UNKNOWN"} msg=${msg}`);
+    // Swap the tray icon to the error state (grey outline + red "!") so the
+    // user sees "disconnected" at a glance instead of a stale usage gauge.
+    // -1 is the sentinel for render_error() on the Rust side.
+    void invoke("set_usage_icon", { pct: -1 }).catch(() => {});
   } finally {
     setStore("syncing", false);
   }
