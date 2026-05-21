@@ -44,8 +44,16 @@ pub fn setup(app: &mut App) -> tauri::Result<()> {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            use tauri::tray::TrayIconEvent;
-            if let TrayIconEvent::DoubleClick { .. } = event {
+            use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
+            // Left click (mouse-up) toggles. DoubleClick 도 같이 fire 되지만
+            // 한 번의 single click 으로 toggle 충분. 사용자 신고: "X 로
+            // hide 한 후 다시 못 부름" — 트레이 좌클릭 미구현이 원인.
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
                 toggle_window(tray.app_handle());
             }
         })
