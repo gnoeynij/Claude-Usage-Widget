@@ -1,3 +1,7 @@
+// Paint::default() 후 set_color/anti_alias 재할당 패턴이 여러 함수에 반복.
+// struct literal 로 바꿔도 가독성 차이 없고 logic 동일이라 module-level silence.
+#![allow(clippy::field_reassign_with_default)]
+
 //! Runtime tray/taskbar icon — Anthropic pixel mark on radial-halo background.
 //!
 //! 변천:

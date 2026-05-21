@@ -235,7 +235,7 @@ gh release create vX.Y.Z --repo gnoeynij/Claude-Usage-Widget `
 
 이 섹션은 새 PC·새 Claude Code 세션이 이 프로젝트의 *현재 상태*를 빠르게 잡기 위한 요약. 사실이 바뀌면 갱신하고, 추정이 섞이면 명시한다.
 
-- **버전**: `v2.0.0-alpha.1` ([package.json](package.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml), [src/state/store.ts](src/state/store.ts) 모두 동일 — 다음 bump 시 5곳 일괄 갱신, [BACKLOG](BACKLOG.md) P1).
+- **버전**: `v2.0.0` ([package.json](package.json), [package-lock.json](package-lock.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml), [src-tauri/Cargo.lock](src-tauri/Cargo.lock), [src/state/store.ts](src/state/store.ts) 모두 동일 — 다음 bump 시 6곳 일괄 갱신, [BACKLOG](BACKLOG.md) P1).
 - **빌드**: `npm run tauri build` exit 0. Windows MSVC 14.44.35207 + rustc 1.95.0 + Node 환경에서 51~87s.
 - **자동화 테스트**: **없음.** 검증은 빌드된 `.exe` 실행 + UI 동작 + `capture-widget.ps1` 스크린샷으로 수동.
 - **알려진 빈 구멍** ([BACKLOG.md](BACKLOG.md) 참조):
