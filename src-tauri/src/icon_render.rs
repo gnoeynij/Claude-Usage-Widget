@@ -83,19 +83,20 @@ fn render_error(alpha_factor: f32) -> Vec<u8> {
     pixmap.take()
 }
 
-/// Radial halo: solid core fading to transparent at edges. Stops shape the
-/// "발광체" feel — inner mass stays opaque, fade only in outer 45% of radius.
-/// 외곽 alpha 0 으로 사각형 윤곽 없이 OS 합성과 자연스럽게 어우러짐.
+/// Radial halo: Gaussian-스러운 5-stop falloff. 이전엔 0~0.55 solid core
+/// 였다가 0.55~0.85 사이에 alpha 가 급강하해서 사용자에게 *경계선* 처럼
+/// 보였음. 점진적 stops 로 자연스러운 광원 falloff 흉내.
 fn draw_halo(pixmap: &mut Pixmap, r: u8, g: u8, b: u8, core_alpha: u8) {
     let cx = SIZE as f32 / 2.0;
     let cy = SIZE as f32 / 2.0;
     let halo_r = 62.0;
 
-    let mid_alpha = core_alpha / 4;
+    let core = core_alpha as f32;
     let stops = vec![
         GradientStop::new(0.0, Color::from_rgba8(r, g, b, core_alpha)),
-        GradientStop::new(0.55, Color::from_rgba8(r, g, b, core_alpha)),
-        GradientStop::new(0.85, Color::from_rgba8(r, g, b, mid_alpha)),
+        GradientStop::new(0.25, Color::from_rgba8(r, g, b, (core * 0.82) as u8)),
+        GradientStop::new(0.5, Color::from_rgba8(r, g, b, (core * 0.46) as u8)),
+        GradientStop::new(0.75, Color::from_rgba8(r, g, b, (core * 0.17) as u8)),
         GradientStop::new(1.0, Color::from_rgba8(r, g, b, 0)),
     ];
     let shader = RadialGradient::new(
