@@ -1,15 +1,20 @@
-//! Runtime tray/taskbar icon — Anthropic pixel mark on threshold-color background.
+//! Runtime tray/taskbar icon — Anthropic pixel mark on radial-halo background.
 //!
-//! W2 변형(픽셀 + bar)은 작은 trayicon 사이즈에서 bar가 거의 안 보였음.
-//! 더 명확한 신호 위해 *배경 색* 자체를 threshold(녹색/주황/빨강)로 칠하고
-//! 픽셀 크랩은 흰색 tint로 overlay. 16-24px 사이즈에서도 색은 분명히 인지됨.
+//! 변천:
+//! - W2(픽셀 + 하단 bar) → 작은 사이즈에서 bar가 사라짐
+//! - 픽셀 + rounded-square fill → "네이버 N 로고" 같다는 피드백
+//! - 픽셀 + radial halo (현재) → 부드러운 발광체 + brand identity
+//!
+//! 배경 색 자체가 threshold 신호(녹/주/적, Apple stoplight). 외곽은 alpha 0으로
+//! fade out 되어 사각형 윤곽 없이 자연스레 OS 합성과 어우러짐.
 //!
 //! Source PNG는 `src/assets/claude-header.png` (256×160), 컴파일 타임 embed.
-//! 흰색 tint는 직접 R/G/B 를 255로 치환하고 alpha 만 보존하는 방식
-//! (tiny-skia용 ColorMatrix가 없으므로 blit 시점에 한다).
 
 use image::imageops::FilterType;
-use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Transform};
+use tiny_skia::{
+    Color, FillRule, GradientStop, Paint, PathBuilder, Pixmap, Point, RadialGradient, Rect,
+    SpreadMode, Transform,
+};
 
 const SIZE: u32 = 128;
 
@@ -20,25 +25,20 @@ pub fn render_gauge_rgba(pct: f64) -> (Vec<u8>, u32, u32) {
     let bytes = if pct < 0.0 {
         render_error()
     } else {
-        render_pixel_bg(pct)
+        render_pixel_halo(pct)
     };
     (bytes, SIZE, SIZE)
 }
 
-fn render_pixel_bg(pct: f64) -> Vec<u8> {
+fn render_pixel_halo(pct: f64) -> Vec<u8> {
     let pct = pct.clamp(0.0, 100.0) as f32;
     let mut pixmap = Pixmap::new(SIZE, SIZE).expect("pixmap alloc");
 
-    // Background — threshold color rounded square
-    let bg_path = rounded_rect_path(0.0, 0.0, SIZE as f32, SIZE as f32, 25.0);
-    let mut bg_paint = Paint::default();
-    bg_paint.set_color(threshold_color(pct));
-    bg_paint.anti_alias = true;
-    pixmap.fill_path(&bg_path, &bg_paint, FillRule::Winding, Transform::identity(), None);
+    let (r, g, b) = threshold_rgb(pct);
+    draw_halo(&mut pixmap, r, g, b, 255);
 
-    // Crab — white tinted, large, centered
     let crab_w = 90u32;
-    let crab_h = (crab_w as f32 * 160.0 / 256.0) as u32; // preserve 256:160 aspect
+    let crab_h = (crab_w as f32 * 160.0 / 256.0) as u32;
     let crab_x = (SIZE - crab_w) / 2;
     let crab_y = (SIZE - crab_h) / 2;
     blit_png_tinted(&mut pixmap, CRAB_PNG, crab_x, crab_y, crab_w, crab_h, 255, 255, 255, 255);
@@ -48,15 +48,9 @@ fn render_pixel_bg(pct: f64) -> Vec<u8> {
 
 fn render_error() -> Vec<u8> {
     let mut pixmap = Pixmap::new(SIZE, SIZE).expect("pixmap alloc");
+    // Neutral grey halo — 색 신호 부재 = "데이터 없음"
+    draw_halo(&mut pixmap, 140, 140, 150, 220);
 
-    // Neutral grey background — colored signal absence = "no data"
-    let bg_path = rounded_rect_path(0.0, 0.0, SIZE as f32, SIZE as f32, 25.0);
-    let mut bg_paint = Paint::default();
-    bg_paint.set_color(Color::from_rgba8(140, 140, 150, 255));
-    bg_paint.anti_alias = true;
-    pixmap.fill_path(&bg_path, &bg_paint, FillRule::Winding, Transform::identity(), None);
-
-    // Dimmed white crab
     let crab_w = 90u32;
     let crab_h = (crab_w as f32 * 160.0 / 256.0) as u32;
     let crab_x = (SIZE - crab_w) / 2;
@@ -66,24 +60,45 @@ fn render_error() -> Vec<u8> {
     pixmap.take()
 }
 
-fn rounded_rect_path(x: f32, y: f32, w: f32, h: f32, r: f32) -> tiny_skia::Path {
+/// Radial halo: solid core fading to transparent at edges. Stops shape the
+/// "발광체" feel — inner mass stays opaque, fade only in outer 45% of radius.
+/// 외곽 alpha 0 으로 사각형 윤곽 없이 OS 합성과 자연스럽게 어우러짐.
+fn draw_halo(pixmap: &mut Pixmap, r: u8, g: u8, b: u8, core_alpha: u8) {
+    let cx = SIZE as f32 / 2.0;
+    let cy = SIZE as f32 / 2.0;
+    let halo_r = 62.0;
+
+    let mid_alpha = core_alpha / 4;
+    let stops = vec![
+        GradientStop::new(0.0, Color::from_rgba8(r, g, b, core_alpha)),
+        GradientStop::new(0.55, Color::from_rgba8(r, g, b, core_alpha)),
+        GradientStop::new(0.85, Color::from_rgba8(r, g, b, mid_alpha)),
+        GradientStop::new(1.0, Color::from_rgba8(r, g, b, 0)),
+    ];
+    let shader = RadialGradient::new(
+        Point::from_xy(cx, cy),
+        Point::from_xy(cx, cy),
+        halo_r,
+        stops,
+        SpreadMode::Pad,
+        Transform::identity(),
+    )
+    .expect("radial gradient");
+
+    let mut paint = Paint::default();
+    paint.shader = shader;
+    paint.anti_alias = true;
+
     let mut pb = PathBuilder::new();
-    pb.move_to(x + r, y);
-    pb.line_to(x + w - r, y);
-    pb.quad_to(x + w, y, x + w, y + r);
-    pb.line_to(x + w, y + h - r);
-    pb.quad_to(x + w, y + h, x + w - r, y + h);
-    pb.line_to(x + r, y + h);
-    pb.quad_to(x, y + h, x, y + h - r);
-    pb.line_to(x, y + r);
-    pb.quad_to(x, y, x + r, y);
-    pb.close();
-    pb.finish().expect("rounded rect path")
+    pb.push_rect(Rect::from_xywh(0.0, 0.0, SIZE as f32, SIZE as f32).expect("rect"));
+    let rect_path = pb.finish().expect("rect path");
+    pixmap.fill_path(&rect_path, &paint, FillRule::Winding, Transform::identity(), None);
 }
 
 /// Decode PNG, resize with Lanczos3, *tint* RGB to (tr, tg, tb), preserve alpha
-/// (multiplied by `alpha_mult/255`), premultiply, and blit into pixmap.
-/// tiny-skia stores premultiplied RGBA; image crate returns straight RGBA.
+/// (multiplied by `alpha_mult/255`), premultiply, and source-over composite
+/// into pixmap. tiny-skia stores premultiplied RGBA; image crate returns
+/// straight RGBA, so we both premultiply *and* blend manually.
 #[allow(clippy::too_many_arguments)]
 fn blit_png_tinted(
     pixmap: &mut Pixmap,
@@ -113,11 +128,9 @@ fn blit_png_tinted(
             let src_idx = ((y * iw + x) * 4) as usize;
             let src_a = rgba[src_idx + 3];
             if src_a == 0 {
-                continue; // fully transparent — leave bg alone
+                continue;
             }
-            // Compose with tint over existing canvas pixel (source-over alpha blend)
             let a = ((src_a as u16) * (alpha_mult as u16) / 255) as u8;
-            // Premultiplied tint
             let r = ((tr as u16) * (a as u16) / 255) as u8;
             let g = ((tg as u16) * (a as u16) / 255) as u8;
             let b = ((tb as u16) * (a as u16) / 255) as u8;
@@ -130,7 +143,6 @@ fn blit_png_tinted(
             if dst_idx + 4 > canvas_bytes.len() {
                 continue;
             }
-            // Source-over composite: out = src + dst * (1 - src_a)
             let inv_a = 255 - a;
             let dst_r = canvas_bytes[dst_idx];
             let dst_g = canvas_bytes[dst_idx + 1];
@@ -145,12 +157,12 @@ fn blit_png_tinted(
 }
 
 /// Match the in-app Donut/CapsuleProgress threshold (Apple stoplight).
-fn threshold_color(pct: f32) -> Color {
+fn threshold_rgb(pct: f32) -> (u8, u8, u8) {
     if pct >= 80.0 {
-        Color::from_rgba8(0xff, 0x45, 0x3a, 255)
+        (0xff, 0x45, 0x3a)
     } else if pct >= 50.0 {
-        Color::from_rgba8(0xff, 0x9f, 0x0a, 255)
+        (0xff, 0x9f, 0x0a)
     } else {
-        Color::from_rgba8(0x34, 0xc7, 0x59, 255)
+        (0x34, 0xc7, 0x59)
     }
 }
