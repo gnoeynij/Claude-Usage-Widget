@@ -158,11 +158,11 @@ let persistStorePromise: Promise<TauriStore> | null = null;
 // `-1` means error state — keep static, don't breathe (info beats animation).
 let lastUsagePct = 0;
 let breathTimer: number | null = null;
-const BREATH_CYCLE_MS = 3000;
-// Slower than 100ms — Windows shell appears to throttle very fast tray-icon
-// updates, flattening the visible alpha swing. 200ms (5fps) still reads as
-// smooth breathing and leaves the OS room to actually repaint each frame.
-const BREATH_TICK_MS = 200;
+// 4s cycle — 사람 호흡 속도(3-5초) 안쪽으로 좀 더 천천히. 50ms tick(20fps)
+// 으로 frame 간 alpha jump 을 0.6/80 ≈ 0.75% 로 줄여 부드럽게 보간.
+// (200ms tick 시도해보니 호흡감은 살아있지만 fade 가 step 처럼 보임)
+const BREATH_CYCLE_MS = 4000;
+const BREATH_TICK_MS = 50;
 
 function getPersistStore(): Promise<TauriStore> {
   if (!persistStorePromise) {
@@ -208,10 +208,10 @@ function startBreathing() {
     const t = ((Date.now() - t0) % BREATH_CYCLE_MS) / BREATH_CYCLE_MS;
     // sine wave: starts at min, peaks at mid-cycle, back to min
     const sine = 0.5 - 0.5 * Math.cos(t * Math.PI * 2);
-    // Range 0.4 → 1.0. At 22px tray size, alpha differences compress visually
-    // (Weber's law on small areas), so the swing needs to be wider than feels
-    // necessary in a 256×256 preview. 0.4 still keeps the color signal legible.
-    const alpha = 0.4 + 0.6 * sine;
+    // Range 0.5 → 1.0. Swing 좁히면 자연스러움 ↑ (peak 가 덜 두드러짐).
+    // Rust 측 halo core_alpha cap 200/255 와 곱해져 실제 시각 alpha 는
+    // 100/255~200/255 (≈ 39%~78%) 로 부드러움.
+    const alpha = 0.5 + 0.5 * sine;
     void invoke("set_usage_icon", { pct: lastUsagePct, alpha }).catch(() => {});
   }, BREATH_TICK_MS);
 }

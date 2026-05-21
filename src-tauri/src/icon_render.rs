@@ -51,12 +51,16 @@ fn render_pixel_halo(pct: f64, alpha_factor: f32) -> Vec<u8> {
     let mut pixmap = Pixmap::new(SIZE, SIZE).expect("pixmap alloc");
 
     let (r, g, b) = threshold_rgb(pct);
-    let core_alpha = (255.0 * alpha_factor) as u8;
+    // Cap halo core alpha at 200 (~78%) — full 255 가 트레이에서 *너무 진해*
+    // 라는 피드백. 78% 까지 내려도 색 신호는 인지 가능하면서 발광체 톤이
+    // 한결 부드러워짐.
+    let core_alpha = (200.0 * alpha_factor) as u8;
     draw_halo(&mut pixmap, r, g, b, core_alpha);
 
     // Crab 도 살짝 호흡 — 단 완전히 사라지지 않도록 0.7~1.0 range 로 잡아
-    // brand identity 가 매 frame 인식되도록 유지.
-    let crab_alpha = (255.0 * (0.7 + 0.3 * alpha_factor)) as u8;
+    // brand identity 가 매 frame 인식되도록 유지. 220 cap 으로 halo 와
+    // 톤 균형.
+    let crab_alpha = (220.0 * (0.7 + 0.3 * alpha_factor)) as u8;
     let crab_x = (SIZE - CRAB_W) / 2;
     let crab_y = (SIZE - CRAB_H) / 2;
     blit_crab_tinted(&mut pixmap, crab_x, crab_y, 255, 255, 255, crab_alpha);
