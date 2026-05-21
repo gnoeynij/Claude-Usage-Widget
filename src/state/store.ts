@@ -89,7 +89,7 @@ export type ModeSizes = Record<Mode, ModeSize | null>;
 const MODE_DEFAULTS: Record<Mode, [number, number, number, number]> = {
   mini: [240, 112, 240, 112],
   normal: [360, 420, 320, 360],
-  detail: [600, 680, 520, 520],
+  detail: [600, 600, 520, 520],
 };
 
 type StoreShape = {
