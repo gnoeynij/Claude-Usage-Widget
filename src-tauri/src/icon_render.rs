@@ -36,6 +36,50 @@ static CACHED_CRAB: Lazy<Vec<u8>> = Lazy::new(|| {
     resized.to_rgba8().into_raw()
 });
 
+/// 1px morphological dilation of the crab alpha channel — *외곽 1px* 픽셀에
+/// 만 alpha 가 들어가고 본체 영역(원본 crab opaque)은 0. 결과 buffer 는
+/// RGB=0(검정), alpha=neighbor max. 흰 crab 보다 *먼저* blit 하면 본체는
+/// 흰 crab 에 덮이고 외곽 1px 만 검은 stroke 으로 남아 halo 배경 위에서
+/// contrast 가 보장된다.
+static CACHED_CRAB_STROKE: Lazy<Vec<u8>> = Lazy::new(|| {
+    let crab = &*CACHED_CRAB;
+    let w = CRAB_W as usize;
+    let h = CRAB_H as usize;
+    let mut stroke = vec![0u8; w * h * 4];
+    for y in 0..h {
+        for x in 0..w {
+            let idx = (y * w + x) * 4;
+            // 본체(crab 자체 opaque) 위치엔 stroke 안 그림
+            if crab[idx + 3] > 0 {
+                continue;
+            }
+            let mut max_neighbor = 0u8;
+            // 8-방향 (corner 포함) — 4-방향만 하면 corner 가 빠져 들쭉날쭉
+            for dy in -1i32..=1 {
+                for dx in -1i32..=1 {
+                    if dx == 0 && dy == 0 {
+                        continue;
+                    }
+                    let nx = x as i32 + dx;
+                    let ny = y as i32 + dy;
+                    if nx < 0 || nx >= w as i32 || ny < 0 || ny >= h as i32 {
+                        continue;
+                    }
+                    let nidx = ((ny as usize) * w + (nx as usize)) * 4;
+                    let a = crab[nidx + 3];
+                    if a > max_neighbor {
+                        max_neighbor = a;
+                    }
+                }
+            }
+            if max_neighbor > 0 {
+                stroke[idx + 3] = max_neighbor;
+            }
+        }
+    }
+    stroke
+});
+
 pub fn render_gauge_rgba(pct: f64, alpha_factor: f32) -> (Vec<u8>, u32, u32) {
     let bytes = if pct < 0.0 {
         render_error(alpha_factor)
@@ -61,6 +105,8 @@ fn render_pixel_halo(pct: f64, alpha_factor: f32) -> Vec<u8> {
     let crab_alpha = (250.0 * (0.7 + 0.3 * alpha_factor)) as u8;
     let crab_x = (SIZE - CRAB_W) / 2;
     let crab_y = (SIZE - CRAB_H) / 2;
+    // Stroke 먼저 (검정) → 흰 crab 이 본체 영역 덮어 외곽 1px 만 stroke 남음
+    blit_stroke(&mut pixmap, crab_x, crab_y, crab_alpha);
     blit_crab_tinted(&mut pixmap, crab_x, crab_y, 255, 255, 255, crab_alpha);
 
     pixmap.take()
@@ -76,6 +122,7 @@ fn render_error(alpha_factor: f32) -> Vec<u8> {
     let crab_alpha = (180.0 * (0.7 + 0.3 * alpha_factor)) as u8;
     let crab_x = (SIZE - CRAB_W) / 2;
     let crab_y = (SIZE - CRAB_H) / 2;
+    blit_stroke(&mut pixmap, crab_x, crab_y, crab_alpha);
     blit_crab_tinted(&mut pixmap, crab_x, crab_y, 255, 255, 255, crab_alpha);
 
     pixmap.take()
@@ -166,6 +213,47 @@ fn blit_crab_tinted(
             canvas_bytes[dst_idx]     = r.saturating_add(((dst_r as u16) * (inv_a as u16) / 255) as u8);
             canvas_bytes[dst_idx + 1] = g.saturating_add(((dst_g as u16) * (inv_a as u16) / 255) as u8);
             canvas_bytes[dst_idx + 2] = b.saturating_add(((dst_b as u16) * (inv_a as u16) / 255) as u8);
+            canvas_bytes[dst_idx + 3] = a.saturating_add(((dst_a as u16) * (inv_a as u16) / 255) as u8);
+        }
+    }
+}
+
+/// Premultiplied black source-over composite, sourced from `CACHED_CRAB_STROKE`
+/// (1px outer dilation of crab alpha). RGB always 0; only alpha varies.
+fn blit_stroke(pixmap: &mut Pixmap, dx: u32, dy: u32, alpha_mult: u8) {
+    let stroke = &*CACHED_CRAB_STROKE;
+    let canvas_w = pixmap.width();
+    let canvas_h = pixmap.height();
+    let canvas_bytes = pixmap.data_mut();
+    for y in 0..CRAB_H {
+        for x in 0..CRAB_W {
+            let src_idx = ((y * CRAB_W + x) * 4) as usize;
+            let src_a = stroke[src_idx + 3];
+            if src_a == 0 {
+                continue;
+            }
+            let a = ((src_a as u16) * (alpha_mult as u16) / 255) as u8;
+            if a == 0 {
+                continue;
+            }
+            let dx_p = dx + x;
+            let dy_p = dy + y;
+            if dx_p >= canvas_w || dy_p >= canvas_h {
+                continue;
+            }
+            let dst_idx = ((dy_p * canvas_w + dx_p) * 4) as usize;
+            if dst_idx + 4 > canvas_bytes.len() {
+                continue;
+            }
+            let inv_a = 255 - a;
+            let dst_r = canvas_bytes[dst_idx];
+            let dst_g = canvas_bytes[dst_idx + 1];
+            let dst_b = canvas_bytes[dst_idx + 2];
+            let dst_a = canvas_bytes[dst_idx + 3];
+            // Black src (R=G=B=0 premultiplied), so out_RGB = dst_RGB * (1 - src_a)
+            canvas_bytes[dst_idx]     = ((dst_r as u16) * (inv_a as u16) / 255) as u8;
+            canvas_bytes[dst_idx + 1] = ((dst_g as u16) * (inv_a as u16) / 255) as u8;
+            canvas_bytes[dst_idx + 2] = ((dst_b as u16) * (inv_a as u16) / 255) as u8;
             canvas_bytes[dst_idx + 3] = a.saturating_add(((dst_a as u16) * (inv_a as u16) / 255) as u8);
         }
     }
