@@ -127,7 +127,50 @@ fn render_error(alpha_factor: f32) -> Vec<u8> {
     blit_stroke(&mut pixmap, crab_x, crab_y, crab_alpha);
     blit_crab_tinted(&mut pixmap, crab_x, crab_y, 255, 255, 255, crab_alpha);
 
+    // 우상단 빨간 status dot — 회색 halo 만으론 "오류" 인지 약함. dot 은
+    // crab 본체와 분리된 corner overlay 라 사용량 100%(빨간 halo)와 혼동 X.
+    // 검은 outline 으로 라이트/다크 트레이 양쪽 contrast 보장.
+    draw_error_dot(&mut pixmap);
+
     pixmap.take()
+}
+
+fn draw_error_dot(pixmap: &mut Pixmap) {
+    let cx = 108.0;
+    let cy = 18.0;
+    let r = 14.0;
+
+    // Dark outline (2px) — 라이트 트레이에서도 빨강 dot 분리감 보장
+    let mut outline_pb = PathBuilder::new();
+    outline_pb.push_circle(cx, cy, r + 2.0);
+    if let Some(outline_path) = outline_pb.finish() {
+        let mut outline_paint = Paint::default();
+        outline_paint.set_color(Color::from_rgba8(20, 20, 20, 220));
+        outline_paint.anti_alias = true;
+        pixmap.fill_path(
+            &outline_path,
+            &outline_paint,
+            FillRule::Winding,
+            Transform::identity(),
+            None,
+        );
+    }
+
+    // Red fill (threshold danger 색과 동일)
+    let mut dot_pb = PathBuilder::new();
+    dot_pb.push_circle(cx, cy, r);
+    if let Some(dot_path) = dot_pb.finish() {
+        let mut dot_paint = Paint::default();
+        dot_paint.set_color(Color::from_rgba8(0xff, 0x45, 0x3a, 255));
+        dot_paint.anti_alias = true;
+        pixmap.fill_path(
+            &dot_path,
+            &dot_paint,
+            FillRule::Winding,
+            Transform::identity(),
+            None,
+        );
+    }
 }
 
 /// Radial halo: Gaussian-스러운 5-stop falloff. 이전엔 0~0.55 solid core
