@@ -50,6 +50,7 @@ pub fn run() {
             commands::set_usage_icon,
             commands::set_window_size,
             commands::quit_app,
+            commands::hide_window,
             commands::run_migration,
             commands::open_log_dir,
         ])

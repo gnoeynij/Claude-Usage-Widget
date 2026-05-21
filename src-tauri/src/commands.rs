@@ -134,6 +134,14 @@ pub fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// 위젯을 트레이로 hide. FooterBar X 버튼이 frontend
+/// `getCurrentWindow().hide()` 로 안 되는 신고가 있어 backend 우회.
+/// 다른 command 들과 동일한 invoke 패턴으로 안정성 ↑.
+#[tauri::command]
+pub async fn hide_window(window: tauri::Window) -> Result<(), String> {
+    window.hide().map_err(|e| e.to_string())
+}
+
 /// Apply a mode-specific window size + minimum size in one shot. Order
 /// matters: `set_min_size` first so the subsequent `set_size` isn't clamped
 /// by the *previous* mode's minimum.

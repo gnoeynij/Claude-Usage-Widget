@@ -1,5 +1,6 @@
 import { X } from "lucide-solid";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
+import { warn } from "@tauri-apps/plugin-log";
 import { SegmentedControl } from "../components/SegmentedControl";
 import { store, setMode, type Mode } from "../state/store";
 import { t } from "../i18n";
@@ -40,7 +41,11 @@ export function FooterBar() {
       </div>
       <button
         class="ring-hover"
-        onClick={() => void getCurrentWindow().hide()}
+        onClick={() => {
+          void invoke("hide_window").catch((e) => {
+            void warn(`hide_window failed: ${String(e)}`);
+          });
+        }}
         title={t().show}
         style={{
           width: "26px",
