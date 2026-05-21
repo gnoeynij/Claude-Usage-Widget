@@ -88,8 +88,8 @@ export type ModeSizes = Record<Mode, ModeSize | null>;
  *  container-query breakpoint that switches the detail grid to 2 columns. */
 const MODE_DEFAULTS: Record<Mode, [number, number, number, number]> = {
   mini: [240, 112, 240, 112],
-  normal: [360, 380, 320, 360],
-  detail: [600, 640, 520, 520],
+  normal: [320, 360, 320, 360],
+  detail: [592, 619, 520, 520],
 };
 
 type StoreShape = {
