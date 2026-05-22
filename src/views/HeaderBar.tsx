@@ -1,21 +1,8 @@
 import { Settings as SettingsIcon, RefreshCw } from "lucide-solid";
 import { Show } from "solid-js";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { error as logError } from "@tauri-apps/plugin-log";
 import { store, syncNow, toggleSettings } from "../state/store";
 import { t } from "../i18n";
-
-// macOS WKWebView ignores `-webkit-app-region: drag` (Chromium-only), so
-// fall back to startDragging() on mousedown. Requires
-// `core:window:allow-start-dragging` in capabilities — without it the IPC
-// fails silently with `Command plugin:window|start_dragging not allowed by
-// ACL`. Interactive children opt out so buttons keep their click semantics.
-function startWindowDrag(e: MouseEvent) {
-  if ((e.target as HTMLElement).closest("button, [role='button'], input")) return;
-  getCurrentWindow()
-    .startDragging()
-    .catch((err) => void logError(`startDragging failed: ${err}`));
-}
+import { startWindowDrag } from "../utils/drag";
 
 function updateDotLabel() {
   const v = store.updateInfo?.version;

@@ -1,18 +1,9 @@
 import { createSignal } from "solid-js";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { error as logError } from "@tauri-apps/plugin-log";
 import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
 import { store, setMode } from "../state/store";
 import { t } from "../i18n";
-
-// See HeaderBar.tsx — macOS WKWebView needs an explicit startDragging() call.
-function startWindowDrag(e: MouseEvent) {
-  if ((e.target as HTMLElement).closest("button, [role='button'], input")) return;
-  getCurrentWindow()
-    .startDragging()
-    .catch((err) => void logError(`startDragging failed: ${err}`));
-}
+import { startWindowDrag } from "../utils/drag";
 
 function MiniRow(props: { label: string; value: number }) {
   return (
