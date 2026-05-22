@@ -2,12 +2,12 @@
 
 # Claude Usage Widget
 
-A desktop widget for **Claude Code** that shows your **Anthropic API usage** — current session, weekly limits, recent blocks, and per-model cost — at a glance, without opening a browser or terminal. Rebuilt from scratch with **Tauri 2 + SolidJS + Rust** for **Windows**.
+A desktop widget for **Claude Code** that shows your **Anthropic API usage** — current session, weekly limits, recent blocks, and per-model cost — at a glance, without opening a browser or terminal. Rebuilt from scratch with **Tauri 2 + SolidJS + Rust** for **Windows** and **macOS**.
 
 ![Tauri 2](https://img.shields.io/badge/Tauri-2-blue.svg)
 ![SolidJS](https://img.shields.io/badge/SolidJS-1.9-2C4F7C.svg)
 ![Rust](https://img.shields.io/badge/Rust-1.77+-orange.svg)
-![Windows](https://img.shields.io/badge/Platform-Windows-lightgrey.svg)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-lightgrey.svg)
 ![License](https://img.shields.io/badge/License-MIT-orange.svg)
 
 > This project is a Windows-only personal fork of [INNO-HI/ClaudeUsageWidget](https://github.com/INNO-HI/ClaudeUsageWidget), published with the original author [@khwee2000](https://velog.io/@khwee2000)'s permission. Original copyright belongs to [INNO-HI](https://github.com/INNO-HI). See [LICENSE](LICENSE) for terms and the [Releases](../../releases) page for the full change log.
@@ -25,8 +25,8 @@ A lightweight desktop tool that sits in a corner of your screen and tracks your 
 
 Switch via footer SegmentedControl or tray menu. Each mode has its own default size + minSize, and any size you drag-adjust is remembered per mode.
 
-### Liquid Glass + Win11 Mica/Acrylic
-System backdrop composited with OS-level vibrancy. The background-opacity slider fades only the background — text, donuts, and gauges stay fully opaque.
+### Liquid Glass + OS-native vibrancy
+System backdrop composited with OS-level vibrancy — **Win11 Mica/Acrylic** on Windows, **NSVisualEffectView (HudWindow material)** on macOS. The background-opacity slider fades only the background — text, donuts, and gauges stay fully opaque.
 
 ### Live tray icon
 - Anthropic pixel character on a radial halo
@@ -39,7 +39,7 @@ System backdrop composited with OS-level vibrancy. The background-opacity slider
 Silent check 3 seconds after boot + manual button in Settings. When an update is available, you get a dot badge on the gear icon and a "Restart now" button after the background download finishes. Signed manifests via `tauri-plugin-updater`.
 
 ### OAuth token auto-recovery
-Polls `~/.claude/.credentials.json` mtime so a Claude Code CLI token refresh triggers an immediate retry without waiting for the next sync. On expiry, the in-app banner tells you to run `claude` once and the widget self-heals.
+Reads Claude Code's OAuth token from the platform-native store — `~/.claude/.credentials.json` on Windows, the **macOS Keychain** (`Claude Code-credentials` service) on macOS. On expiry, the in-app banner tells you to run `claude` once and the widget self-heals on the next sync.
 
 ### Bilingual (English / Korean)
 Every string switches instantly, including time labels and AM/PM.
@@ -51,9 +51,18 @@ Settings → "Open logs folder" reveals `widget.log` with timestamped entries fo
 
 ## 🚀 Installation & Usage
 
+### Windows
 1. **Download** — Grab the latest `Claude Widget_X.Y.Z_x64-setup.exe` from the [Releases](../../releases) tab.
 2. **Install** — Double-click the installer. WebView2 Runtime installs automatically on Windows 10 (Windows 11 ships with it).
 3. **Run** — The widget needs an existing [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) login on the same PC (`~/.claude/.credentials.json`).
+
+### macOS
+1. **Download** — Grab the latest `Claude Widget_X.Y.Z_aarch64.dmg` from the [Releases](../../releases) tab (Apple Silicon).
+2. **Install** — Open the .dmg, drag `Claude Widget.app` into `/Applications`.
+3. **First launch — Gatekeeper bypass** — The .dmg is *ad-hoc signed* (not paid Apple Developer ID), so macOS refuses the first launch with *"Apple could not verify…"*. Two options:
+   - **Right-click → Open** in Finder, then click *Open* in the dialog. macOS remembers the choice — subsequent launches are normal.
+   - Or run once in Terminal: `xattr -d com.apple.quarantine "/Applications/Claude Widget.app"`
+4. **Run** — The widget reads your OAuth token from the macOS Keychain — wherever the `claude` CLI stored it. No extra setup if you've used Claude Code at least once on this Mac.
 4. **Controls**
    - **Mode** — Footer SegmentedControl (Mini / Normal / Detail) or tray right-click menu
    - **Move** — Drag the header bar (or any non-interactive surface in Mini)
@@ -82,7 +91,9 @@ This is an unsigned-installer personal open-source build, so Windows SmartScreen
 
 > v2.0+ uses **Tauri 2 + Rust + SolidJS + Vite + UnoCSS + Motion One**. The legacy PyQt6 source is preserved on the `v1.5.1` tag; the instructions below build the current `main` branch.
 
-Requires Node ≥ 20, the Rust toolchain (`rustup`), and the Microsoft C++ Build Tools on Windows ("Desktop development with C++" workload). WebView2 Runtime ships with Windows 11; on Windows 10 the installer bootstrapper fetches it automatically.
+Requires Node ≥ 20 and the Rust toolchain (`rustup`). Platform extras:
+- **Windows** — Microsoft C++ Build Tools ("Desktop development with C++" workload). WebView2 Runtime ships with Windows 11; on Windows 10 the installer bootstrapper fetches it automatically.
+- **macOS** — Xcode Command Line Tools (`xcode-select --install`). First-time DMG bundling needs Terminal to have Finder Automation permission (System Settings → Privacy & Security → Automation → Terminal → Finder). See [`docs/macos-setup.md`](docs/macos-setup.md) for the full setup walk-through.
 
 ```bash
 # 1. Clone
@@ -98,12 +109,16 @@ npm run tauri dev
 # 4. Production build
 npm run tauri build
 
-# 5. Output
+# 5. Output (Windows)
 #   src-tauri/target/release/bundle/nsis/Claude Widget_<ver>_x64-setup.exe  (recommended)
 #   src-tauri/target/release/claude-widget.exe                              (portable)
+#
+# 5. Output (macOS)
+#   src-tauri/target/release/bundle/dmg/Claude Widget_<ver>_aarch64.dmg     (recommended)
+#   src-tauri/target/release/bundle/macos/Claude Widget.app                 (raw bundle)
 ```
 
-> The NSIS installer is the recommended distribution because it bootstraps WebView2 on Windows 10 and integrates with `tauri-plugin-updater` for silent in-place upgrades.
+> Tauri's bundler picks the right output per host OS — running `npm run tauri build` on Windows produces the NSIS installer, and on macOS produces the .app + .dmg.
 
 ---
 

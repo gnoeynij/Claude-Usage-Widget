@@ -14,6 +14,7 @@
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
 | ~~OAuth 직접 refresh (B)~~ → P1 격하 | UX·인증 | [docs/plans/2026-05-20-oauth-refresh.md](docs/plans/2026-05-20-oauth-refresh.md) §"B 격하 근거" | Anthropic spec 미공개·cred 파일 race·client_id 폐기 위험. A+D로 80% 효과 달성. **always-spot-check** (진행 결정 시) |
+| **macOS 첫 release 발행** | 인프라 | [docs/macos-setup.md](docs/macos-setup.md) §"알려진 미구현 영역" | 코드·.dmg·.app.tar.gz 다 통과. 남은 액션: 집 Windows 에서 `~/.tauri/claude-widget.key` + 비밀번호 macOS 로 복사 → 서명 빌드 → `node scripts/make-updater-manifest.mjs` → `gh release upload v2.0.1 <dmg> <app.tar.gz> <app.tar.gz.sig> latest.json`. **always-spot-check** (자동 업데이트·릴리즈 영역). |
 
 ---
 
@@ -31,8 +32,10 @@
 |---|---|---|---|
 | **자동화 테스트 도입 검토** | 인프라·품질 | [CLAUDE.md "테스트 프레임워크"](CLAUDE.md) | 현재 0%. 후보: (a) Rust 단위 테스트 — `jsonl_aggregator`·`pricing`·`migration`이 순수 함수 비중 커서 ROI 높음. (b) Vitest — `src/state/store.ts` Solid 신호 로직. (c) Playwright — Tauri WebView 한정이라 dev URL에서만, 실 .exe 시각 회귀는 여전히 `capture-widget.ps1` 의존. 1인 사이드 프로젝트 ROI 고려해 (a)부터. |
 | **Win10 호환 검증** | 시각 회귀 | [vibrancy_win.rs](src-tauri/src/vibrancy_win.rs) | Mica/Acrylic은 Win11 전제. Win10에서 fallback이 정상인지 실 머신 확인 필요. |
-| **macOS 지원 작업 진입** | 인프라 | [`docs/macos-setup.md`](docs/macos-setup.md) | 순정 맥북 setup 가이드 작성 완료. cfg 분기 대부분 OK ([lib.rs](src-tauri/src/lib.rs)·[migration.rs](src-tauri/src/migration.rs)·[Cargo.toml](src-tauri/Cargo.toml)). 미구현: `vibrancy_mac` (NSVisualEffectView) / 자동 시작 (LaunchAgent) / [tauri.conf.json](src-tauri/tauri.conf.json) `bundle.targets` macOS 분기 / [tray.rs](src-tauri/src/tray.rs) 메뉴바 동작 검증 / `.credentials.json` 경로 확인. 첫 빌드 시도로 실 깨짐 영역 회수 권장. |
 | **Linux 지원** | 인프라 | (없음) | Tauri 2가 지원하나 OAuth + `.credentials.json` 경로 + vibrancy 미구현 + AppImage·deb 분기 등 macOS와 별개. 수요 신호 있을 때만. |
+| **자동 시작 (Windows + macOS 동시)** | UX | (없음) | 현재 자동 시작 기능 자체가 미구현. Windows 추가 시 macOS LaunchAgent 도 같이 (`~/Library/LaunchAgents/com.gnoeynij.claude-widget.plist`). Settings UI 토글 + cfg 분기 모듈. 수요 있을 때. |
+| **macOS 트레이 템플릿 이미지** | 디자인 | [src-tauri/src/icon_render.rs](src-tauri/src/icon_render.rs) | macOS 다크 메뉴바 자동 색반전 (NSImage `isTemplate = true`). 현재 컬러 PNG 그대로 — 사용성 OK 지만 macOS HIG 부정합. 별도 PR. |
+| **macOS Universal binary** | 인프라 | (없음) | aarch64 only 첫 release. Intel Mac 수요 있을 때 `--target universal-apple-darwin`. `rustup target add x86_64-apple-darwin` 은 이미 설치됨. |
 
 ---
 
@@ -61,6 +64,7 @@
 | **opacity slider fix (5번 실패 영역)** — 진짜 원인은 Mica vibrancy가 panel fade를 시각적으로 묻힘. fix: `vibrancy_win::clear_vibrancy` + `set_mica_enabled` command + setOpacity가 opacity 0/>0 에 따라 Mica 토글. `--glass-base-alpha` 1.0 (light/dark 모두). 검증: 0% Mica on alpha 1.0·50% Mica off alpha 0.5 (뒤 GitHub README 비침)·100% Mica off alpha 0 (panel 완전 투명) 3컷 캡처 확인 | (본 커밋) | 2026-05-20 |
 | **v2.0.0 stable** — 자동 업데이트 frontend (3s silent + manual button + restart) + 모드별 리사이즈 (mini/normal/detail + persist) + UI 폴리시 (Mini visionOS handle + SegmentedControl grid) + 로그 진단 (`widget.log` + open log dir 버튼은 backlog로 제거) + 리팩토링 (utils/{math,format,color,error} + createMemo + 일부 dead code) + 트레이/태스크바 아이콘 v2 (radial halo + Gaussian gradient 5-stop + 흰 crab + 1px 검은 stroke + 호흡 + Settings toggle + error 우상단 빨간 dot). 버전 6곳(`package.json`/`package-lock.json`/`tauri.conf.json`/`Cargo.toml`/`Cargo.lock`/`store.ts`) `2.0.0-alpha.1` → `2.0.0`. | (이번 세션) | 2026-05-21 |
 | **v2.0.1 dead code 청소** — `set_window_opacity` + `apply_opacity_win` + `FULL_OPACITY_THRESHOLD` (commands.rs) + lib.rs invoke_handler 등록 + Cargo.toml `Win32_UI_WindowsAndMessaging` feature + `--blur-mult` (tokens.css 정의 + store.ts removeProperty) + store.ts `style.opacity = ""` legacy cleanup 한 묶음 제거. opacity 처리가 v2.0 Mica 토글 + CSS mult로 옮긴 뒤 잔존이었음. typecheck + cargo check exit 0. | (이번 세션) | 2026-05-21 |
+| **macOS 지원 — 빌드·vibrancy·credentials** — `vibrancy_mac.rs` (NSVisualEffectMaterial.HudWindow + Active state) + lib.rs/commands.rs cfg 분기. `tauri.conf.json` `bundle.targets: ["nsis", "app", "dmg"]` + `bundle.macOS.minimumSystemVersion: "11.0"`. `usage_api.rs` macOS 분기 — Claude Code CLI 가 *Keychain* (`security` 서비스 `Claude Code-credentials`, account `$USER`) 에 token 저장, `.credentials.json` 부재. Rust `keyring` crate 는 매치 실패 → `security` CLI subprocess 호출로 우회. `make-updater-manifest.mjs` darwin-aarch64/x86_64 자동 감지. `scripts/capture-widget.sh` 신규 (AppleScript 좌표 + `screencapture`). README/README.ko/`docs/macos-setup.md` 갱신. 검증: cargo check exit 0, `npm run tauri build --bundles app,dmg` exit 0, 실 .app 실행 → vibrancy·트레이·메뉴·사용량 게이지 (Anthropic API HTTP 200) 동작 확인. 단 *첫 release 발행은 후속* (집 Windows signing key 가져온 후). | (이번 세션) | 2026-05-22 |
 
 ---
 

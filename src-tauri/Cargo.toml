@@ -42,6 +42,13 @@ windows = { version = "0.61", features = [
   "Win32_Graphics_Dwm",
 ] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# Raw Objective-C messaging for NSWindow contentView.layer.cornerRadius —
+# Tauri 2 doesn't expose macOS corner-radius and NSVisualEffectView paints
+# square, masking the CSS border-radius on .glass-panel.
+objc2 = "0.5"
+
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

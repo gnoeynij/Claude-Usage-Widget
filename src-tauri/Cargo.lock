@@ -472,6 +472,7 @@ dependencies = [
  "dirs 5.0.1",
  "image",
  "log",
+ "objc2 0.5.2",
  "once_cell",
  "reqwest 0.12.28",
  "serde",

@@ -1,8 +1,18 @@
 import { createSignal } from "solid-js";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { error as logError } from "@tauri-apps/plugin-log";
 import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
 import { store, setMode } from "../state/store";
 import { t } from "../i18n";
+
+// See HeaderBar.tsx — macOS WKWebView needs an explicit startDragging() call.
+function startWindowDrag(e: MouseEvent) {
+  if ((e.target as HTMLElement).closest("button, [role='button'], input")) return;
+  getCurrentWindow()
+    .startDragging()
+    .catch((err) => void logError(`startDragging failed: ${err}`));
+}
 
 function MiniRow(props: { label: string; value: number }) {
   return (
@@ -32,6 +42,8 @@ export function MiniView() {
   return (
     <main
       class="drag view-in"
+      data-tauri-drag-region
+      onMouseDown={startWindowDrag}
       style={{
         position: "relative",
         display: "flex",
@@ -42,10 +54,11 @@ export function MiniView() {
       }}
       ondblclick={() => setMode("normal")}
     >
-      {/* visionOS-style sheet handle: thin bar at top-center hints "drag-down
-          to dismiss" affordance. Default opacity is just visible enough to
-          register; hover expands width + opacity to make the affordance
-          unambiguous. Clicking returns to normal mode. */}
+      {/* "Tap to expand" handle anchored at the bottom-center — mirrors the
+          location of Normal/Detail's footer SegmentedControl so the mode
+          toggle lives in the same spot across all three modes. Default
+          opacity is just visible enough to register; hover expands width +
+          opacity to make the affordance unambiguous. */}
       <button
         class="no-drag"
         onClick={(e) => {
@@ -57,7 +70,7 @@ export function MiniView() {
         title={t().miniExpand}
         style={{
           position: "absolute",
-          top: 0,
+          bottom: 0,
           left: "50%",
           transform: "translateX(-50%)",
           width: "56px",

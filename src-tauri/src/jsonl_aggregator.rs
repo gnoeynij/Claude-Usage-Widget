@@ -77,7 +77,14 @@ pub struct AggregateOut {
 pub fn aggregate() -> Result<AggregateOut> {
     let root = match projects_root() {
         Some(p) if p.exists() => p,
-        _ => return Ok(AggregateOut::default()),
+        Some(p) => {
+            log::warn!("aggregate: projects_root does not exist: {}", p.display());
+            return Ok(AggregateOut::default());
+        }
+        _ => {
+            log::warn!("aggregate: home_dir() unavailable");
+            return Ok(AggregateOut::default());
+        }
     };
 
     let mut records = collect_records(&root);
@@ -85,9 +92,17 @@ pub fn aggregate() -> Result<AggregateOut> {
 
     let blocks = group_blocks(&records);
     let now = Utc::now();
+    let active = active_view(&blocks, now, &records);
+    log::info!(
+        "aggregate: root={} records={} blocks={} active={}",
+        root.display(),
+        records.len(),
+        blocks.len(),
+        active.is_some()
+    );
 
     Ok(AggregateOut {
-        active: active_view(&blocks, now, &records),
+        active,
         peak_block_cost: blocks
             .iter()
             .map(|b| b.cost)
