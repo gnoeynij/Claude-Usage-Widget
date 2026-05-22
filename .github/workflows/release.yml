@@ -1,0 +1,55 @@
+name: Release
+
+# 트리거: 버전 태그 push 또는 수동 dispatch.
+# - `v1.2.3` → 정식 release
+# - `v1.2.3-rc1` 처럼 dash 포함 → prerelease 자동
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install dependencies
+        run: npm install
+
+      # Tauri 공식 action — 양 OS 의 bundle/sign/release upload 를 한 번에.
+      # bundle.targets 가 tauri.conf.json 에 `["nsis", "app", "dmg"]` 로
+      # 설정되어 있어 host OS 에 맞는 산출물 (Windows: nsis, macOS: app+dmg)
+      # 만 자동 생성. includeUpdaterJson 으로 latest.json 도 합본 자동 생성.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: ${{ github.ref_name }}
+          releaseDraft: false
+          # v2.0.2 → 정식, v2.0.2-rc1 → prerelease (dash 포함 자동 판별)
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          includeUpdaterJson: true
