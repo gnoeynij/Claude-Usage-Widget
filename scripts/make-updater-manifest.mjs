@@ -26,6 +26,11 @@ if (!fs.existsSync(sigPath)) {
 
 const signature = fs.readFileSync(sigPath, 'utf8').trim();
 
+// GitHub release asset upload 시 파일명의 공백을 *dot* 으로 자동 변환함.
+// 단순 encodeURIComponent (`%20`) 로 만든 URL 은 404 → updater fail.
+// (v2.0.1 release 에서 같은 회귀 발생 — Claude%20Widget_... vs 실제 Claude.Widget_...)
+const githubAssetName = exeName.replace(/ /g, '.');
+
 const manifest = {
   version: `v${version}`,
   notes: process.env.RELEASE_NOTES ?? 'See release page',
@@ -33,7 +38,7 @@ const manifest = {
   platforms: {
     'windows-x86_64': {
       signature,
-      url: `https://github.com/${REPO}/releases/download/v${version}/${encodeURIComponent(exeName)}`,
+      url: `https://github.com/${REPO}/releases/download/v${version}/${githubAssetName}`,
     },
   },
 };
