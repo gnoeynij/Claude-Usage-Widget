@@ -1,5 +1,5 @@
-use objc2::msg_send;
 use objc2::runtime::AnyObject;
+use objc2::{class, msg_send};
 use tauri::WebviewWindow;
 use window_vibrancy::{
     apply_vibrancy, clear_vibrancy as wv_clear_vibrancy, NSVisualEffectMaterial,
@@ -45,17 +45,48 @@ fn apply_rounded_corners(window: &WebviewWindow) {
     };
     unsafe {
         let ns_window = ns_window_raw as *mut AnyObject;
+
+        // Force the window itself transparent — tauri.conf.json's
+        // `transparent: true` ought to do this, but in combination with
+        // NSVisualEffectView the corner regions still paint as black on
+        // some macOS builds. Setting opaque=false + clear backgroundColor
+        // explicitly makes the 4 corners outside the rounded mask show the
+        // desktop instead of the window's default fill.
+        let _: () = msg_send![ns_window, setOpaque: false];
+        let clear_color: *mut AnyObject = msg_send![class!(NSColor), clearColor];
+        let _: () = msg_send![ns_window, setBackgroundColor: clear_color];
+
         let content_view: *mut AnyObject = msg_send![ns_window, contentView];
         if content_view.is_null() {
             return;
         }
-        let _: () = msg_send![content_view, setWantsLayer: true];
-        let layer: *mut AnyObject = msg_send![content_view, layer];
-        if layer.is_null() {
-            return;
+        apply_corner_to_view(content_view);
+
+        // NSVisualEffectView (added by window-vibrancy under the WebView)
+        // and the WebView itself each have their own backing layer. The
+        // content view's `masksToBounds` doesn't clip *sibling* layers that
+        // sit beside the content view in the window's layer tree, so the
+        // square vibrancy material bleeds into the 4 corner regions and
+        // reads as black on the HudWindow material. Apply the same corner
+        // mask to every direct subview to clip them in lock-step.
+        let subviews: *mut AnyObject = msg_send![content_view, subviews];
+        if !subviews.is_null() {
+            let count: usize = msg_send![subviews, count];
+            for i in 0..count {
+                let subview: *mut AnyObject = msg_send![subviews, objectAtIndex: i];
+                apply_corner_to_view(subview);
+            }
         }
-        let _: () = msg_send![layer, setCornerRadius: 10.0_f64];
-        let _: () = msg_send![layer, setMasksToBounds: true];
     }
+}
+
+unsafe fn apply_corner_to_view(view: *mut AnyObject) {
+    let _: () = msg_send![view, setWantsLayer: true];
+    let layer: *mut AnyObject = msg_send![view, layer];
+    if layer.is_null() {
+        return;
+    }
+    let _: () = msg_send![layer, setCornerRadius: 10.0_f64];
+    let _: () = msg_send![layer, setMasksToBounds: true];
 }
 
