@@ -7,3 +7,13 @@ export function formatCost(n: number): string {
     maximumFractionDigits: 2,
   })}`;
 }
+
+/** Token count → short K/M/B. ModelsCard 우측 작은 column 에 들어가니 4-5
+ *  char 안쪽으로 짧게. */
+export function formatTokens(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  if (n < 1_000) return n.toFixed(0);
+  if (n < 1_000_000) return `${(n / 1_000).toFixed(1)}K`;
+  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  return `${(n / 1_000_000_000).toFixed(1)}B`;
+}

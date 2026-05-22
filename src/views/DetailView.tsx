@@ -4,7 +4,8 @@ import { CapsuleProgress } from "../components/CapsuleProgress";
 import { Donut } from "../components/Donut";
 import { store } from "../state/store";
 import { t } from "../i18n";
-import { formatCost } from "../utils/format";
+import { formatCost, formatTokens } from "../utils/format";
+import { startWindowDrag } from "../utils/drag";
 
 function formatTimestamp(iso: string) {
   const d = new Date(iso);
@@ -80,6 +81,10 @@ function ActiveCard() {
                 <CapsuleProgress value={costPct()} tone="accent" />
                 <span class="t-caption label-tertiary">
                   {t().peakLabel(Math.round(costPct()), formatCost(peak()))}
+                  <Show when={act().elapsed_min > 0}>
+                    {" / ↗ "}
+                    {formatCost(act().cost_usd / (act().elapsed_min / 60))}/hr
+                  </Show>
                 </span>
               </div>
             </div>
@@ -236,9 +241,9 @@ function ModelsCard() {
             <div
               style={{
                 display: "grid",
-                "grid-template-columns": "84px 1fr 72px",
+                "grid-template-columns": "58px 1fr 60px 40px",
                 "align-items": "center",
-                gap: "var(--s-3)",
+                gap: "8px",
                 padding: "6px 0",
               }}
             >
@@ -248,6 +253,9 @@ function ModelsCard() {
                   display: "inline-flex",
                   "align-items": "center",
                   gap: "6px",
+                  "white-space": "nowrap",
+                  overflow: "hidden",
+                  "text-overflow": "ellipsis",
                 }}
               >
                 <span
@@ -256,6 +264,7 @@ function ModelsCard() {
                     height: "8px",
                     "border-radius": "50%",
                     background: color,
+                    "flex-shrink": 0,
                   }}
                 />
                 {fam.family}
@@ -268,9 +277,22 @@ function ModelsCard() {
               />
               <span
                 class="t-body tabular-nums"
-                style={{ "text-align": "right" }}
+                style={{
+                  "text-align": "right",
+                  "font-size": "12px",
+                  "white-space": "nowrap",
+                }}
               >
                 {formatCost(fam.cost)}
+              </span>
+              <span
+                class="t-caption label-tertiary tabular-nums"
+                style={{
+                  "text-align": "right",
+                  "white-space": "nowrap",
+                }}
+              >
+                {formatTokens(fam.tokens)}
               </span>
             </div>
           );
@@ -339,12 +361,30 @@ export function DetailView() {
     <main
       class="view-in"
       style={{
+        position: "relative",
         flex: 1,
         "container-type": "inline-size",
         overflow: "auto",
         padding: "0 var(--s-1) var(--s-1)",
       }}
     >
+      {/* 상단 drag region — 시각적 표시 없음, 위젯 이동용. height 28px.
+          main 이 overflow:auto 라 스크롤 시 함께 위로 사라짐 — 스크롤 상태
+          에선 헤더 22px drag 로 대체. Windows 는 CSS `drag` 클래스 처리,
+          macOS 는 data-tauri-drag-region + onMouseDown 폴백 (utils/drag.ts). */}
+      <div
+        class="drag"
+        data-tauri-drag-region
+        onMouseDown={startWindowDrag}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "28px",
+          "z-index": 1,
+        }}
+      />
       <div class="detail-grid">
         <ActiveCard />
         <PeriodsCard />

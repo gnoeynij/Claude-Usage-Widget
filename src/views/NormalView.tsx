@@ -4,6 +4,7 @@ import { CapsuleProgress } from "../components/CapsuleProgress";
 import { store, syncNow } from "../state/store";
 import { t } from "../i18n";
 import { clamp } from "../utils/math";
+import { startWindowDrag } from "../utils/drag";
 
 function formatResetsIn(iso?: string | null) {
   if (!iso) return null;
@@ -47,6 +48,7 @@ export function NormalView() {
     <main
       class="view-in"
       style={{
+        position: "relative",
         flex: 1,
         display: "flex",
         "flex-direction": "column",
@@ -54,6 +56,23 @@ export function NormalView() {
         padding: "0 var(--s-2)",
       }}
     >
+      {/* 상단 drag region — 시각적 표시 없음, 위젯 이동용. height 28px 로
+          마우스 조준 영역 확보. Donut 상단 일부가 drag 로 흡수되지만 sync 는
+          헤더 ↻ 로 대체 가능. Windows 는 CSS `drag` 클래스가 처리, macOS 는
+          data-tauri-drag-region + onMouseDown 폴백 필요 (utils/drag.ts). */}
+      <div
+        class="drag"
+        data-tauri-drag-region
+        onMouseDown={startWindowDrag}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "28px",
+          "z-index": 1,
+        }}
+      />
       {/* Hero — session donut as the focal element. Clicking it triggers a
           manual sync (the same as the header ↻) so the largest visual is
           also the largest target. */}
