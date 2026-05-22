@@ -53,8 +53,12 @@ const platforms = {};
   for (const tarPath of candidates) {
     const sigPath = `${tarPath}.sig`;
     if (fs.existsSync(sigPath)) {
-      // Use a release-friendly asset name that survives gh release upload.
-      const assetName = `Claude Widget_${version}_universal.app.tar.gz`;
+      // GitHub releases keep the original file name on upload (spaces become
+      // dots) — `gh release upload <file>#<displayname>` only sets the UI
+      // label, not the asset name. The Tauri bundler always emits this
+      // generic name (no version suffix); tag in the URL path provides the
+      // version identity. v2.0.2 → 404 회귀 (8ff720b 영역 후속).
+      const assetName = appTarName;
       const signature = fs.readFileSync(sigPath, 'utf8').trim();
       const entry = { signature, url: releaseBase(assetName) };
       // Both arch keys point to the same universal tarball — tauri-plugin-updater
