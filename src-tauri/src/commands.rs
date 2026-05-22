@@ -43,7 +43,15 @@ pub async fn set_mica_enabled(window: tauri::WebviewWindow, enabled: bool) -> Re
             crate::vibrancy_win::clear_vibrancy(&window)?;
         }
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        if enabled {
+            crate::vibrancy_mac::apply_mica(&window)?;
+        } else {
+            crate::vibrancy_mac::clear_vibrancy(&window)?;
+        }
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     {
         let _ = (window, enabled);
     }

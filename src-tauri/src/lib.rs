@@ -7,6 +7,8 @@ mod tray;
 mod usage_api;
 #[cfg(target_os = "windows")]
 mod vibrancy_win;
+#[cfg(target_os = "macos")]
+mod vibrancy_mac;
 
 use tauri::Manager;
 
@@ -61,6 +63,13 @@ pub fn run() {
                 match vibrancy_win::apply_mica(&window) {
                     Ok(()) => log::info!("setup: Mica applied"),
                     Err(e) => log::warn!("setup: Mica failed: {}", e),
+                }
+            }
+            #[cfg(target_os = "macos")]
+            {
+                match vibrancy_mac::apply_mica(&window) {
+                    Ok(()) => log::info!("setup: NSVisualEffectView applied"),
+                    Err(e) => log::warn!("setup: NSVisualEffectView failed: {}", e),
                 }
             }
 

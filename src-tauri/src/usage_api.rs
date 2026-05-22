@@ -47,9 +47,48 @@ pub fn credentials_mtime_ms() -> Option<f64> {
     Some(dur.as_secs_f64() * 1000.0)
 }
 
-fn read_credentials() -> Option<OAuthBlock> {
+/// Pull the raw OAuth secret string. macOS reads from the login Keychain
+/// (where Claude Code CLI stores it by default — service
+/// "Claude Code-credentials", account = $USER) via the `security` CLI; the
+/// `keyring` Rust crate's query path silently fails to match the item that
+/// Claude Code writes, but the CLI works. Falls back to
+/// `~/.claude/.credentials.json` for users who have that file (Linux/Windows
+/// also take this path). The JSON shape is identical across platforms.
+fn read_credentials_raw() -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(user) = std::env::var("USER") {
+            match std::process::Command::new("security")
+                .args([
+                    "find-generic-password",
+                    "-a",
+                    &user,
+                    "-s",
+                    "Claude Code-credentials",
+                    "-w",
+                ])
+                .output()
+            {
+                Ok(o) if o.status.success() => {
+                    if let Ok(s) = String::from_utf8(o.stdout) {
+                        return Some(s.trim().to_string());
+                    }
+                }
+                Ok(o) => log::warn!(
+                    "keychain: security CLI exit={:?} stderr={}",
+                    o.status.code(),
+                    String::from_utf8_lossy(&o.stderr).trim()
+                ),
+                Err(e) => log::warn!("keychain: security CLI spawn failed: {}", e),
+            }
+        }
+    }
     let path = credentials_path()?;
-    let raw = std::fs::read_to_string(path).ok()?;
+    std::fs::read_to_string(path).ok()
+}
+
+fn read_credentials() -> Option<OAuthBlock> {
+    let raw = read_credentials_raw()?;
     let parsed: Credentials = serde_json::from_str(&raw).ok()?;
     let oauth = parsed.claude_ai_oauth?;
     if oauth.access_token.as_deref().unwrap_or("").is_empty() {

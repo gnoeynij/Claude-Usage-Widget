@@ -42,6 +42,7 @@ windows = { version = "0.61", features = [
   "Win32_Graphics_Dwm",
 ] }
 
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
