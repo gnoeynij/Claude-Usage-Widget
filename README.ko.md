@@ -124,7 +124,13 @@ npm run tauri build
 
 ## 📝 Change Log
 
-v2.0.0 이후 변경 내역은 [docs/release-notes/](docs/release-notes/) 폴더 또는 [Releases](../../releases) 페이지를 참고하세요.
+### v2.0.x (Tauri 2 + SolidJS 라인)
+
+- [**v2.0.2**](docs/release-notes/v2.0.2.md) — macOS 첫 정식 릴리즈 (vibrancy, Keychain credentials, drag region, DMG) + 검은 모서리 fix + Windows/macOS 자동 업데이트 통합 + Detail 모드 UX (시간당 비용, 모델별 토큰, drag overlay).
+- [**v2.0.1**](docs/release-notes/v2.0.1.md) — 첫 공개 v2.0.x 릴리즈 (v2.0.0 은 internal cut), 서명 키 교체.
+- [**v2.0.0**](docs/release-notes/v2.0.0.md) — *internal cut.* PyQt6 → Tauri 2 + SolidJS 전면 재작성. Liquid Glass + Win11 Mica/Acrylic, 3-mode 위젯 (Mini/Normal/Detail), 자동 업데이트, 트레이, OAuth 회복, en/ko 다국어.
+
+전체 노트는 [Releases](../../releases) 페이지에서도 확인 가능.
 
 ### v1.5.1 (PyQt6 라인, legacy)
 - 토큰 만료 처리 — `expiresAt` 사전 체크로 의미 없는 GET 스킵 + 401 응답 시 새 credentials 로 1회 자동 retry (Claude Code 가 sync 중 토큰을 갱신하는 race 대응)
