@@ -72,4 +72,6 @@
 
 ## stale 의심 / 재평가 후보
 
-(현재 없음)
+| 항목 | 영역 | 출처 | 비고 |
+|---|---|---|---|
+| `.claude/worktrees/awesome-kepler-2868ae/` 빈 고아 디렉토리 | 인프라 | (점검 발견 2026-05-24) | `git worktree list` 미등록 + ChildCount 0. 정리 시점에 현 세션 cwd 였어서 in-use lock 으로 자동 삭제 불가. 다음 세션 외부 셸에서 `Remove-Item -Recurse -Force .claude/worktrees/awesome-kepler-2868ae`. |
