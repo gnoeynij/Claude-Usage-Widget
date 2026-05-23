@@ -11,9 +11,7 @@
 
 ## P0 — 알파→베타 가기 전 막힘
 
-| 항목 | 영역 | 출처 | 비고 |
-|---|---|---|---|
-| ~~OAuth 직접 refresh (B)~~ → P1 격하 | UX·인증 | [docs/plans/2026-05-20-oauth-refresh.md](docs/plans/2026-05-20-oauth-refresh.md) §"B 격하 근거" | Anthropic spec 미공개·cred 파일 race·client_id 폐기 위험. A+D로 80% 효과 달성. **always-spot-check** (진행 결정 시) |
+(현재 없음 — OAuth 직접 refresh 는 P1 으로 격하.)
 
 ---
 
@@ -21,6 +19,7 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
+| **OAuth 직접 refresh (B 방식)** — P0 에서 격하 | UX·인증 | [docs/plans/2026-05-20-oauth-refresh.md](docs/plans/2026-05-20-oauth-refresh.md) §"B 격하 근거" | Anthropic spec 미공개·cred 파일 race·client_id 폐기 위험. recovery (A+D, ✓ 60) 로 80% 효과 달성. **always-spot-check** (진행 결정 시) |
 | **버전 단일 출처 헬퍼** | 인프라 | [회귀 사례 §3](CLAUDE.md) | `package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml` / `src-tauri/Cargo.lock` / `src/state/store.ts` 5곳 동시 bump. `scripts/bump-version.mjs` 또는 README 체크리스트 중 택1. 4aa3443에서 한 번 손으로 정렬 — 다음 bump 전엔 자동화. |
 
 ---
@@ -67,6 +66,7 @@
 | **v2.0.2 정식 release — Windows + macOS 자동 업데이트 활성화** — PR #1 (macOS 지원) + PR #2 (꼭지점 검은 모서리 fix: NSWindow.opaque=false + clearColor + contentView 모든 subview cornerRadius). v2.0.2-rc1 검증 단계 거쳐 정식 발행. macOS Apple Silicon (.app + .dmg + .app.tar.gz + .sig) + Windows (.exe + .sig) + latest.json 6 자산. 실측: v2.0.2-rc1 → v2.0.2 자동 업데이트 흐름 (download → install) 양 OS 정상 동작 확인. 회귀 fix: `make-updater-manifest.mjs` 의 macOS asset URL 을 Tauri 번들러 generic name (`Claude Widget.app.tar.gz`) 그대로 사용 — `gh release upload #displayname` 한계로 인한 404 회귀 (`2faa8da`). 회귀 사례 §11~14 추가. | `5d0bf9c` + `2faa8da` | 2026-05-23 |
 | **CI 자동 release (GitHub Actions)** — `.github/workflows/release.yml` (tauri-action v0) + matrix [macos-latest, windows-latest] + tag push (`v*.*.*`) / `workflow_dispatch` trigger. dash 포함 (`v*-rc*`) prerelease 자동 판별. secrets 등록 완료 (`TAURI_SIGNING_PRIVATE_KEY` + `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). 이전 수동 cross-machine 워크플로 (Windows 빌드 → iCloud → macOS 빌드 → 통합 release, 매회 30분~1시간) 가 *tag push 한 줄* 로 축소. CLAUDE.md "릴리즈 정책" 섹션 갱신 — CI 흐름 + 다중 백업 + 비상 수동. | `c800961` | 2026-05-23 |
 | **PR #1 머지 + drag.ts 공통화 + Normal/Detail drag overlay** — macOS PR (#1: vibrancy + Keychain + drag region + DMG + Mini handle 하단) 로컬 머지. `make-updater-manifest.mjs` conflict resolve 시 `8ff720b` 의 공백→dot URL fix 를 `releaseBase()` 함수에 흡수해 자동 업데이트 404 회귀 재발 방지. `startWindowDrag` 헬퍼 `src/utils/drag.ts` 신설로 3 곳 (HeaderBar/MiniView/Normal+Detail) 통합. `format.ts formatTokens` (K/M/B short) + DetailView ActiveCard 시간당 비용 + ModelsCard 4-col grid + Normal/Detail 상단 28px drag overlay (Windows + macOS 호환 — `class="drag" + data-tauri-drag-region + onMouseDown=startWindowDrag`). 검증: typecheck exit 0 + `npm run tauri build` (signing 단계만 키 부재로 실패, 회귀 사례 §4) + Normal 모드 캡처 정상. | `f32554e` + `6a52b79` + `e7f8ac9` | 2026-05-22 |
+| **docs/release-notes/ stale 해소** — v2.0.1.md (internal cut → 첫 공개 framing + 서명 키 교체) + v2.0.2.md (macOS 첫 정식 + 검은 모서리 fix + 자동 업데이트 양 OS 통합 + Detail UX) 신설. README/README.ko Change Log 한 줄 링크 → v2.0.x 3개 버전 한 줄 요약 + 노트 링크. | `d882b2d` | 2026-05-24 |
 
 ---
 

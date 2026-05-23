@@ -292,8 +292,7 @@ gh release create vX.Y.Z --target main --title "..." --notes "..." \
 - **자동화 테스트**: **없음.** 검증은 빌드된 `.exe`/`.app` 실행 + UI 동작 + 캡처 스크립트로 수동 (`capture-widget.ps1` / `capture-widget.sh`).
 - **자동 업데이트**: 양 OS 활성 (v2.0.2). `releases/latest/download/latest.json` endpoint, minisign 서명 검증. macOS 는 ad-hoc 서명 (Apple Developer 미가입), Gatekeeper 첫 실행 우회 README 안내.
 - **알려진 빈 구멍** ([BACKLOG.md](BACKLOG.md) 참조):
-  - OAuth 토큰 자동 refresh 부재 — Windows `.credentials.json` / macOS Keychain 만료 시 Claude Code CLI 갱신 의존
-  - `pricing.rs:9` `cache_write_1h` dead-code 경고
+  - OAuth 토큰 **full refresh (B 방식 — refresh_token 으로 새 access token 발급)** 미구현 — recovery (만료 banner + mtime polling + 자동 retry) 는 v2.0.0 에서 완료 (BACKLOG ✓ 60). 토큰 만료 시 사용자가 `claude` CLI 1회 실행 필요. B 방식은 Anthropic spec 미공개·client_id 폐기 위험으로 P0 → P1 격하.
   - macOS Universal binary 미지원 — Apple Silicon only (Intel Mac 수요 시 후속, BACKLOG P2)
   - macOS 트레이 템플릿 이미지 미적용 — 다크 메뉴바 자동 색반전 X (BACKLOG P2)
 - **다음 작업 후보**: [`BACKLOG.md`](BACKLOG.md) P0 참조.
