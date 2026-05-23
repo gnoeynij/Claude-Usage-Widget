@@ -10,7 +10,7 @@ A desktop widget for **Claude Code** that shows your **Anthropic API usage** —
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-lightgrey.svg)
 ![License](https://img.shields.io/badge/License-MIT-orange.svg)
 
-> This project is a Windows-only personal fork of [INNO-HI/ClaudeUsageWidget](https://github.com/INNO-HI/ClaudeUsageWidget), published with the original author [@khwee2000](https://velog.io/@khwee2000)'s permission. Original copyright belongs to [INNO-HI](https://github.com/INNO-HI). See [LICENSE](LICENSE) for terms and the [Releases](../../releases) page for the full change log.
+> This project is a personal project based on [INNO-HI/ClaudeUsageWidget](https://github.com/INNO-HI/ClaudeUsageWidget), published with the original author [@khwee2000](https://velog.io/@khwee2000)'s permission. Original copyright belongs to [INNO-HI](https://github.com/INNO-HI). See [LICENSE](LICENSE) for terms and the [Releases](../../releases) page for the full change log.
 
 A lightweight desktop tool that sits in a corner of your screen and tracks your Claude Code usage in real time. Aimed at developers who use Claude Code daily and want a passive, always-visible usage monitor instead of polling a dashboard.
 
@@ -54,7 +54,8 @@ Settings → "Open logs folder" reveals `widget.log` with timestamped entries fo
 ### Windows
 1. **Download** — Grab the latest `Claude Widget_X.Y.Z_x64-setup.exe` from the [Releases](../../releases) tab.
 2. **Install** — Double-click the installer. WebView2 Runtime installs automatically on Windows 10 (Windows 11 ships with it).
-3. **Run** — The widget needs an existing [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) login on the same PC (`~/.claude/.credentials.json`).
+3. **First launch — SmartScreen bypass** — This is an unsigned-installer personal open-source build, so Windows SmartScreen may warn you on first launch. It is not malware — click `More info → Run anyway` to proceed.
+4. **Run** — The widget needs an existing [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) login on the same PC (`~/.claude/.credentials.json`).
 
 ### macOS
 1. **Download** — Grab the latest `Claude Widget_X.Y.Z_aarch64.dmg` from the [Releases](../../releases) tab (Apple Silicon).
@@ -63,14 +64,15 @@ Settings → "Open logs folder" reveals `widget.log` with timestamped entries fo
    - **Right-click → Open** in Finder, then click *Open* in the dialog. macOS remembers the choice — subsequent launches are normal.
    - Or run once in Terminal: `xattr -d com.apple.quarantine "/Applications/Claude Widget.app"`
 4. **Run** — The widget reads your OAuth token from the macOS Keychain — wherever the `claude` CLI stored it. No extra setup if you've used Claude Code at least once on this Mac.
-4. **Controls**
-   - **Mode** — Footer SegmentedControl (Mini / Normal / Detail) or tray right-click menu
-   - **Move** — Drag the header bar (or any non-interactive surface in Mini)
-   - **Resize** — Drag window corners/edges; each mode remembers your size
-   - **Hide** — `×` in the footer sends the widget to the tray; left-click the tray icon to bring it back
-   - **Quit** — Right-click the tray icon → `Quit`
-   - **Settings** — `⚙` button in the header
-5. **Auto-sync** — Settings → Auto sync (`Off / 5m / 10m / 30m / 1h`, default `5m`).
+
+### Controls (Windows & macOS)
+- **Mode** — Footer SegmentedControl (Mini / Normal / Detail) or tray right-click menu
+- **Move** — Drag the header bar (or any non-interactive surface in Mini)
+- **Resize** — Drag window corners/edges; each mode remembers your size
+- **Hide** — `×` in the footer sends the widget to the tray; left-click the tray icon to bring it back
+- **Quit** — Right-click the tray icon → `Quit`
+- **Settings** — `⚙` button in the header
+- **Auto-sync** — Settings → Auto sync (`Off / 5m / 10m / 30m / 1h`, default `5m`).
 
 <p align="center">
   <img src="docs/screenshots/normal.png" alt="Normal mode" width="280" />
@@ -80,8 +82,6 @@ Settings → "Open logs folder" reveals `widget.log` with timestamped entries fo
 <p align="center">
   <img src="docs/screenshots/mini.png" alt="Mini mode" width="320" />
 </p>
-
-This is an unsigned-installer personal open-source build, so Windows SmartScreen may warn you on first launch. It is not malware — click `More info → Run anyway` to proceed.
 
 > ⚠️ The widget calls Claude Code's OAuth usage endpoint. If Anthropic changes the endpoint or policy, the widget may stop working until updated.
 
