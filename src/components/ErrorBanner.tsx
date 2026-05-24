@@ -1,47 +1,100 @@
 import { Show } from "solid-js";
-import { AlertTriangle } from "lucide-solid";
+import { AlertTriangle, AlertCircle, WifiOff, Clock } from "lucide-solid";
+import type { Component } from "solid-js";
 import { store } from "../state/store";
+import type { ErrorCode } from "../state/store";
 import { t } from "../i18n";
 
+type Tone = "warn" | "info" | "danger";
+
+type BannerInfo = {
+  title: string;
+  hint: string;
+  tone: Tone;
+  Icon: Component<{ size?: number; style?: Record<string, string> }>;
+};
+
+function bannerFor(code: ErrorCode): BannerInfo | null {
+  const s = t();
+  switch (code) {
+    case "TOKEN_EXPIRED":
+      return { title: s.tokenExpired, hint: s.tokenExpiredHint, tone: "warn", Icon: AlertTriangle };
+    case "NO_CREDENTIALS":
+      return { title: s.noCredentials, hint: s.noCredentialsHint, tone: "warn", Icon: AlertCircle };
+    case "RATE_LIMITED":
+      return { title: s.rateLimited, hint: s.rateLimitedHint, tone: "info", Icon: Clock };
+    case "NETWORK":
+      return { title: s.networkError, hint: s.networkErrorHint, tone: "danger", Icon: WifiOff };
+    default:
+      return null;
+  }
+}
+
+// Color tokens per tone — `--accent` already covers the warn/info path
+// (Liquid Glass design system has one accent color), so warn/info share the
+// same tint and only differ in icon. danger gets the dedicated red.
+function toneStyles(tone: Tone) {
+  if (tone === "danger") {
+    return {
+      background: "var(--danger-tint, rgba(255, 59, 48, 0.12))",
+      border: "1px solid var(--danger, rgba(255, 59, 48, 0.5))",
+      iconColor: "var(--danger, #ff3b30)",
+    };
+  }
+  return {
+    background: "var(--accent-tint)",
+    border: "1px solid var(--accent-tint-strong)",
+    iconColor: "var(--accent)",
+  };
+}
+
 export function ErrorBanner() {
+  const info = () => bannerFor(store.errorCode);
+
   return (
-    <Show when={store.errorCode === "TOKEN_EXPIRED"}>
-      <div
-        role="status"
-        class="t-caption"
-        style={{
-          display: "flex",
-          "align-items": "flex-start",
-          gap: "var(--s-2)",
-          margin: "0 var(--s-2)",
-          padding: "var(--s-2) var(--s-3)",
-          "border-radius": "var(--r-md)",
-          background: "var(--accent-tint)",
-          color: "var(--label)",
-          border: "1px solid var(--accent-tint-strong)",
-        }}
-      >
-        <AlertTriangle
-          size={14}
-          style={{
-            color: "var(--accent)",
-            "flex-shrink": 0,
-            "margin-top": "2px",
-          }}
-        />
-        <div
-          style={{
-            display: "flex",
-            "flex-direction": "column",
-            gap: "2px",
-            flex: 1,
-            "min-width": 0,
-          }}
-        >
-          <span style={{ "font-weight": 600 }}>{t().tokenExpired}</span>
-          <span class="label-secondary">{t().tokenExpiredHint}</span>
-        </div>
-      </div>
+    <Show when={info()}>
+      {(i) => {
+        const styles = () => toneStyles(i().tone);
+        const Icon = i().Icon;
+        return (
+          <div
+            role="status"
+            class="t-caption"
+            style={{
+              display: "flex",
+              "align-items": "flex-start",
+              gap: "var(--s-2)",
+              margin: "0 var(--s-2)",
+              padding: "var(--s-2) var(--s-3)",
+              "border-radius": "var(--r-md)",
+              background: styles().background,
+              color: "var(--label)",
+              border: styles().border,
+            }}
+          >
+            <Icon
+              size={14}
+              style={{
+                color: styles().iconColor,
+                "flex-shrink": "0",
+                "margin-top": "2px",
+              }}
+            />
+            <div
+              style={{
+                display: "flex",
+                "flex-direction": "column",
+                gap: "2px",
+                flex: 1,
+                "min-width": 0,
+              }}
+            >
+              <span style={{ "font-weight": 600 }}>{i().title}</span>
+              <span class="label-secondary">{i().hint}</span>
+            </div>
+          </div>
+        );
+      }}
     </Show>
   );
 }

@@ -65,4 +65,10 @@ export const ko: Strings = {
 
   tokenExpired: "인증 토큰 만료",
   tokenExpiredHint: "터미널에서 `claude` 한 번 실행하면 위젯이 자동 복구돼요.",
+  noCredentials: "인증 정보 없음",
+  noCredentialsHint: "터미널에서 `claude` 로 로그인하면 동기화가 시작돼요.",
+  rateLimited: "요청 제한",
+  rateLimitedHint: "Anthropic API 가 잠시 제한 중이에요. 다음 주기에 자동 재시도합니다.",
+  networkError: "네트워크 오류",
+  networkErrorHint: "Anthropic API 에 연결할 수 없어요. 네트워크 상태를 확인해주세요.",
 };

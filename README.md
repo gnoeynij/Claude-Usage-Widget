@@ -126,6 +126,7 @@ npm run tauri build
 
 ### v2.0.x (Tauri 2 + SolidJS line)
 
+- [**v2.0.3**](docs/release-notes/v2.0.3.md) — settings persist gap fix (lang / dark / opacity / sync / always-on-top / mode now survive restarts) + PyQt6 migration realignment + tray menu i18n (ko/en) + error banner expanded to 4 states (TOKEN_EXPIRED / NO_CREDENTIALS / RATE_LIMITED / NETWORK).
 - [**v2.0.2**](docs/release-notes/v2.0.2.md) — first macOS release (vibrancy, Keychain credentials, drag region, DMG) + black-corner fix + unified Windows/macOS auto-updater + Detail-mode UX (hourly cost, per-model tokens, drag overlay).
 - [**v2.0.1**](docs/release-notes/v2.0.1.md) — first public v2.0.x release (v2.0.0 was an internal cut); signing key rotation.
 - [**v2.0.0**](docs/release-notes/v2.0.0.md) — *internal cut.* Full PyQt6 → Tauri 2 + SolidJS rewrite. Liquid Glass + Win11 Mica/Acrylic, 3-mode widget (Mini/Normal/Detail), auto-updater, tray, OAuth recovery, en/ko i18n.

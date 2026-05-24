@@ -133,7 +133,7 @@ const [store, setStore] = createStore<StoreShape>({
   syncing: false,
   syncError: null,
   errorCode: null,
-  version: "2.0.2",
+  version: "2.0.3",
   tickMinute: 0,
   updateStatus: "idle",
   updateInfo: null,
@@ -171,34 +171,37 @@ function getPersistStore(): Promise<TauriStore> {
   return persistStorePromise;
 }
 
+async function persistSetting<K extends keyof StoreShape>(
+  key: K,
+  value: StoreShape[K],
+) {
+  try {
+    const ps = await getPersistStore();
+    await ps.set(key as string, value);
+    await ps.save();
+  } catch (e) {
+    console.error(`persist ${String(key)} failed`, e);
+  }
+}
+
+async function loadSetting<T>(
+  key: string,
+  apply: (v: T) => void,
+  validate?: (v: unknown) => v is T,
+) {
+  try {
+    const ps = await getPersistStore();
+    const v = await ps.get<T>(key);
+    if (v === undefined || v === null) return;
+    if (validate && !validate(v)) return;
+    apply(v);
+  } catch (e) {
+    console.error(`load ${key} failed`, e);
+  }
+}
+
 async function persistModeSizes() {
-  try {
-    const ps = await getPersistStore();
-    await ps.set("modeSizes", store.modeSizes);
-    await ps.save();
-  } catch (e) {
-    console.error("persist modeSizes failed", e);
-  }
-}
-
-async function persistBreatheEnabled(v: boolean) {
-  try {
-    const ps = await getPersistStore();
-    await ps.set("breatheEnabled", v);
-    await ps.save();
-  } catch (e) {
-    console.error("persist breatheEnabled failed", e);
-  }
-}
-
-async function loadBreatheEnabled() {
-  try {
-    const ps = await getPersistStore();
-    const v = await ps.get<boolean>("breatheEnabled");
-    if (typeof v === "boolean") setStore("breatheEnabled", v);
-  } catch (e) {
-    console.error("load breatheEnabled failed", e);
-  }
+  return persistSetting("modeSizes", store.modeSizes);
 }
 
 function startBreathing() {
@@ -225,7 +228,7 @@ function stopBreathing() {
 
 export function setBreatheEnabled(value: boolean) {
   setStore("breatheEnabled", value);
-  void persistBreatheEnabled(value);
+  void persistSetting("breatheEnabled", value);
   if (value && lastUsagePct >= 0) {
     startBreathing();
   } else {
@@ -252,6 +255,11 @@ async function loadModeSizes() {
     console.error("load modeSizes failed", e);
   }
 }
+
+// Boot 시점 setter 호출이 다시 persist 를 트리거하면 read-after-write 가 의미
+// 없는 디스크 I/O 가 됨. load 흐름에선 이 플래그가 true 인 동안 persist 를
+// skip 한다.
+let suppressPersist = false;
 
 function applyModeSize(mode: Mode) {
   const saved = store.modeSizes[mode];
@@ -291,13 +299,60 @@ export async function initStore() {
   } catch {
     /* migration is non-fatal */
   }
+
+  // Restore user preferences from disk before any UI / IPC side-effects fire.
+  // suppressPersist prevents the setter chain from writing the same value
+  // back to disk (read-after-write loop).
+  suppressPersist = true;
+  try {
+    await loadSetting<Lang>(
+      "lang",
+      (v) => setLang(v),
+      (v): v is Lang => v === "en" || v === "ko",
+    );
+    await loadSetting<boolean>(
+      "dark",
+      (v) => setDark(v),
+      (v): v is boolean => typeof v === "boolean",
+    );
+    await loadSetting<boolean>(
+      "alwaysOnTop",
+      (v) => void setAlwaysOnTop(v),
+      (v): v is boolean => typeof v === "boolean",
+    );
+    await loadSetting<number>(
+      "syncIntervalMin",
+      (v) => setSyncIntervalMin(v),
+      (v): v is number => typeof v === "number" && v >= 0,
+    );
+    await loadSetting<number>(
+      "opacity",
+      (v) => setStore("opacity", v),
+      (v): v is number => typeof v === "number" && v >= 0 && v <= 100,
+    );
+    await loadSetting<Mode>(
+      "mode",
+      (v) => setStore("mode", v),
+      (v): v is Mode => v === "mini" || v === "normal" || v === "detail",
+    );
+  } finally {
+    suppressPersist = false;
+  }
+
+  // Apply DOM-level defaults *after* lang/dark are restored — setLang/setDark
+  // already did this if a stored value was found, but call once more in case
+  // neither key was persisted yet (fresh install).
   applyDarkClass(store.dark);
   document.documentElement.lang = store.lang;
 
   // Restore per-mode sizes from disk before wiring the resize listener — we
   // don't want our own load to be picked up as a "user resize".
   await loadModeSizes();
-  await loadBreatheEnabled();
+  await loadSetting<boolean>(
+    "breatheEnabled",
+    (v) => setStore("breatheEnabled", v),
+    (v): v is boolean => typeof v === "boolean",
+  );
 
   // Apply current mode's size on boot — otherwise tauri.conf.json 의 초기
   // 사이즈가 그대로 보임 (사용자 신고: "처음 Normal 화면이 옛 사이즈, 모드
@@ -419,6 +474,7 @@ export async function syncNow() {
 
 export function setMode(mode: Mode) {
   setStore("mode", mode);
+  if (!suppressPersist) void persistSetting("mode", mode);
   applyModeSize(mode);
   if (mode === "detail") {
     void refreshDetail();
@@ -441,15 +497,18 @@ export function toggleSettings() {
 export function setDark(value: boolean) {
   setStore("dark", value);
   applyDarkClass(value);
+  if (!suppressPersist) void persistSetting("dark", value);
 }
 
 export function setLang(value: Lang) {
   setStore("lang", value);
   document.documentElement.lang = value;
+  if (!suppressPersist) void persistSetting("lang", value);
 }
 
 export async function setAlwaysOnTop(value: boolean) {
   setStore("alwaysOnTop", value);
+  if (!suppressPersist) void persistSetting("alwaysOnTop", value);
   try {
     await invoke("set_always_on_top", { value });
   } catch (e) {
@@ -459,12 +518,14 @@ export async function setAlwaysOnTop(value: boolean) {
 
 export function setSyncIntervalMin(minutes: number) {
   setStore("syncIntervalMin", minutes);
+  if (!suppressPersist) void persistSetting("syncIntervalMin", minutes);
   scheduleAutoSync();
 }
 
 export function setOpacity(opacityPct: number) {
   const clamped = Math.max(0, Math.min(100, opacityPct));
   setStore("opacity", clamped);
+  if (!suppressPersist) void persistSetting("opacity", clamped);
   // Background-only fade: drive --bg-alpha-mult so glass panel/cards thin
   // out while text/donut/capsule stay fully opaque. Mica toggles in tandem
   // — kept on at 0% (full Liquid Glass) and cleared as soon as the user

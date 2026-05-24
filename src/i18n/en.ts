@@ -63,6 +63,12 @@ export const en = {
 
   tokenExpired: "Auth token expired",
   tokenExpiredHint: "Run `claude` once — the widget will recover automatically.",
+  noCredentials: "No credentials found",
+  noCredentialsHint: "Sign in with Claude Code (`claude` in a terminal) to start syncing.",
+  rateLimited: "Rate limited",
+  rateLimitedHint: "Anthropic API throttled this widget. It'll retry on the next interval.",
+  networkError: "Network error",
+  networkErrorHint: "Can't reach the Anthropic API. Check your connection.",
 };
 
 export type Strings = typeof en;

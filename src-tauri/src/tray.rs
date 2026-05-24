@@ -23,15 +23,46 @@ fn load_tray_icon() -> Image<'static> {
     Image::new_owned(img.into_raw(), w, h)
 }
 
-pub fn setup(app: &mut App) -> tauri::Result<()> {
-    let show = MenuItem::with_id(app, "show", "Show / Hide", true, None::<&str>)?;
-    let mode_mini = MenuItem::with_id(app, "mode_mini", "Mini mode", true, None::<&str>)?;
+struct TrayLabels {
+    show: &'static str,
+    mode_mini: &'static str,
+    mode_normal: &'static str,
+    mode_detail: &'static str,
+    sync: &'static str,
+    quit: &'static str,
+}
+
+fn tray_labels(lang: &str) -> TrayLabels {
+    match lang {
+        "ko" => TrayLabels {
+            show: "표시 / 숨김",
+            mode_mini: "Mini 모드",
+            mode_normal: "Normal 모드",
+            mode_detail: "Detail 모드",
+            sync: "지금 동기화",
+            quit: "종료",
+        },
+        _ => TrayLabels {
+            show: "Show / Hide",
+            mode_mini: "Mini mode",
+            mode_normal: "Normal mode",
+            mode_detail: "Detail mode",
+            sync: "Sync now",
+            quit: "Quit",
+        },
+    }
+}
+
+pub fn setup(app: &mut App, lang: &str) -> tauri::Result<()> {
+    let labels = tray_labels(lang);
+    let show = MenuItem::with_id(app, "show", labels.show, true, None::<&str>)?;
+    let mode_mini = MenuItem::with_id(app, "mode_mini", labels.mode_mini, true, None::<&str>)?;
     let mode_normal =
-        MenuItem::with_id(app, "mode_normal", "Normal mode", true, None::<&str>)?;
+        MenuItem::with_id(app, "mode_normal", labels.mode_normal, true, None::<&str>)?;
     let mode_detail =
-        MenuItem::with_id(app, "mode_detail", "Detail mode", true, None::<&str>)?;
-    let sync = MenuItem::with_id(app, "sync", "Sync now", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+        MenuItem::with_id(app, "mode_detail", labels.mode_detail, true, None::<&str>)?;
+    let sync = MenuItem::with_id(app, "sync", labels.sync, true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", labels.quit, true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
         &[&show, &mode_mini, &mode_normal, &mode_detail, &sync, &quit],

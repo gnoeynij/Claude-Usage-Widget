@@ -11,6 +11,21 @@ mod vibrancy_win;
 mod vibrancy_mac;
 
 use tauri::Manager;
+use tauri_plugin_store::StoreExt;
+
+/// Read the persisted `lang` value from `widget-settings.json` so the tray
+/// menu can render localized labels on first paint. Falls back to "en" if
+/// the store is missing, the key is absent, or the value isn't one of the
+/// supported language codes.
+fn read_persisted_lang(app: &tauri::App) -> String {
+    let Ok(store) = app.store("widget-settings.json") else {
+        return "en".to_string();
+    };
+    match store.get("lang") {
+        Some(serde_json::Value::String(s)) if s == "en" || s == "ko" => s,
+        _ => "en".to_string(),
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -73,11 +88,17 @@ pub fn run() {
                 }
             }
 
-            if let Err(e) = tray::setup(app) {
+            // Tray menu labels follow the user's persisted language. Reading
+            // the store synchronously at setup avoids a flash of English labels
+            // while the frontend boots — and the frontend can't update menu
+            // labels on `setLang` anyway without a re-create, so the labels
+            // are fixed for the session (changes take effect after restart).
+            let lang = read_persisted_lang(app);
+            if let Err(e) = tray::setup(app, &lang) {
                 log::error!("setup: tray init failed: {}", e);
                 return Err(e.into());
             }
-            log::info!("setup: tray ready");
+            log::info!("setup: tray ready (lang={})", lang);
 
             match migration::run_once(app) {
                 Ok(()) => log::info!("setup: migration done"),
