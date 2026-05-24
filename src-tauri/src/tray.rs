@@ -29,7 +29,6 @@ struct TrayLabels {
     mode_normal: &'static str,
     mode_detail: &'static str,
     sync: &'static str,
-    settings: &'static str,
     quit: &'static str,
 }
 
@@ -41,7 +40,6 @@ fn tray_labels(lang: &str) -> TrayLabels {
             mode_normal: "Normal 모드",
             mode_detail: "Detail 모드",
             sync: "지금 동기화",
-            settings: "설정…",
             quit: "종료",
         },
         _ => TrayLabels {
@@ -50,7 +48,6 @@ fn tray_labels(lang: &str) -> TrayLabels {
             mode_normal: "Normal mode",
             mode_detail: "Detail mode",
             sync: "Sync now",
-            settings: "Settings…",
             quit: "Quit",
         },
     }
@@ -65,11 +62,10 @@ pub fn setup(app: &mut App, lang: &str) -> tauri::Result<()> {
     let mode_detail =
         MenuItem::with_id(app, "mode_detail", labels.mode_detail, true, None::<&str>)?;
     let sync = MenuItem::with_id(app, "sync", labels.sync, true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", labels.settings, true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", labels.quit, true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
-        &[&show, &mode_mini, &mode_normal, &mode_detail, &sync, &settings, &quit],
+        &[&show, &mode_mini, &mode_normal, &mode_detail, &sync, &quit],
     )?;
 
     let icon = load_tray_icon();
@@ -90,15 +86,6 @@ pub fn setup(app: &mut App, lang: &str) -> tauri::Result<()> {
             }
             "sync" => {
                 let _ = app.emit("tray://sync", ());
-            }
-            "settings" => {
-                // 위젯이 hidden 상태일 수도 있으니 먼저 show + focus,
-                // 그 다음 frontend 가 Settings 패널 열도록 신호.
-                if let Some(win) = app.get_webview_window("main") {
-                    let _ = win.show();
-                    let _ = win.set_focus();
-                }
-                let _ = app.emit("tray://settings", ());
             }
             "quit" => app.exit(0),
             _ => {}

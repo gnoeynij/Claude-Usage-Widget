@@ -202,3 +202,35 @@ input[type="range"]::-webkit-slider-thumb {
   box-shadow: 0 2px 4px rgba(0,0,0,0.18), 0 0 0 0.5px rgba(0,0,0,0.04);
   cursor: default;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Scrollbar — Liquid Glass tone. The default WebView scrollbar (gray slab
+   plus arrow buttons) reads as harsh against the panel material. Replace
+   with a thin, near-transparent track plus a fill-token thumb that lifts
+   on hover. Tauri uses WebView2 on Windows and WKWebView on macOS — both
+   honor the ::-webkit-scrollbar pseudo-elements.
+   ────────────────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--fill-2);
+  border-radius: var(--r-pill);
+  /* 2px transparent border + background-clip 으로 트랙 안 thumb 좌우 1px
+     여백을 만들어 visually 더 둥글고 작게 보이게. iOS overlay scrollbar
+     스타일. */
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: background var(--dur-fast) var(--ease-smooth);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fill-1);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}

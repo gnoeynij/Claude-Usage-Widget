@@ -438,23 +438,11 @@ export async function initStore() {
   // back to disk (read-after-write loop).
   suppressPersist = true;
   try {
-    // lang: persisted value wins; otherwise pick `ko` if the OS reports a
-    // Korean locale (navigator.language starts with "ko"), else `en`. New
-    // users on Korean systems get the localized UI without having to dig
-    // into Settings.
-    let langApplied = false;
     await loadSetting<Lang>(
       "lang",
-      (v) => {
-        setLang(v);
-        langApplied = true;
-      },
+      (v) => setLang(v),
       (v): v is Lang => v === "en" || v === "ko",
     );
-    if (!langApplied) {
-      const osLang = navigator.language?.toLowerCase().startsWith("ko") ? "ko" : "en";
-      setLang(osLang);
-    }
     // dark: persisted value wins; otherwise follow OS `prefers-color-scheme`.
     // A media-query listener below keeps the widget in sync if the OS theme
     // changes while the widget is running, *unless* the user has explicitly
@@ -564,9 +552,6 @@ export async function initStore() {
   });
   await listen("tray://sync", () => {
     void syncNow();
-  });
-  await listen("tray://settings", () => {
-    setStore("settingsOpen", true);
   });
 
   // Minute heartbeat for time-based UI (header dot freshness, "X min ago"
