@@ -36,6 +36,13 @@
   --separator: rgba(60, 60, 67, 0.18);
   --hairline: rgba(0, 0, 0, 0.08);
 
+  /* Modal scrim — Settings 오버레이가 위젯 본체 위에 덮는 wash 색. opacity
+     slider 가 위젯 본체를 fade 시킨 상태에서 (예: opacity 100% → 본체
+     완전 투명) Settings 만 남아 desktop 위 paint 되므로 라이트 모드에서
+     검은 톤 scrim 은 *desktop 색과 무관하게 회색으로 어두워짐*. 라이트
+     모드는 밝은 wash 로 분기. */
+  --scrim-bg: rgba(255, 255, 255, 0.55);
+
   /* ─── Liquid Glass material (light) ──────────────────────────────────── */
   /* RGB + alpha kept split so opacity-mult can dial alpha independently.
      `--glass-base-alpha = 1` so that at slider 0% the panel reads as fully
@@ -147,6 +154,10 @@
 
   --separator: rgba(235, 237, 250, 0.24);
   --hairline: rgba(255, 255, 255, 0.16);
+
+  /* 다크 모드 scrim — 검은 톤 그대로. 어두운 desktop 위에 자연스럽게
+     paint 됨. 사용자 신호 OK. */
+  --scrim-bg: rgba(0, 0, 0, 0.32);
 
   /* Stronger fills than v1 — slider needs a clearly visible top end.
      base-alpha = 1 so slider 0% reads as fully opaque (see :root note). */

@@ -238,7 +238,7 @@ export function SettingsPanel() {
         // than collapsing to its content height and leaking the view behind.
         "flex-direction": "column",
         padding: "var(--s-2)",
-        background: "rgba(0, 0, 0, 0.32)",
+        background: "var(--scrim-bg)",
         "backdrop-filter": "blur(12px) saturate(140%)",
         "-webkit-backdrop-filter": "blur(12px) saturate(140%)",
         "border-radius": "inherit",

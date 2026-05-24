@@ -42,6 +42,11 @@
           mask-composite: exclude;
   pointer-events: none;
   z-index: 2;
+  /* Fade specular border with the opacity slider so opacity 100% really
+     hides the whole panel (otherwise the 1px outline keeps painting and
+     the user sees "settings only fading" because the panel outline never
+     disappears). */
+  opacity: var(--bg-alpha-mult);
 }
 
 /* Subtle vertical wash inside the panel — the top is a touch brighter,
@@ -56,7 +61,9 @@
     var(--inner-glow) 0%,
     transparent 30%
   );
-  opacity: 0.55;
+  /* 0.55 base * --bg-alpha-mult so the inner glow also fades with the
+     opacity slider. */
+  opacity: calc(0.55 * var(--bg-alpha-mult));
   pointer-events: none;
   z-index: 1;
 }
@@ -100,6 +107,8 @@
           mask-composite: exclude;
   pointer-events: none;
   z-index: 1;
+  /* Same as .glass-panel::before — fade card outline with opacity slider. */
+  opacity: var(--bg-alpha-mult);
 }
 
 .glass-card > * { position: relative; z-index: 2; }

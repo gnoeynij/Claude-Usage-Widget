@@ -126,6 +126,7 @@ npm run tauri build
 
 ### v2.0.x (Tauri 2 + SolidJS line)
 
+- [**v2.1.1**](docs/release-notes/v2.1.1.md) — opacity slider visual consistency hotfix: `.glass-panel::before/::after` + `.glass-card::before` now fade with `--bg-alpha-mult` (previously the outline + inner glow stayed painted at 100% opacity); `--scrim-bg` light/dark token split fixes the dark-gray Settings wash on light mode.
 - [**v2.1.0**](docs/release-notes/v2.1.0.md) — OS usage notifications (5h session 85% / 95% thresholds, lazy permission request) + Detail-mode mtime-based caching (heavy users no longer re-walk the full ~/.claude/projects on every sync) + log rotation cap (~5 MB) + `scripts/bump-version.mjs` for one-shot 6-file version bumps.
 - [**v2.0.3**](docs/release-notes/v2.0.3.md) — settings persist gap fix (lang / dark / opacity / sync / always-on-top / mode now survive restarts) + PyQt6 migration realignment + tray menu i18n (ko/en) + error banner expanded to 4 states (TOKEN_EXPIRED / NO_CREDENTIALS / RATE_LIMITED / NETWORK).
 - [**v2.0.2**](docs/release-notes/v2.0.2.md) — first macOS release (vibrancy, Keychain credentials, drag region, DMG) + black-corner fix + unified Windows/macOS auto-updater + Detail-mode UX (hourly cost, per-model tokens, drag overlay).

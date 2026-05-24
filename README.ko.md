@@ -126,6 +126,7 @@ npm run tauri build
 
 ### v2.0.x (Tauri 2 + SolidJS 라인)
 
+- [**v2.1.1**](docs/release-notes/v2.1.1.md) — 배경 투명도 시각 정합성 hotfix: `.glass-panel::before/::after` + `.glass-card::before` 가 `--bg-alpha-mult` 따라 fade (이전엔 opacity 100% 에서도 외곽선·inner glow 가 그대로 paint), `--scrim-bg` 라이트/다크 토큰 분기로 라이트 모드 Settings 어두운 회색 wash 해소.
 - [**v2.1.0**](docs/release-notes/v2.1.0.md) — 사용량 OS 알림 (5h 세션 85% / 95% 임계치, 첫 도달 시점 lazy 권한 요청) + Detail 모드 mtime 기반 캐싱 (헤비 사용자의 풀스캔 latency 단축) + 로그 회전 상한 (~5MB) + `scripts/bump-version.mjs` 6 파일 일괄 bump 헬퍼.
 - [**v2.0.3**](docs/release-notes/v2.0.3.md) — 설정 persist 회귀 해소 (lang / 다크 / opacity / sync / 항상 위 / 모드가 재시작 후에도 유지) + PyQt6 마이그레이션 정렬 + 트레이 메뉴 i18n (한/영) + 에러 배너 4종 확장 (TOKEN_EXPIRED / NO_CREDENTIALS / RATE_LIMITED / NETWORK).
 - [**v2.0.2**](docs/release-notes/v2.0.2.md) — macOS 첫 정식 릴리즈 (vibrancy, Keychain credentials, drag region, DMG) + 검은 모서리 fix + Windows/macOS 자동 업데이트 통합 + Detail 모드 UX (시간당 비용, 모델별 토큰, drag overlay).
