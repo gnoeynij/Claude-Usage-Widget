@@ -233,11 +233,17 @@ fn collect_records(root: &Path) -> Vec<Record> {
     let seen_set: std::collections::HashSet<_> = seen.iter().collect();
     cache.retain(|k, _| seen_set.contains(k));
 
+    // Total records currently cached — a rough proxy for memory footprint.
+    // 1 record ≈ 50-100 B (UsageTokens 4×u64 + DateTime + model String), so
+    // a million records is ~50-100 MB. Useful for spotting cache bloat in
+    // heavy-user bug reports without instrumenting allocation.
+    let cache_records: usize = cache.values().map(|c| c.records.len()).sum();
     log::info!(
-        "aggregate: scanned {} files (cache hits={} misses={}) in {}ms",
+        "aggregate: scanned {} files (cache hits={} misses={} cached_records={}) in {}ms",
         seen.len(),
         hits,
         misses,
+        cache_records,
         start.elapsed().as_millis(),
     );
     out

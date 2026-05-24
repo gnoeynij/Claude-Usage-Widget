@@ -265,13 +265,24 @@ export function setNotifyThresholds(value: boolean) {
 
 const NOTIFY_LEVELS = [85, 95] as const;
 
+// Session-scoped flag: once the OS reports `denied`, don't keep re-prompting
+// every sync. The user can change the decision in OS Settings; we'll pick it
+// up on the next widget restart (isPermissionGranted will re-read OS state).
+let notificationPermissionDenied = false;
+
 /** Fire an OS notification when the 5h session crosses 85 % / 95 %.
  *  Idempotent — each threshold fires once per session block (identified by
  *  `session_resets_at`). Permission is requested lazily on first crossing,
  *  not at boot, so users who never approach the limit aren't pinged. */
 async function maybeNotifyThreshold(usage: UsagePayload) {
   if (!store.notifyThresholds) return;
+  if (notificationPermissionDenied) return;
+  // `session_resets_at` should always come back from the API, but guard
+  // anyway — without a block identifier we can't reliably detect a new 5h
+  // window and would risk either spamming or never re-arming. Skip silently.
   const block = usage.session_resets_at ?? null;
+  if (block === null) return;
+
   // New 5h block started — reset the fired-thresholds list.
   if (block !== store.notifiedBlock) {
     setStore("notifiedBlock", block);
@@ -295,7 +306,11 @@ async function maybeNotifyThreshold(usage: UsagePayload) {
     void warn(`notification permission failed: ${toErrorMessage(e)}`);
     return;
   }
-  if (!granted) return;
+  if (!granted) {
+    notificationPermissionDenied = true;
+    void info("notification permission denied — won't re-prompt this session");
+    return;
+  }
 
   for (const level of due) {
     try {
