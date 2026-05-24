@@ -123,13 +123,11 @@ type StoreShape = {
   modeSizes: ModeSizes;
   /** Tray icon breathing pulse. Default ON; toggle from Settings. */
   breatheEnabled: boolean;
-  /** OS notification when 5h session usage crosses 85% / 95%.
-   *  Default ON; toggle from Settings. Permission requested only on first
-   *  threshold crossing (no upfront prompt). */
-  notifyThresholds: boolean;
-  /** Per-session-block memory of which thresholds already fired, so the
-   *  notification doesn't repeat on every sync. Reset when
-   *  `usage.session_resets_at` changes (new 5h block started). */
+  /** Per-session-block memory of which 85% / 95% thresholds already fired,
+   *  so the OS notification doesn't repeat on every sync. Reset when
+   *  `usage.session_resets_at` changes (new 5h block started). Notification
+   *  enable/disable itself is the OS's responsibility — no widget-side
+   *  toggle since v2.1.0+. */
   notifiedBlock: string | null;
   notifiedLevels: number[]; // e.g. [85] or [85, 95]
 };
@@ -155,7 +153,6 @@ const [store, setStore] = createStore<StoreShape>({
   updateDownloadPct: 0,
   modeSizes: { mini: null, normal: null, detail: null },
   breatheEnabled: true,
-  notifyThresholds: true,
   notifiedBlock: null,
   notifiedLevels: [],
 });
@@ -258,11 +255,6 @@ export function setBreatheEnabled(value: boolean) {
   }
 }
 
-export function setNotifyThresholds(value: boolean) {
-  setStore("notifyThresholds", value);
-  if (!suppressPersist) void persistSetting("notifyThresholds", value);
-}
-
 const NOTIFY_LEVELS = [85, 95] as const;
 
 // Session-scoped flag: once the OS reports `denied`, don't keep re-prompting
@@ -275,7 +267,6 @@ let notificationPermissionDenied = false;
  *  `session_resets_at`). Permission is requested lazily on first crossing,
  *  not at boot, so users who never approach the limit aren't pinged. */
 async function maybeNotifyThreshold(usage: UsagePayload) {
-  if (!store.notifyThresholds) return;
   if (notificationPermissionDenied) return;
   // `session_resets_at` should always come back from the API, but guard
   // anyway — without a block identifier we can't reliably detect a new 5h
@@ -439,11 +430,6 @@ export async function initStore() {
   await loadSetting<boolean>(
     "breatheEnabled",
     (v) => setStore("breatheEnabled", v),
-    (v): v is boolean => typeof v === "boolean",
-  );
-  await loadSetting<boolean>(
-    "notifyThresholds",
-    (v) => setStore("notifyThresholds", v),
     (v): v is boolean => typeof v === "boolean",
   );
   await loadSetting<string | null>(
