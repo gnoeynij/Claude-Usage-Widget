@@ -2,7 +2,7 @@ import { Show, For, createMemo } from "solid-js";
 import { GlassCard } from "../components/GlassCard";
 import { CapsuleProgress } from "../components/CapsuleProgress";
 import { Donut } from "../components/Donut";
-import { store } from "../state/store";
+import { store, syncNow } from "../state/store";
 import { t } from "../i18n";
 import { formatCost, formatTokens } from "../utils/format";
 import { startWindowDrag } from "../utils/drag";
@@ -56,6 +56,7 @@ function ActiveCard() {
                 size={88}
                 stroke={7}
                 label={`${Math.floor(act().remaining_min / 60)}h ${act().remaining_min % 60}m`}
+                onClick={() => void syncNow()}
               />
               <div
                 style={{

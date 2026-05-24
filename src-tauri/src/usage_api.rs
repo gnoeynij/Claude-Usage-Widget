@@ -114,12 +114,6 @@ struct UsageBlock {
 }
 
 #[derive(Deserialize, Debug, Default)]
-struct ExtraUsage {
-    #[serde(default)]
-    is_enabled: Option<bool>,
-}
-
-#[derive(Deserialize, Debug, Default)]
 struct UsageResponse {
     #[serde(default)]
     five_hour: UsageBlock,
@@ -127,8 +121,6 @@ struct UsageResponse {
     seven_day: UsageBlock,
     #[serde(default)]
     seven_day_sonnet: UsageBlock,
-    #[serde(default)]
-    extra_usage: ExtraUsage,
 }
 
 #[derive(Serialize, Default, Debug)]
@@ -138,8 +130,6 @@ pub struct UsageOutput {
     pub seven_day_sonnet: f64,
     pub session_resets_at: Option<String>,
     pub weekly_resets_at: Option<String>,
-    pub plan_name: String,
-    pub is_connected: bool,
 }
 
 pub async fn fetch_usage() -> Result<UsageOutput> {
@@ -208,20 +198,11 @@ async fn call_usage(access_token: &str) -> Result<UsageOutput> {
 
     let body: UsageResponse = resp.json().await.context("JSON_PARSE_ERROR")?;
 
-    let plan_name = if body.extra_usage.is_enabled.unwrap_or(false) {
-        "Max (Extra)"
-    } else {
-        "Max"
-    }
-    .to_string();
-
     Ok(UsageOutput {
         five_hour: body.five_hour.utilization.unwrap_or(0.0),
         seven_day: body.seven_day.utilization.unwrap_or(0.0),
         seven_day_sonnet: body.seven_day_sonnet.utilization.unwrap_or(0.0),
         session_resets_at: body.five_hour.resets_at,
         weekly_resets_at: body.seven_day.resets_at,
-        plan_name,
-        is_connected: true,
     })
 }

@@ -130,6 +130,11 @@ type StoreShape = {
    *  toggle since v2.1.0+. */
   notifiedBlock: string | null;
   notifiedLevels: number[]; // e.g. [85] or [85, 95]
+  /** Same shape, but for the 7-day weekly limit (`usage.seven_day` +
+   *  `weekly_resets_at`). Tracked separately so a fresh weekly window
+   *  doesn't clear pending session notifications and vice versa. */
+  notifiedWeek: string | null;
+  notifiedWeekLevels: number[];
 };
 
 const [store, setStore] = createStore<StoreShape>({
@@ -155,6 +160,8 @@ const [store, setStore] = createStore<StoreShape>({
   breatheEnabled: true,
   notifiedBlock: null,
   notifiedLevels: [],
+  notifiedWeek: null,
+  notifiedWeekLevels: [],
 });
 
 export { store, setStore };
@@ -262,30 +269,84 @@ const NOTIFY_LEVELS = [85, 95] as const;
 // up on the next widget restart (isPermissionGranted will re-read OS state).
 let notificationPermissionDenied = false;
 
-/** Fire an OS notification when the 5h session crosses 85 % / 95 %.
- *  Idempotent — each threshold fires once per session block (identified by
- *  `session_resets_at`). Permission is requested lazily on first crossing,
- *  not at boot, so users who never approach the limit aren't pinged. */
+type NotifyScope = "session" | "weekly";
+
+type ScopeKeys = {
+  block: "notifiedBlock" | "notifiedWeek";
+  levels: "notifiedLevels" | "notifiedWeekLevels";
+};
+
+const SCOPE_KEYS: Record<NotifyScope, ScopeKeys> = {
+  session: { block: "notifiedBlock", levels: "notifiedLevels" },
+  weekly: { block: "notifiedWeek", levels: "notifiedWeekLevels" },
+};
+
+/** Determine which thresholds need firing for a scope and roll the
+ *  fired-list forward when a new block starts. Returns the levels actually
+ *  due to fire (after dedup), or [] if nothing is pending. */
+function pickDueAndReset(
+  scope: NotifyScope,
+  pct: number,
+  blockId: string | null | undefined,
+): number[] {
+  const block = blockId ?? null;
+  if (block === null) return [];
+  const keys = SCOPE_KEYS[scope];
+  if (block !== store[keys.block]) {
+    setStore(keys.block, block);
+    setStore(keys.levels, []);
+    void persistSetting(keys.block, block);
+    void persistSetting(keys.levels, []);
+  }
+  return NOTIFY_LEVELS.filter(
+    (level) => pct >= level && !store[keys.levels].includes(level),
+  );
+}
+
+function fireForScope(scope: NotifyScope, due: number[], pct: number) {
+  const isWeekly = scope === "weekly";
+  for (const level of due) {
+    try {
+      const title = isWeekly
+        ? t().notifyTitleWeekly(Math.round(pct))
+        : t().notifyTitle(Math.round(pct));
+      const body = isWeekly
+        ? level >= 95
+          ? t().notifyBodyWeekly95
+          : t().notifyBodyWeekly85
+        : level >= 95
+          ? t().notifyBody95
+          : t().notifyBody85;
+      sendNotification({ title, body });
+      void info(
+        `notification fired ${scope} at ${level}% (actual ${pct.toFixed(1)}%)`,
+      );
+    } catch (e) {
+      void warn(`notification send failed: ${toErrorMessage(e)}`);
+    }
+  }
+  const keys = SCOPE_KEYS[scope];
+  const next = [...store[keys.levels], ...due];
+  setStore(keys.levels, next);
+  void persistSetting(keys.levels, next);
+}
+
+/** Fire an OS notification when 5h session or 7-day weekly crosses 85% /
+ *  95%. Idempotent per block. Permission is requested lazily on first
+ *  crossing, not at boot. */
 async function maybeNotifyThreshold(usage: UsagePayload) {
   if (notificationPermissionDenied) return;
-  // `session_resets_at` should always come back from the API, but guard
-  // anyway — without a block identifier we can't reliably detect a new 5h
-  // window and would risk either spamming or never re-arming. Skip silently.
-  const block = usage.session_resets_at ?? null;
-  if (block === null) return;
-
-  // New 5h block started — reset the fired-thresholds list.
-  if (block !== store.notifiedBlock) {
-    setStore("notifiedBlock", block);
-    setStore("notifiedLevels", []);
-    void persistSetting("notifiedBlock", block);
-    void persistSetting("notifiedLevels", []);
-  }
-  const pct = usage.five_hour;
-  const due = NOTIFY_LEVELS.filter(
-    (level) => pct >= level && !store.notifiedLevels.includes(level),
+  const sessionDue = pickDueAndReset(
+    "session",
+    usage.five_hour,
+    usage.session_resets_at,
   );
-  if (due.length === 0) return;
+  const weeklyDue = pickDueAndReset(
+    "weekly",
+    usage.seven_day,
+    usage.weekly_resets_at,
+  );
+  if (sessionDue.length === 0 && weeklyDue.length === 0) return;
 
   let granted = false;
   try {
@@ -303,20 +364,8 @@ async function maybeNotifyThreshold(usage: UsagePayload) {
     return;
   }
 
-  for (const level of due) {
-    try {
-      const title = t().notifyTitle(Math.round(pct));
-      const body =
-        level >= 95 ? t().notifyBody95 : t().notifyBody85;
-      sendNotification({ title, body });
-      void info(`notification fired at ${level}% (actual ${pct.toFixed(1)}%)`);
-    } catch (e) {
-      void warn(`notification send failed: ${toErrorMessage(e)}`);
-    }
-  }
-  const next = [...store.notifiedLevels, ...due];
-  setStore("notifiedLevels", next);
-  void persistSetting("notifiedLevels", next);
+  if (sessionDue.length > 0) fireForScope("session", sessionDue, usage.five_hour);
+  if (weeklyDue.length > 0) fireForScope("weekly", weeklyDue, usage.seven_day);
 }
 
 async function loadModeSizes() {
@@ -339,6 +388,11 @@ async function loadModeSizes() {
 // 없는 디스크 I/O 가 됨. load 흐름에선 이 플래그가 true 인 동안 persist 를
 // skip 한다.
 let suppressPersist = false;
+
+// `setDark` 가 사용자에 의해 호출됐는지 (boot load / OS 자동 감지 가 아닌)
+// 추적. true 가 되면 prefers-color-scheme watcher 가 OS 변경을 무시 — 사용자
+// 명시 선택을 덮어쓰지 않는다.
+let userTouchedDark = false;
 
 function applyModeSize(mode: Mode) {
   const saved = store.modeSizes[mode];
@@ -384,16 +438,39 @@ export async function initStore() {
   // back to disk (read-after-write loop).
   suppressPersist = true;
   try {
+    // lang: persisted value wins; otherwise pick `ko` if the OS reports a
+    // Korean locale (navigator.language starts with "ko"), else `en`. New
+    // users on Korean systems get the localized UI without having to dig
+    // into Settings.
+    let langApplied = false;
     await loadSetting<Lang>(
       "lang",
-      (v) => setLang(v),
+      (v) => {
+        setLang(v);
+        langApplied = true;
+      },
       (v): v is Lang => v === "en" || v === "ko",
     );
+    if (!langApplied) {
+      const osLang = navigator.language?.toLowerCase().startsWith("ko") ? "ko" : "en";
+      setLang(osLang);
+    }
+    // dark: persisted value wins; otherwise follow OS `prefers-color-scheme`.
+    // A media-query listener below keeps the widget in sync if the OS theme
+    // changes while the widget is running, *unless* the user has explicitly
+    // toggled (tracked by `userTouchedDark`).
+    let darkApplied = false;
     await loadSetting<boolean>(
       "dark",
-      (v) => setDark(v),
+      (v) => {
+        setDark(v);
+        darkApplied = true;
+      },
       (v): v is boolean => typeof v === "boolean",
     );
+    if (!darkApplied && typeof window.matchMedia === "function") {
+      setDark(window.matchMedia("(prefers-color-scheme: dark)").matches);
+    }
     await loadSetting<boolean>(
       "alwaysOnTop",
       (v) => void setAlwaysOnTop(v),
@@ -442,6 +519,16 @@ export async function initStore() {
     (v) => setStore("notifiedLevels", v),
     (v): v is number[] => Array.isArray(v) && v.every((n) => typeof n === "number"),
   );
+  await loadSetting<string | null>(
+    "notifiedWeek",
+    (v) => setStore("notifiedWeek", v),
+    (v): v is string | null => v === null || typeof v === "string",
+  );
+  await loadSetting<number[]>(
+    "notifiedWeekLevels",
+    (v) => setStore("notifiedWeekLevels", v),
+    (v): v is number[] => Array.isArray(v) && v.every((n) => typeof n === "number"),
+  );
 
   // Apply current mode's size on boot — otherwise tauri.conf.json 의 초기
   // 사이즈가 그대로 보임 (사용자 신고: "처음 Normal 화면이 옛 사이즈, 모드
@@ -478,6 +565,9 @@ export async function initStore() {
   await listen("tray://sync", () => {
     void syncNow();
   });
+  await listen("tray://settings", () => {
+    setStore("settingsOpen", true);
+  });
 
   // Minute heartbeat for time-based UI (header dot freshness, "X min ago"
   // labels). Independent of sync — never causes network traffic.
@@ -499,6 +589,19 @@ export async function initStore() {
   // Silent auto-check 3s after boot — avoids racing the first usage sync and
   // keeps perceived startup snappy. Errors and "no update" stay silent.
   window.setTimeout(() => void checkForUpdate(false), 3000);
+
+  // Follow OS theme changes unless the user has explicitly picked a theme.
+  if (typeof window.matchMedia === "function") {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onSchemeChange = (e: MediaQueryListEvent) => {
+      if (userTouchedDark) return;
+      setStore("dark", e.matches);
+      applyDarkClass(e.matches);
+    };
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", onSchemeChange);
+    }
+  }
 }
 
 async function pollCredentialsMtime(initial = false) {
@@ -587,7 +690,10 @@ export function toggleSettings() {
 export function setDark(value: boolean) {
   setStore("dark", value);
   applyDarkClass(value);
-  if (!suppressPersist) void persistSetting("dark", value);
+  if (!suppressPersist) {
+    userTouchedDark = true;
+    void persistSetting("dark", value);
+  }
 }
 
 export function setLang(value: Lang) {

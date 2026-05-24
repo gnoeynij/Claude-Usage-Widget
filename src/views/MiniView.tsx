@@ -1,7 +1,7 @@
 import { createSignal } from "solid-js";
 import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
-import { store, setMode } from "../state/store";
+import { store, setMode, syncNow } from "../state/store";
 import { t } from "../i18n";
 import { startWindowDrag } from "../utils/drag";
 
@@ -93,6 +93,7 @@ export function MiniView() {
         size={96}
         stroke={7}
         label={t().session.toLowerCase()}
+        onClick={() => void syncNow()}
       />
       <div
         style={{

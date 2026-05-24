@@ -19,6 +19,9 @@ export const ko: Strings = {
   notifyTitle: (pct) => `Claude 사용량 ${pct}%`,
   notifyBody85: "현재 5시간 세션 한도의 85% 에 도달했어요.",
   notifyBody95: "95% — 5시간 세션 한도에 거의 도달했어요.",
+  notifyTitleWeekly: (pct) => `Claude 주간 사용량 ${pct}%`,
+  notifyBodyWeekly85: "7일 주간 한도의 85% 에 도달했어요.",
+  notifyBodyWeekly95: "95% — 7일 주간 한도에 거의 도달했어요.",
 
   updateAvailable: "업데이트 있음",
   checkForUpdates: "업데이트 확인",
