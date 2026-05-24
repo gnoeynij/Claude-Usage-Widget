@@ -1,14 +1,30 @@
 use anyhow::Result;
 use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
+use once_cell::sync::Lazy;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::SystemTime;
 use walkdir::WalkDir;
 
 use crate::pricing::{cost_usd, family_of, UsageTokens};
 
 const SESSION_BLOCK_HOURS: i64 = 5;
 const RECENT_BLOCKS: usize = 5;
+
+/// Per-file cache so we don't re-parse jsonl files whose mtime hasn't
+/// changed since the last aggregate() call. Heavy Claude Code users
+/// accumulate gigabytes under ~/.claude/projects/ and a full re-walk on
+/// every Detail-mode sync was the dominant cost. Memory cost is bounded
+/// by the dataset size — same as if we always held it in memory.
+struct CachedFile {
+    mtime: SystemTime,
+    records: Vec<Record>,
+}
+
+static FILE_CACHE: Lazy<Mutex<HashMap<PathBuf, CachedFile>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 fn projects_root() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".claude").join("projects"))
@@ -114,8 +130,70 @@ pub fn aggregate() -> Result<AggregateOut> {
     })
 }
 
-fn collect_records(root: &Path) -> Vec<Record> {
+fn parse_jsonl(path: &Path) -> Vec<Record> {
     let mut out = Vec::new();
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return out;
+    };
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) else {
+            continue;
+        };
+        let Some(msg) = value.get("message").and_then(|m| m.as_object()) else {
+            continue;
+        };
+        if msg.get("role").and_then(|r| r.as_str()) != Some("assistant") {
+            continue;
+        }
+        let Some(usage) = msg.get("usage").and_then(|u| u.as_object()) else {
+            continue;
+        };
+        let Some(ts_str) = value.get("timestamp").and_then(|t| t.as_str()) else {
+            continue;
+        };
+        let Ok(ts) = DateTime::parse_from_rfc3339(ts_str) else {
+            continue;
+        };
+        let model = msg
+            .get("model")
+            .and_then(|m| m.as_str())
+            .unwrap_or("")
+            .to_string();
+        if model.is_empty() {
+            continue;
+        }
+        out.push(Record {
+            ts: ts.with_timezone(&Utc),
+            model,
+            tokens: UsageTokens {
+                input: usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+                output: usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+                cache_creation: usage
+                    .get("cache_creation_input_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0),
+                cache_read: usage
+                    .get("cache_read_input_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0),
+            },
+        });
+    }
+    out
+}
+
+fn collect_records(root: &Path) -> Vec<Record> {
+    let start = std::time::Instant::now();
+    let mut cache = FILE_CACHE.lock().expect("FILE_CACHE poisoned");
+    let mut seen: Vec<PathBuf> = Vec::new();
+    let mut out: Vec<Record> = Vec::new();
+    let mut hits = 0usize;
+    let mut misses = 0usize;
+
     for entry in WalkDir::new(root).into_iter().filter_map(Result::ok) {
         if !entry.file_type().is_file() {
             continue;
@@ -123,58 +201,45 @@ fn collect_records(root: &Path) -> Vec<Record> {
         if entry.path().extension().and_then(|s| s.to_str()) != Some("jsonl") {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(entry.path()) else {
-            continue;
+        let path = entry.path().to_path_buf();
+        let mtime = entry
+            .metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+
+        let records = if let Some(cached) = cache.get(&path) {
+            if cached.mtime == mtime {
+                hits += 1;
+                cached.records.clone()
+            } else {
+                misses += 1;
+                let fresh = parse_jsonl(&path);
+                cache.insert(path.clone(), CachedFile { mtime, records: fresh.clone() });
+                fresh
+            }
+        } else {
+            misses += 1;
+            let fresh = parse_jsonl(&path);
+            cache.insert(path.clone(), CachedFile { mtime, records: fresh.clone() });
+            fresh
         };
-        for line in text.lines() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) else {
-                continue;
-            };
-            let Some(msg) = value.get("message").and_then(|m| m.as_object()) else {
-                continue;
-            };
-            if msg.get("role").and_then(|r| r.as_str()) != Some("assistant") {
-                continue;
-            }
-            let Some(usage) = msg.get("usage").and_then(|u| u.as_object()) else {
-                continue;
-            };
-            let Some(ts_str) = value.get("timestamp").and_then(|t| t.as_str()) else {
-                continue;
-            };
-            let Ok(ts) = DateTime::parse_from_rfc3339(ts_str) else {
-                continue;
-            };
-            let model = msg
-                .get("model")
-                .and_then(|m| m.as_str())
-                .unwrap_or("")
-                .to_string();
-            if model.is_empty() {
-                continue;
-            }
-            out.push(Record {
-                ts: ts.with_timezone(&Utc),
-                model,
-                tokens: UsageTokens {
-                    input: usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
-                    output: usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
-                    cache_creation: usage
-                        .get("cache_creation_input_tokens")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0),
-                    cache_read: usage
-                        .get("cache_read_input_tokens")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0),
-                },
-            });
-        }
+        out.extend(records);
+        seen.push(path);
     }
+
+    // Drop entries for files that no longer exist (project deleted, session
+    // archived, etc.) so the cache doesn't grow unbounded.
+    let seen_set: std::collections::HashSet<_> = seen.iter().collect();
+    cache.retain(|k, _| seen_set.contains(k));
+
+    log::info!(
+        "aggregate: scanned {} files (cache hits={} misses={}) in {}ms",
+        seen.len(),
+        hits,
+        misses,
+        start.elapsed().as_millis(),
+    );
     out
 }
 

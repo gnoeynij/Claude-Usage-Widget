@@ -4,8 +4,14 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Store as TauriStore } from "@tauri-apps/plugin-store";
 import { info, warn } from "@tauri-apps/plugin-log";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
 import { checkForUpdate } from "./updater";
 import { toErrorMessage } from "../utils/error";
+import { t } from "../i18n";
 
 export type Mode = "mini" | "normal" | "detail";
 export type Lang = "en" | "ko";
@@ -117,6 +123,15 @@ type StoreShape = {
   modeSizes: ModeSizes;
   /** Tray icon breathing pulse. Default ON; toggle from Settings. */
   breatheEnabled: boolean;
+  /** OS notification when 5h session usage crosses 85% / 95%.
+   *  Default ON; toggle from Settings. Permission requested only on first
+   *  threshold crossing (no upfront prompt). */
+  notifyThresholds: boolean;
+  /** Per-session-block memory of which thresholds already fired, so the
+   *  notification doesn't repeat on every sync. Reset when
+   *  `usage.session_resets_at` changes (new 5h block started). */
+  notifiedBlock: string | null;
+  notifiedLevels: number[]; // e.g. [85] or [85, 95]
 };
 
 const [store, setStore] = createStore<StoreShape>({
@@ -133,13 +148,16 @@ const [store, setStore] = createStore<StoreShape>({
   syncing: false,
   syncError: null,
   errorCode: null,
-  version: "2.0.3",
+  version: "2.1.0",
   tickMinute: 0,
   updateStatus: "idle",
   updateInfo: null,
   updateDownloadPct: 0,
   modeSizes: { mini: null, normal: null, detail: null },
   breatheEnabled: true,
+  notifyThresholds: true,
+  notifiedBlock: null,
+  notifiedLevels: [],
 });
 
 export { store, setStore };
@@ -238,6 +256,61 @@ export function setBreatheEnabled(value: boolean) {
     // breath tick left).
     void invoke("set_usage_icon", { pct: lastUsagePct, alpha: 1.0 }).catch(() => {});
   }
+}
+
+export function setNotifyThresholds(value: boolean) {
+  setStore("notifyThresholds", value);
+  if (!suppressPersist) void persistSetting("notifyThresholds", value);
+}
+
+const NOTIFY_LEVELS = [85, 95] as const;
+
+/** Fire an OS notification when the 5h session crosses 85 % / 95 %.
+ *  Idempotent — each threshold fires once per session block (identified by
+ *  `session_resets_at`). Permission is requested lazily on first crossing,
+ *  not at boot, so users who never approach the limit aren't pinged. */
+async function maybeNotifyThreshold(usage: UsagePayload) {
+  if (!store.notifyThresholds) return;
+  const block = usage.session_resets_at ?? null;
+  // New 5h block started — reset the fired-thresholds list.
+  if (block !== store.notifiedBlock) {
+    setStore("notifiedBlock", block);
+    setStore("notifiedLevels", []);
+    void persistSetting("notifiedBlock", block);
+    void persistSetting("notifiedLevels", []);
+  }
+  const pct = usage.five_hour;
+  const due = NOTIFY_LEVELS.filter(
+    (level) => pct >= level && !store.notifiedLevels.includes(level),
+  );
+  if (due.length === 0) return;
+
+  let granted = false;
+  try {
+    granted = await isPermissionGranted();
+    if (!granted) {
+      granted = (await requestPermission()) === "granted";
+    }
+  } catch (e) {
+    void warn(`notification permission failed: ${toErrorMessage(e)}`);
+    return;
+  }
+  if (!granted) return;
+
+  for (const level of due) {
+    try {
+      const title = t().notifyTitle(Math.round(pct));
+      const body =
+        level >= 95 ? t().notifyBody95 : t().notifyBody85;
+      sendNotification({ title, body });
+      void info(`notification fired at ${level}% (actual ${pct.toFixed(1)}%)`);
+    } catch (e) {
+      void warn(`notification send failed: ${toErrorMessage(e)}`);
+    }
+  }
+  const next = [...store.notifiedLevels, ...due];
+  setStore("notifiedLevels", next);
+  void persistSetting("notifiedLevels", next);
 }
 
 async function loadModeSizes() {
@@ -353,6 +426,21 @@ export async function initStore() {
     (v) => setStore("breatheEnabled", v),
     (v): v is boolean => typeof v === "boolean",
   );
+  await loadSetting<boolean>(
+    "notifyThresholds",
+    (v) => setStore("notifyThresholds", v),
+    (v): v is boolean => typeof v === "boolean",
+  );
+  await loadSetting<string | null>(
+    "notifiedBlock",
+    (v) => setStore("notifiedBlock", v),
+    (v): v is string | null => v === null || typeof v === "string",
+  );
+  await loadSetting<number[]>(
+    "notifiedLevels",
+    (v) => setStore("notifiedLevels", v),
+    (v): v is number[] => Array.isArray(v) && v.every((n) => typeof n === "number"),
+  );
 
   // Apply current mode's size on boot — otherwise tauri.conf.json 의 초기
   // 사이즈가 그대로 보임 (사용자 신고: "처음 Normal 화면이 옛 사이즈, 모드
@@ -446,6 +534,7 @@ export async function syncNow() {
     if (store.mode === "detail") {
       await refreshDetail();
     }
+    void maybeNotifyThreshold(usage);
     // Re-paint tray + taskbar icon with the fresh 5-hour session percent so
     // the gauge in the tray matches the one in the widget. Best-effort —
     // failure is non-fatal (icon stays on previous render).

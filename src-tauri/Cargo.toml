@@ -1,6 +1,6 @@
 [package]
 name = "claude-widget"
-version = "2.0.3"
+version = "2.1.0"
 description = "Claude Usage Widget — Liquid Glass"
 edition = "2021"
 rust-version = "1.77"
@@ -22,6 +22,7 @@ tauri-plugin-os = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-log = "2"
+tauri-plugin-notification = "2"
 log = "0.4"
 window-vibrancy = "0.5"
 serde = { version = "1", features = ["derive"] }

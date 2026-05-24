@@ -47,7 +47,10 @@ pub fn run() {
                 ))
                 .level(log::LevelFilter::Info)
                 .max_file_size(1_000_000) // 1 MB rotation
-                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                // Keep ~5 MB total. `KeepAll` 은 1년 사용 시 수십~수백 MB
+                // 누적 위험. KeepSome(5) 로 디스크 누수 차단하면서 최근
+                // sync·error·update 기록은 버그 리포트용 충분히 보관.
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(5))
                 .build(),
         )
         .plugin(tauri_plugin_window_state::Builder::default().build())
@@ -57,6 +60,7 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             commands::fetch_usage,
             commands::credentials_mtime,

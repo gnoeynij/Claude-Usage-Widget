@@ -12,6 +12,7 @@ import {
   setSyncIntervalMin,
   setOpacity,
   setBreatheEnabled,
+  setNotifyThresholds,
   type Lang,
 } from "../state/store";
 import { checkForUpdate, installUpdate } from "../state/updater";
@@ -326,6 +327,11 @@ export function SettingsPanel() {
           label={t().breathe}
           checked={store.breatheEnabled}
           onChange={setBreatheEnabled}
+        />
+        <SwitchRow
+          label={t().notifyThresholds}
+          checked={store.notifyThresholds}
+          onChange={setNotifyThresholds}
         />
         <Section label={t().opacity}>
           <input
