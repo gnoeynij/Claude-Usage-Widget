@@ -34,6 +34,7 @@
 | **자동 시작 (Windows + macOS 동시)** | UX | (없음) | 현재 자동 시작 기능 자체가 미구현. Windows 추가 시 macOS LaunchAgent 도 같이 (`~/Library/LaunchAgents/com.gnoeynij.claude-widget.plist`). Settings UI 토글 + cfg 분기 모듈. 수요 있을 때. |
 | **macOS 트레이 템플릿 이미지** | 디자인 | [src-tauri/src/icon_render.rs](src-tauri/src/icon_render.rs) | macOS 다크 메뉴바 자동 색반전 (NSImage `isTemplate = true`). 현재 컬러 PNG 그대로 — 사용성 OK 지만 macOS HIG 부정합. 별도 PR. |
 | **macOS Universal binary** | 인프라 | (없음) | aarch64 only 첫 release. Intel Mac 수요 있을 때 `--target universal-apple-darwin`. `rustup target add x86_64-apple-darwin` 은 이미 설치됨. |
+| **macOS opacity slider 재시도** | UX·시각 | [회귀 사례 §17](CLAUDE.md), [docs/sessions/2026-05-24-macos-opacity-attempts.md](docs/sessions/2026-05-24-macos-opacity-attempts.md) | v2.1.1 시점 10시간 시도 후 폐기. 진짜 root cause = macOS WKWebView opaque backing (Tauri `transparent: true` 가 wry → WKWebView 까지 안 닿음). 작동 확인된 패턴 = setup hook + `with_webview` callback 안에서 `setBackgroundColor:clearColor + setOpaque:NO` (runtime IPC 시점은 NSException) + CSS `--bg-alpha-mult` floor 라이트 0.05 / 다크 0.3. **재시도 결정 시 회고 docs 사전 read 의무**. 단점 — *Windows reference 와 100% 시각 일치 불가능*, desktop blending 차이로 *유사*까지만. 또는 *wry upstream 에서 transparent → WKWebView 전달 패치* 자연 해결 시 가장 ROI 높은 시점. |
 
 ---
 
