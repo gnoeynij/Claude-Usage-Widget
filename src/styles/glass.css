@@ -15,8 +15,8 @@
      intermediate token — WebView2's var() chain doesn't reliably
      re-evaluate after first paint. Going one var() level deep fixes that. */
   background: rgba(var(--glass-base-rgb), calc(var(--glass-base-alpha) * var(--bg-alpha-mult)));
-  backdrop-filter: blur(var(--glass-base-blur)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--glass-base-blur)) saturate(180%);
+  /* Phase 1 후보 1 — backdrop-filter 제거 시도. blur 영역 사라짐 + Liquid
+     Glass 영역 디자인 영역 영향 큼 단 *완전 transparent 시각* 영역 가능. */
   box-shadow: var(--shadow-soft);
   isolation: isolate;
   overflow: hidden;
@@ -84,8 +84,7 @@
   /* See .glass-panel above — same inline rgba + calc to ensure cards
      fade with the opacity slider via --bg-alpha-mult. */
   background: rgba(var(--glass-card-rgb), calc(var(--glass-card-alpha) * var(--bg-alpha-mult)));
-  backdrop-filter: blur(var(--glass-card-blur)) saturate(160%);
-  -webkit-backdrop-filter: blur(var(--glass-card-blur)) saturate(160%);
+  /* Phase 1 후보 1 — backdrop-filter 제거 (.glass-panel 영역 동일). */
   box-shadow: var(--shadow-card);
   /* var(--s-3)=12 instead of var(--s-4)=16 — saved ~24px total vertical
      so Detail's 6-card grid fits the default 680px without scrollbar,
