@@ -13,7 +13,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+# macos-private-api: enables wry/transparent + wry/fullscreen on macOS.
+# Required for WKWebView transparent background (drawsBackground=NO KVC).
+# Without this, .glass-panel alpha fade is masked by WKWebView's opaque
+# system backing (white in light mode, dark gray in dark mode) — see
+# CLAUDE.md 회귀 사례 §17. No-op on Windows builds.
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-fs = "2"
 tauri-plugin-http = "2"
 tauri-plugin-store = "2"

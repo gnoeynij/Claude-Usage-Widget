@@ -186,6 +186,24 @@ let breathTimer: number | null = null;
 const BREATH_CYCLE_MS = 4000;
 const BREATH_TICK_MS = 50;
 
+// macOS WKWebView 는 wry `transparent` feature (macos-private-api opt-in) 가
+// 켜졌을 때 `drawsBackground=NO` 로 진짜 transparent 가 되지만, content
+// (text/donut) 도 desktop blending 으로 invisible 해지는 부작용이 있다.
+// `--bg-alpha-mult` 의 minimum floor 를 둬서 panel 이 약하게 paint 되어
+// content layer 가 anchor 되도록 한다. Windows WebView2 는 다르게 합성하므로
+// floor 0. 회고: docs/sessions/2026-05-24-macos-opacity-attempts.md 8차.
+const IS_MAC =
+  typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent);
+const MAC_FLOOR_LIGHT = 0.05;
+const MAC_FLOOR_DARK = 0.3;
+
+function effectiveBgAlphaMult(opacityPct: number, dark: boolean): number {
+  const raw = 1 - opacityPct / 100;
+  if (!IS_MAC) return raw;
+  const floor = dark ? MAC_FLOOR_DARK : MAC_FLOOR_LIGHT;
+  return Math.max(floor, raw);
+}
+
 function getPersistStore(): Promise<TauriStore> {
   if (!persistStorePromise) {
     persistStorePromise = TauriStore.load("widget-settings.json");
@@ -679,6 +697,12 @@ export function setDark(value: boolean) {
     userTouchedDark = true;
     void persistSetting("dark", value);
   }
+  // macOS floor 가 라이트/다크 분기라 dark toggle 시 mult 재계산 필요.
+  // Windows / Linux 는 floor 0 이라 no-op.
+  if (IS_MAC) {
+    const mult = effectiveBgAlphaMult(store.opacity, value);
+    document.documentElement.style.setProperty("--bg-alpha-mult", String(mult));
+  }
 }
 
 export function setLang(value: Lang) {
@@ -712,7 +736,8 @@ export function setOpacity(opacityPct: number) {
   // — kept on at 0% (full Liquid Glass) and cleared as soon as the user
   // dials any transparency, otherwise Mica paints the panel white-ish on
   // bright desktops and masks the fade entirely (see 23222cf retro).
-  const mult = 1 - clamped / 100;
+  // macOS 는 floor 적용 — effectiveBgAlphaMult 주석 참조.
+  const mult = effectiveBgAlphaMult(clamped, store.dark);
   document.documentElement.style.setProperty("--bg-alpha-mult", String(mult));
   void invoke("set_mica_enabled", { enabled: clamped === 0 }).catch(() => {});
 }
