@@ -20,7 +20,6 @@
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
 | **OAuth 직접 refresh (B 방식)** — P0 에서 격하 | UX·인증 | [docs/plans/2026-05-20-oauth-refresh.md](docs/plans/2026-05-20-oauth-refresh.md) §"B 격하 근거" | Anthropic spec 미공개·cred 파일 race·client_id 폐기 위험. recovery (A+D, ✓ 60) 로 80% 효과 달성. **always-spot-check** (진행 결정 시) |
-| **Plan 표시 hardcode → 동적** | UX | [usage_api.rs:211-216](src-tauri/src/usage_api.rs) | "Max" / "Max (Extra)" 만 표시. Pro / Team 사용자엔 부정확. raw 응답에 plan 필드 있는지 확인 후 진행 — 임시 raw log 1회 빌드 → sync → widget.log 의 raw json schema 확인 후 결정. |
 
 ---
 
