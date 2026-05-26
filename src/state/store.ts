@@ -194,8 +194,12 @@ const BREATH_TICK_MS = 50;
 // floor 0. 회고: docs/sessions/2026-05-24-macos-opacity-attempts.md 8차.
 const IS_MAC =
   typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent);
-const MAC_FLOOR_LIGHT = 0.05;
-const MAC_FLOOR_DARK = 0.3;
+// Phase 1 실험 — floor 영역 완전 제거. content layer 영역 *GPU translateZ
+// 영역* 강제 (glass.css 의 .glass-panel > * / .glass-card > * 영역) 로
+// content 영역 invisible 영역 회피 가설 영역. 실패 시 floor 영역 복원
+// (이전 라이트 0.05 / 다크 0.3 영역).
+const MAC_FLOOR_LIGHT = 0;
+const MAC_FLOOR_DARK = 0;
 
 function effectiveBgAlphaMult(opacityPct: number, dark: boolean): number {
   const raw = 1 - opacityPct / 100;

@@ -68,8 +68,15 @@
   z-index: 1;
 }
 
-/* Cards sit above both pseudo layers. */
-.glass-panel > * { position: relative; z-index: 3; }
+/* Cards sit above both pseudo layers.
+   transform: translateZ(0) 영역 — Phase 1 실험. macOS WKWebView 영역에서
+   content 영역 *GPU compositor layer 영역 강제* 분리 — background alpha 0
+   시 content 영역 invisible 영역 회피 가설. */
+.glass-panel > * {
+  position: relative;
+  z-index: 3;
+  transform: translateZ(0);
+}
 
 .glass-card {
   position: relative;
@@ -111,7 +118,11 @@
   opacity: var(--bg-alpha-mult);
 }
 
-.glass-card > * { position: relative; z-index: 2; }
+.glass-card > * {
+  position: relative;
+  z-index: 2;
+  transform: translateZ(0);
+}
 
 /* Primary / accented card — lifts slightly above the default cards and adds
    a 2px accent hairline at the top edge so the eye knows which card is hero. */
