@@ -166,6 +166,12 @@ fn parse_jsonl(path: &Path) -> Vec<Record> {
         if model.is_empty() {
             continue;
         }
+        // "<synthetic>" marks Claude Code placeholder turns (no API call, zero
+        // usage). Skip them so they don't inflate the message count or anchor a
+        // phantom $0 session block.
+        if model == "<synthetic>" {
+            continue;
+        }
         out.push(Record {
             ts: ts.with_timezone(&Utc),
             model,

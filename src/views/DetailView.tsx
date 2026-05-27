@@ -17,6 +17,10 @@ function formatTimestamp(iso: string) {
   return `${d.toLocaleDateString(locale, { month: "short", day: "numeric" })} ${time}`;
 }
 
+// The three Claude families, fixed display order (most → least capable). Shown
+// even at 0 so the card reads consistently.
+const MODEL_FAMILIES = ["Opus", "Sonnet", "Haiku"];
+
 function modelColor(family: string) {
   const lower = family.toLowerCase();
   if (lower.includes("opus")) return "var(--accent)";
@@ -225,16 +229,28 @@ function RecentCard() {
 }
 
 function ModelsCard() {
-  const fams = () => store.detail?.by_family ?? [];
-  // Memoize: `Math.max(...arr.map(...))` allocates a fresh array and spreads
-  // it every time, called from the inner For. Cache until `fams()` invalidates.
-  const peak = createMemo(() => Math.max(...fams().map((f) => f.cost), 0.01));
+  // Show the three Claude families in fixed order, 0 if unused, so the card
+  // reads consistently (the user expects to see Sonnet/Haiku even at 0). A
+  // non-standard family is appended only when it has real usage — that keeps
+  // zero-usage "<synthetic>" placeholders (bucketed as "Other") off the card.
+  const rows = createMemo(() => {
+    const fams = store.detail?.by_family ?? [];
+    const byName = new Map(fams.map((f) => [f.family, f]));
+    const fixed = MODEL_FAMILIES.map(
+      (name) => byName.get(name) ?? { family: name, cost: 0, tokens: 0 },
+    );
+    const extras = fams.filter(
+      (f) => !MODEL_FAMILIES.includes(f.family) && f.cost > 0,
+    );
+    return [...fixed, ...extras];
+  });
+  const peak = createMemo(() => Math.max(...rows().map((f) => f.cost), 0.01));
   return (
     <GlassCard>
       <div class="t-section" style={{ "margin-bottom": "var(--s-3)" }}>
         {t().models}
       </div>
-      <For each={fams()}>
+      <For each={rows()}>
         {(fam) => {
           const pct = () => (peak() > 0 ? (fam.cost / peak()) * 100 : 0);
           const color = modelColor(fam.family);
@@ -299,9 +315,6 @@ function ModelsCard() {
           );
         }}
       </For>
-      <Show when={fams().length === 0}>
-        <EmptyHint />
-      </Show>
     </GlassCard>
   );
 }
