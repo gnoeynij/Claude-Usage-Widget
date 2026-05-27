@@ -20,8 +20,8 @@ A lightweight desktop tool that sits in a corner of your screen and tracks your 
 
 ### Three-mode widget
 - **Mini** (240×112) — Donut + 2-row capsule. Minimum footprint
-- **Normal** (360×420) — Donut hero + weekly capsules. Default
-- **Detail** (600×680) — 4-card dashboard: Active session, Periods (today / yesterday / week / month), Recent 5h blocks, per-model usage
+- **Normal** (320×360) — Donut hero + weekly capsules. Default
+- **Detail** (592×619, minSize 520×520) — 4-card dashboard: Active session, Periods (today / yesterday / week / month), Recent 5h blocks, per-model usage
 
 Switch via footer SegmentedControl or tray menu. Each mode has its own default size + minSize, and any size you drag-adjust is remembered per mode.
 
@@ -37,6 +37,11 @@ Silent check 3 seconds after boot + manual button in Settings. When an update is
 
 ### OAuth token auto-recovery
 Reads Claude Code's OAuth token from the platform-native store — `~/.claude/.credentials.json` on Windows, the **macOS Keychain** (`Claude Code-credentials` service) on macOS. On expiry, the in-app banner tells you to run `claude` once and the widget self-heals on the next sync.
+
+### Usage notifications
+- OS notification when you cross **85%** or **95%** of the current 5-hour session limit *or* the 7-day weekly limit
+- One notification per threshold per block — no repeats on every sync
+- Permission requested lazily on the first crossing (not at boot); OS Settings governs whether they're shown
 
 ### Bilingual (English / Korean)
 Every string switches instantly, including time labels and AM/PM.
