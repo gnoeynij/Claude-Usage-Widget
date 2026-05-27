@@ -135,6 +135,13 @@
   --donut-stroke: 8px;
 }
 
+/* macOS native windows round corners a touch more than Win11 (~13px vs ~10px).
+   Bump only the macOS panel radius so it lines up with the window mask in
+   vibrancy_mac.rs; Windows keeps the base --r-window: 10px above. */
+:root.mac {
+  --r-window: 13px;
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
    Dark theme — class-based, so we can also override per element when needed.
    ────────────────────────────────────────────────────────────────────────── */
