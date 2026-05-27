@@ -287,10 +287,10 @@ gh release create vX.Y.Z --target main --title "..." --notes "..." \
 
 이 섹션은 새 PC·새 Claude Code 세션이 이 프로젝트의 *현재 상태*를 빠르게 잡기 위한 요약. 사실이 바뀌면 갱신하고, 추정이 섞이면 명시한다.
 
-- **버전**: `v2.1.0` ([package.json](package.json), [package-lock.json](package-lock.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml), [src-tauri/Cargo.lock](src-tauri/Cargo.lock), [src/state/store.ts](src/state/store.ts) 모두 동일. **bump 헬퍼** `node scripts/bump-version.mjs <semver>` (또는 `--check`) — 회귀 사례 §3 재발 방어.
+- **버전**: `v2.1.3` ([package.json](package.json), [package-lock.json](package-lock.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml), [src-tauri/Cargo.lock](src-tauri/Cargo.lock), [src/state/store.ts](src/state/store.ts) 모두 동일. **bump 헬퍼** `node scripts/bump-version.mjs <semver>` (또는 `--check`) — 회귀 사례 §3 재발 방어.
 - **빌드**: `npm run tauri build` exit 0. Windows MSVC 14.44.35207 + rustc 1.95.0 + Node 환경에서 51~96s (v2.1.0 측정 1m 36s — notification plugin 첫 컴파일). macOS Apple Silicon (rustc 1.95.0 + Node 20.20.2) 에서 19~31s. **CI 자동 빌드** ([.github/workflows/release.yml](.github/workflows/release.yml)) — tag push 시 양 OS runner 동시 (~5~10분).
 - **자동화 테스트**: **없음.** 검증은 빌드된 `.exe`/`.app` 실행 + UI 동작 + 캡처 스크립트로 수동 (`capture-widget.ps1` / `capture-widget.sh`).
-- **자동 업데이트**: 양 OS 활성 (v2.1.0). `releases/latest/download/latest.json` endpoint, minisign 서명 검증. macOS 는 ad-hoc 서명 (Apple Developer 미가입), Gatekeeper 첫 실행 우회 README 안내.
+- **자동 업데이트**: 양 OS 활성 (v2.1.3). `releases/latest/download/latest.json` endpoint, minisign 서명 검증. macOS 는 ad-hoc 서명 (Apple Developer 미가입), Gatekeeper 첫 실행 우회 README 안내.
 - **알려진 빈 구멍** ([BACKLOG.md](BACKLOG.md) 참조):
   - OAuth 토큰 **full refresh (B 방식 — refresh_token 으로 새 access token 발급)** 미구현 — recovery (만료 banner + mtime polling + 자동 retry) 는 v2.0.0 에서 완료 (BACKLOG ✓ 60). 토큰 만료 시 사용자가 `claude` CLI 1회 실행 필요. B 방식은 Anthropic spec 미공개·client_id 폐기 위험으로 P0 → P1 격하.
   - macOS Universal binary 미지원 — Apple Silicon only (Intel Mac 수요 시 후속, BACKLOG P2)
