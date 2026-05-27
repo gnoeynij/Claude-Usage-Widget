@@ -28,7 +28,7 @@ Switch via footer SegmentedControl or tray menu. Each mode has its own default s
 ### Liquid Glass + OS-native vibrancy
 System backdrop composited with OS-level vibrancy — **Win11 Mica/Acrylic** on Windows, **NSVisualEffectView (HudWindow material)** on macOS. The background-opacity slider fades only the background — text, donuts, and gauges stay fully opaque.
 
-### Live tray icon
+### Tray status indicator
 - Anthropic mark with a status dot — **green** when the last sync succeeded, **red** when it failed (token expired, network down, rate limited, …)
 - The dot flips immediately on every sync, so you can tell at a glance whether the widget is healthy without expanding it
 
