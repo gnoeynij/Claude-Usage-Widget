@@ -22,6 +22,17 @@ function statusDotColor() {
   if (!store.lastSyncAt) return "var(--label-quaternary)";
   const ageMin =
     (Date.now() - new Date(store.lastSyncAt).getTime()) / 60_000;
+  // Scale freshness to the sync cadence so a healthy auto-sync never reads as
+  // "stale". Hardcoded 5/30 made the dot grey for the back half of every
+  // interval >5min (e.g. minutes 5–10 at the 10min setting). +1min grace
+  // covers the scheduled sync firing and completing.
+  const interval = store.syncIntervalMin;
+  if (interval > 0) {
+    if (ageMin < interval + 1) return "var(--success-dim)";
+    if (ageMin < interval * 2 + 1) return "var(--label-secondary)";
+    return "var(--label-tertiary)";
+  }
+  // Auto-sync off: freshness is on the user, keep the absolute-age fade.
   if (ageMin < 5) return "var(--success-dim)";
   if (ageMin < 30) return "var(--label-secondary)";
   return "var(--label-tertiary)";
