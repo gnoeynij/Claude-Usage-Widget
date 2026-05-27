@@ -135,11 +135,11 @@
   --donut-stroke: 8px;
 }
 
-/* macOS native windows round corners a touch more than Win11 (~13px vs ~10px).
-   Bump only the macOS panel radius so it lines up with the window mask in
-   vibrancy_mac.rs; Windows keeps the base --r-window: 10px above. */
+/* macOS window corner radius varies by app (~10–13px); 24px is well above
+   that — a deliberately rounder look chosen by eye. Set the macOS panel radius
+   to line up with the window mask in vibrancy_mac.rs; Windows keeps base 10px. */
 :root.mac {
-  --r-window: 13px;
+  --r-window: 24px;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

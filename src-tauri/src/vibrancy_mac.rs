@@ -34,7 +34,7 @@ pub fn clear_vibrancy(window: &WebviewWindow) -> Result<(), String> {
 }
 
 /// Round the window's content-view layer to match macOS native windows
-/// (~13px, mirrors `:root.mac --r-window` in tokens.css). NSVisualEffectView paints a
+/// (~24px, mirrors `:root.mac --r-window` in tokens.css). NSVisualEffectView paints a
 /// square rectangle without this, masking the CSS `border-radius` on
 /// `.glass-panel` and giving the user "각진 꼭지점". Reapplied after both
 /// `apply_vibrancy` and `clear_vibrancy` because either call can reset the
@@ -86,7 +86,7 @@ unsafe fn apply_corner_to_view(view: *mut AnyObject) {
     if layer.is_null() {
         return;
     }
-    let _: () = msg_send![layer, setCornerRadius: 13.0_f64];
+    let _: () = msg_send![layer, setCornerRadius: 24.0_f64];
     // Match macOS native windows' continuous (squircle) corner instead of
     // CALayer's default circular arc. kCACornerCurveContinuous == the string
     // "continuous"; build it at runtime so we don't link QuartzCore for one const.
