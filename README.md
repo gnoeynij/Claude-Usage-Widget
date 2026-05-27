@@ -29,11 +29,8 @@ Switch via footer SegmentedControl or tray menu. Each mode has its own default s
 System backdrop composited with OS-level vibrancy — **Win11 Mica/Acrylic** on Windows, **NSVisualEffectView (HudWindow material)** on macOS. The background-opacity slider fades only the background — text, donuts, and gauges stay fully opaque.
 
 ### Live tray icon
-- Anthropic pixel character on a radial halo
-- Halo color is the threshold (green / amber / red, Apple stoplight)
-- Gentle breathing pulse (4-second cycle) you can toggle in Settings
-- 1px black stroke around the character for contrast on any background
-- On a connection error, the halo turns neutral grey and a red status dot appears in the top-right corner
+- Anthropic mark with a status dot — **green** when the last sync succeeded, **red** when it failed (token expired, network down, rate limited, …)
+- The dot flips immediately on every sync, so you can tell at a glance whether the widget is healthy without expanding it
 
 ### Auto-update
 Silent check 3 seconds after boot + manual button in Settings. When an update is available, you get a dot badge on the gear icon and a "Restart now" button after the background download finishes. Signed manifests via `tauri-plugin-updater`.
@@ -126,6 +123,9 @@ npm run tauri build
 
 ### v2.0.x (Tauri 2 + SolidJS line)
 
+- [**v2.1.4**](docs/release-notes/v2.1.4.md) — Tray icon shows immediate sync status (green dot = OK, red dot = failure), tray glyph rendered at the right system size, macOS widget corners rounded to 24px. Internal: halo-gauge design retired (-430 net lines).
+- [**v2.1.3**](docs/release-notes/v2.1.3.md) — macOS background opacity matches Windows; boot + hover frosted-opaque regression fixed.
+- [**v2.1.2**](docs/release-notes/v2.1.2.md) — Background opacity slider now works on macOS (`macos-private-api` opt-in unlocks the wry `transparent` feature path).
 - [**v2.1.1**](docs/release-notes/v2.1.1.md) — opacity slider visual consistency hotfix: `.glass-panel::before/::after` + `.glass-card::before` now fade with `--bg-alpha-mult` (previously the outline + inner glow stayed painted at 100% opacity); `--scrim-bg` light/dark token split fixes the dark-gray Settings wash on light mode.
 - [**v2.1.0**](docs/release-notes/v2.1.0.md) — OS usage notifications (5h session 85% / 95% thresholds, lazy permission request) + Detail-mode mtime-based caching (heavy users no longer re-walk the full ~/.claude/projects on every sync) + log rotation cap (~5 MB) + `scripts/bump-version.mjs` for one-shot 6-file version bumps.
 - [**v2.0.3**](docs/release-notes/v2.0.3.md) — settings persist gap fix (lang / dark / opacity / sync / always-on-top / mode now survive restarts) + PyQt6 migration realignment + tray menu i18n (ko/en) + error banner expanded to 4 states (TOKEN_EXPIRED / NO_CREDENTIALS / RATE_LIMITED / NETWORK).
