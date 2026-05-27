@@ -27,6 +27,21 @@ fn read_persisted_lang(app: &tauri::App) -> String {
     }
 }
 
+/// Read the persisted `opacity` (0–100) so setup can decide whether to paint
+/// the NSVisualEffectView backdrop. Defaults to 0 — the slider's resting value
+/// and the "solid Liquid Glass" look — on any read miss, so the backdrop stays
+/// the safe fallback when the store is unreadable.
+#[cfg(target_os = "macos")]
+fn read_persisted_opacity(app: &tauri::App) -> f64 {
+    let Ok(store) = app.store("widget-settings.json") else {
+        return 0.0;
+    };
+    match store.get("opacity") {
+        Some(serde_json::Value::Number(n)) => n.as_f64().unwrap_or(0.0),
+        _ => 0.0,
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -86,9 +101,22 @@ pub fn run() {
             }
             #[cfg(target_os = "macos")]
             {
-                match vibrancy_mac::apply_mica(&window) {
-                    Ok(()) => log::info!("setup: NSVisualEffectView applied"),
-                    Err(e) => log::warn!("setup: NSVisualEffectView failed: {}", e),
+                // Paint the NSVisualEffectView backdrop only when opacity rests
+                // at 0 (full Liquid Glass). Above 0 the user wants a see-through
+                // panel, so start *cleared* — applying Mica here and clearing it
+                // later from the frontend's setOpacity left the frosted state
+                // visible until the next relayout, reading as "won't go
+                // transparent until I change mode". clear_vibrancy still rounds
+                // the corners + sets the window transparent.
+                let opacity = read_persisted_opacity(app);
+                let res = if opacity == 0.0 {
+                    vibrancy_mac::apply_mica(&window)
+                } else {
+                    vibrancy_mac::clear_vibrancy(&window)
+                };
+                match res {
+                    Ok(()) => log::info!("setup: vibrancy set (opacity={})", opacity),
+                    Err(e) => log::warn!("setup: vibrancy failed: {}", e),
                 }
             }
 
