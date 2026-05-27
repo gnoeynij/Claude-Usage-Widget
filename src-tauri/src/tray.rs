@@ -2,25 +2,47 @@ use std::io::Cursor;
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{App, Emitter, Manager};
+use tauri::{App, AppHandle, Emitter, Manager};
 
 pub const TRAY_ID: &str = "main-tray";
 
-// 트레이 전용 PNG. bundle.icon[0] (32x32.png) 은 가로:세로 1.56:1
-// 직사각형 디자인이라 정사각형 트레이 슬롯에 fit 시 세로가 59%만
-// 차지해 다른 시스템 트레이 아이콘들 대비 작아 보였다. 이 PNG 는
-// alpha bbox(940x602) 만 잘라 minimal padding 으로 재배치한 것.
-const TRAY_ICON_PNG: &[u8] = include_bytes!("../icons/tray.png");
+// 32x32 PNG 두 상태 — Tauri 2 Image API 가 single-resolution 만 받으므로
+// (multi-size ICO 의 OS 자동 픽 미지원), 32x32 가 100% DPI 16x16 트레이엔
+// 2x down-scale (깨끗), 200% DPI 32x32 트레이엔 1:1, 300% DPI 48x48 엔
+// 1.5x up-scale (acceptable). 기존 940x940 → 16 (58x) 대비 큰 개선.
+// dot 합성은 scripts/make-tray-icons.py 가 처리.
+const TRAY_OK_PNG: &[u8] = include_bytes!("../icons/tray-ok-32.png");
+const TRAY_ERR_PNG: &[u8] = include_bytes!("../icons/tray-err-32.png");
 
-fn load_tray_icon() -> Image<'static> {
-    let img = image::ImageReader::new(Cursor::new(TRAY_ICON_PNG))
+#[derive(Clone, Copy)]
+pub enum TrayState {
+    Ok,
+    Err,
+}
+
+fn load_png(bytes: &'static [u8]) -> Image<'static> {
+    let img = image::ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .expect("in-memory cursor never errors")
         .decode()
-        .expect("embedded tray.png must decode")
+        .expect("embedded tray PNG must decode")
         .to_rgba8();
     let (w, h) = img.dimensions();
     Image::new_owned(img.into_raw(), w, h)
+}
+
+fn icon_for(state: TrayState) -> Image<'static> {
+    let bytes = match state {
+        TrayState::Ok => TRAY_OK_PNG,
+        TrayState::Err => TRAY_ERR_PNG,
+    };
+    load_png(bytes)
+}
+
+pub fn set_tray_state(app: &AppHandle, state: TrayState) {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let _ = tray.set_icon(Some(icon_for(state)));
+    }
 }
 
 struct TrayLabels {
@@ -68,7 +90,7 @@ pub fn setup(app: &mut App, lang: &str) -> tauri::Result<()> {
         &[&show, &mode_mini, &mode_normal, &mode_detail, &sync, &quit],
     )?;
 
-    let icon = load_tray_icon();
+    let icon = icon_for(TrayState::Ok);
     let _ = TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .menu(&menu)

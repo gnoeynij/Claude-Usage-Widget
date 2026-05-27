@@ -121,8 +121,6 @@ type StoreShape = {
   updateInfo: UpdateInfo | null;
   updateDownloadPct: number;
   modeSizes: ModeSizes;
-  /** Tray icon breathing pulse. Default ON; toggle from Settings. */
-  breatheEnabled: boolean;
   /** Per-session-block memory of which 85% / 95% thresholds already fired,
    *  so the OS notification doesn't repeat on every sync. Reset when
    *  `usage.session_resets_at` changes (new 5h block started). Notification
@@ -157,7 +155,6 @@ const [store, setStore] = createStore<StoreShape>({
   updateInfo: null,
   updateDownloadPct: 0,
   modeSizes: { mini: null, normal: null, detail: null },
-  breatheEnabled: true,
   notifiedBlock: null,
   notifiedLevels: [],
   notifiedWeek: null,
@@ -174,17 +171,6 @@ let lastCredentialsMtime: number | null = null;
 let resizeSuppressUntil = 0;
 let resizeDebounce: number | null = null;
 let persistStorePromise: Promise<TauriStore> | null = null;
-// Last known 5-hour usage pct. The breathing tick re-renders the tray icon
-// every 100ms with this value + a sine-modulated alpha, so we need to keep it
-// outside the store (Solid signals are overkill for a render-loop scalar).
-// `-1` means error state — keep static, don't breathe (info beats animation).
-let lastUsagePct = 0;
-let breathTimer: number | null = null;
-// 4s cycle — 사람 호흡 속도(3-5초) 안쪽으로 좀 더 천천히. 50ms tick(20fps)
-// 으로 frame 간 alpha jump 을 0.6/80 ≈ 0.75% 로 줄여 부드럽게 보간.
-// (200ms tick 시도해보니 호흡감은 살아있지만 fade 가 step 처럼 보임)
-const BREATH_CYCLE_MS = 4000;
-const BREATH_TICK_MS = 50;
 
 // macOS WKWebView 는 wry `transparent` feature (macos-private-api opt-in) 가
 // 켜졌을 때 `drawsBackground=NO` 로 진짜 transparent 가 되지만, content
@@ -242,42 +228,6 @@ async function loadSetting<T>(
 
 async function persistModeSizes() {
   return persistSetting("modeSizes", store.modeSizes);
-}
-
-function startBreathing() {
-  if (breathTimer !== null) return;
-  const t0 = Date.now();
-  breathTimer = window.setInterval(() => {
-    const t = ((Date.now() - t0) % BREATH_CYCLE_MS) / BREATH_CYCLE_MS;
-    // sine wave: starts at min, peaks at mid-cycle, back to min
-    const sine = 0.5 - 0.5 * Math.cos(t * Math.PI * 2);
-    // Range 0.4 → 1.0. Swing 폭 0.6 — crab 정적 고정 후 호흡감 좀 더 ↑.
-    // 실 halo alpha range 94/255~235/255 (≈ 37%~92%). min phase 에서 halo
-    // 가 옅어져 fade-out 처럼 보여도 crab + stroke 정적이라 brand 항상 인지.
-    const alpha = 0.4 + 0.6 * sine;
-    void invoke("set_usage_icon", { pct: lastUsagePct, alpha }).catch(() => {});
-  }, BREATH_TICK_MS);
-}
-
-function stopBreathing() {
-  if (breathTimer !== null) {
-    window.clearInterval(breathTimer);
-    breathTimer = null;
-  }
-}
-
-export function setBreatheEnabled(value: boolean) {
-  setStore("breatheEnabled", value);
-  void persistSetting("breatheEnabled", value);
-  if (value && lastUsagePct >= 0) {
-    startBreathing();
-  } else {
-    stopBreathing();
-    // Restore static full-opacity icon so the user immediately sees the
-    // toggle take effect (otherwise the tray sits at whatever alpha the last
-    // breath tick left).
-    void invoke("set_usage_icon", { pct: lastUsagePct, alpha: 1.0 }).catch(() => {});
-  }
 }
 
 const NOTIFY_LEVELS = [85, 95] as const;
@@ -510,11 +460,6 @@ export async function initStore() {
   // Restore per-mode sizes from disk before wiring the resize listener — we
   // don't want our own load to be picked up as a "user resize".
   await loadModeSizes();
-  await loadSetting<boolean>(
-    "breatheEnabled",
-    (v) => setStore("breatheEnabled", v),
-    (v): v is boolean => typeof v === "boolean",
-  );
   await loadSetting<string | null>(
     "notifiedBlock",
     (v) => setStore("notifiedBlock", v),
@@ -642,15 +587,7 @@ export async function syncNow() {
       await refreshDetail();
     }
     void maybeNotifyThreshold(usage);
-    // Re-paint tray + taskbar icon with the fresh 5-hour session percent so
-    // the gauge in the tray matches the one in the widget. Best-effort —
-    // failure is non-fatal (icon stays on previous render).
-    lastUsagePct = usage.five_hour;
-    if (store.breatheEnabled) {
-      startBreathing();
-    } else {
-      void invoke("set_usage_icon", { pct: usage.five_hour }).catch(() => {});
-    }
+    void invoke("set_tray_state", { state: "ok" }).catch(() => {});
     void info(`sync ok ${Date.now() - t0}ms`);
   } catch (e) {
     const msg = toErrorMessage(e);
@@ -658,11 +595,7 @@ export async function syncNow() {
     const code = parseErrorCode(msg);
     setStore("errorCode", code);
     void warn(`sync failed ${Date.now() - t0}ms code=${code ?? "UNKNOWN"} msg=${msg}`);
-    // Swap the tray icon to the error state (grey halo) and stop the breath —
-    // a pulsing error icon distracts more than it informs.
-    lastUsagePct = -1;
-    stopBreathing();
-    void invoke("set_usage_icon", { pct: -1 }).catch(() => {});
+    void invoke("set_tray_state", { state: "err" }).catch(() => {});
   } finally {
     setStore("syncing", false);
   }

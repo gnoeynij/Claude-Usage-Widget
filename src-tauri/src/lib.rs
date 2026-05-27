@@ -1,5 +1,4 @@
 mod commands;
-mod icon_render;
 mod jsonl_aggregator;
 mod migration;
 mod pricing;
@@ -82,7 +81,7 @@ pub fn run() {
             commands::aggregate_detail,
             commands::set_always_on_top,
             commands::set_mica_enabled,
-            commands::set_usage_icon,
+            commands::set_tray_state,
             commands::set_window_size,
             commands::quit_app,
             commands::hide_window,
@@ -137,16 +136,6 @@ pub fn run() {
                 Err(e) => log::warn!("setup: migration failed: {}", e),
             }
 
-            // Boot 시점에 tray icon 즉시 halo 로 — 첫 sync 까지 .ico 기본
-            // 이 트레이에 보이는 걸 방지. 작업표시줄 item icon 은 *.exe
-            // icon 그대로* (window 와 작업표시줄 = .exe icon, tray 별도 정책).
-            let (rgba, w, h) = icon_render::render_gauge_rgba(0.0, 1.0);
-            let img_tray = tauri::image::Image::new_owned(rgba, w, h);
-            if let Some(tray) = app.tray_by_id(crate::tray::TRAY_ID) {
-                if let Err(e) = tray.set_icon(Some(img_tray)) {
-                    log::warn!("setup: initial tray icon failed: {}", e);
-                }
-            }
             let _ = &window;
 
             Ok(())

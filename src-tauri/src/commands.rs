@@ -58,24 +58,15 @@ pub async fn set_mica_enabled(window: tauri::WebviewWindow, enabled: bool) -> Re
     Ok(())
 }
 
-/// Re-render the tray + main-window icon to reflect the current 5-hour
-/// session usage. Called from the frontend after every successful
-/// `fetch_usage`. Threshold colors match the in-app CapsuleProgress tokens
-/// (accent / warning / danger).
+/// trayicon 을 정상(ok) 또는 비정상(err) 상태로 전환. frontend 가 sync 결과·
+/// TOKEN_EXPIRED·네트워크 실패 시 호출.
 #[tauri::command]
-pub async fn set_usage_icon(
-    app: tauri::AppHandle,
-    pct: f64,
-    alpha: Option<f32>,
-) -> Result<(), String> {
-    let alpha = alpha.unwrap_or(1.0);
-    let (rgba, w, h) = crate::icon_render::render_gauge_rgba(pct, alpha);
-    // 트레이만 동적 갱신. 작업표시줄 item icon = .exe icon 정적
-    // (사용자 정책: "작업표시줄 = 윈도우 icon ≠ 시스템 트레이").
-    let img_tray = tauri::image::Image::new_owned(rgba, w, h);
-    if let Some(tray) = app.tray_by_id(crate::tray::TRAY_ID) {
-        tray.set_icon(Some(img_tray)).map_err(|e| e.to_string())?;
-    }
+pub fn set_tray_state(app: tauri::AppHandle, state: String) -> Result<(), String> {
+    let s = match state.as_str() {
+        "err" => crate::tray::TrayState::Err,
+        _ => crate::tray::TrayState::Ok,
+    };
+    crate::tray::set_tray_state(&app, s);
     Ok(())
 }
 
