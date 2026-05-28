@@ -660,6 +660,37 @@ export function setSyncIntervalMin(minutes: number) {
   scheduleAutoSync();
 }
 
+// macOS WKWebView caches the composited layers of isolated stacking contexts
+// (.glass-card + its ::before/::after specular layers) and skips re-paint when
+// only their alpha — driven by --bg-alpha-mult — changes. A window relayout
+// forces the compositor to redraw, which is why changing window *mode* visibly
+// restored the opacity ("opaque until I switch modes"). LiquidGlass's
+// offsetHeight reflow only revives .glass-panel's own background, not the
+// cards. Nudge the window 1px and back (same set_window_size path the mode
+// switch uses) to force the redraw. Debounced so a slider drag doesn't resize
+// on every input event. macOS-only — Windows WebView2 repaint path is unverified.
+let repaintTimer: number | null = null;
+function scheduleCompositorRepaint() {
+  if (!IS_MAC) return;
+  if (repaintTimer != null) window.clearTimeout(repaintTimer);
+  repaintTimer = window.setTimeout(async () => {
+    try {
+      const win = getCurrentWindow();
+      const scale = await win.scaleFactor();
+      const sz = await win.innerSize();
+      const w = Math.round(sz.width / scale);
+      const h = Math.round(sz.height / scale);
+      const [, , mw, mh] = MODE_DEFAULTS[store.mode];
+      resizeSuppressUntil = Date.now() + 1000;
+      await invoke("set_window_size", { width: w, height: h + 1, minWidth: mw, minHeight: mh });
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      await invoke("set_window_size", { width: w, height: h, minWidth: mw, minHeight: mh });
+    } catch (e) {
+      console.error("compositor repaint nudge failed", e);
+    }
+  }, 90);
+}
+
 export function setOpacity(opacityPct: number) {
   const clamped = Math.max(0, Math.min(100, opacityPct));
   setStore("opacity", clamped);
@@ -672,6 +703,7 @@ export function setOpacity(opacityPct: number) {
   // macOS 는 floor 적용 — effectiveBgAlphaMult 주석 참조.
   const mult = effectiveBgAlphaMult(clamped, store.dark);
   document.documentElement.style.setProperty("--bg-alpha-mult", String(mult));
+  scheduleCompositorRepaint();
   void invoke("set_mica_enabled", { enabled: clamped === 0 }).catch(() => {});
 }
 
