@@ -172,16 +172,39 @@ fn parse_jsonl(path: &Path) -> Vec<Record> {
         if model == "<synthetic>" {
             continue;
         }
+        // Anthropic split cache creation into 5m vs 1h ephemeral buckets when
+        // the 1h cache went GA (2025-08-13). Newer rows carry the nested
+        // `cache_creation` object; older rows only have the flat
+        // `cache_creation_input_tokens` total — fall back by attributing all
+        // of it to 5m, which matches the only cache duration available before
+        // the split.
+        let (cache_5m, cache_1h) = if let Some(obj) =
+            usage.get("cache_creation").and_then(|v| v.as_object())
+        {
+            let m5 = obj
+                .get("ephemeral_5m_input_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let h1 = obj
+                .get("ephemeral_1h_input_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            (m5, h1)
+        } else {
+            let flat = usage
+                .get("cache_creation_input_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            (flat, 0)
+        };
         out.push(Record {
             ts: ts.with_timezone(&Utc),
             model,
             tokens: UsageTokens {
                 input: usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
                 output: usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
-                cache_creation: usage
-                    .get("cache_creation_input_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0),
+                cache_creation_5m: cache_5m,
+                cache_creation_1h: cache_1h,
                 cache_read: usage
                     .get("cache_read_input_tokens")
                     .and_then(|v| v.as_u64())
@@ -338,7 +361,8 @@ fn family_totals(records: &[Record]) -> Vec<FamilyOut> {
         let cost = cost_usd(&r.model, &r.tokens);
         let toks = r.tokens.input
             + r.tokens.output
-            + r.tokens.cache_creation
+            + r.tokens.cache_creation_5m
+            + r.tokens.cache_creation_1h
             + r.tokens.cache_read;
         let entry = acc.entry(family_of(&r.model)).or_insert((0.0, 0));
         entry.0 += cost;
@@ -365,7 +389,10 @@ fn overall_stats(records: &[Record], blocks: &[Block]) -> StatsOut {
         total_cost / blocks.len() as f64
     };
     let total_input: u64 = records.iter().map(|r| r.tokens.input).sum();
-    let total_cache_creation: u64 = records.iter().map(|r| r.tokens.cache_creation).sum();
+    let total_cache_creation: u64 = records
+        .iter()
+        .map(|r| r.tokens.cache_creation_5m + r.tokens.cache_creation_1h)
+        .sum();
     let total_cache_read: u64 = records.iter().map(|r| r.tokens.cache_read).sum();
     let billed_input = total_input + total_cache_creation + total_cache_read;
     let cache_hit_pct = if billed_input == 0 {
