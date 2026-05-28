@@ -144,7 +144,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### 테스트 프레임워크
 
-- **순수 함수 단위 테스트만 존재.** `cargo test` 17개: [`pricing.rs`](src-tauri/src/pricing.rs) 9 (`cost_usd`/`resolve`/`family_of` — 회귀 사례 §19 단가·1h cache·prefix 매칭 방어) + [`jsonl_aggregator.rs`](src-tauri/src/jsonl_aggregator.rs) 8 (`group_blocks` 5h 경계·`active_view`·`overall_stats` cache_hit·`family_totals` 정렬·`recent_blocks` cap). 그 외 (UI·통합·시각) 자동 테스트는 없음 — `tests/`, Vitest, Playwright 미구성. `period_totals` 는 `Local::now()` 의존이라 미테스트 (주입 리팩터 필요).
+- **순수 함수 단위 테스트만 존재.** `cargo test` 20개: [`pricing.rs`](src-tauri/src/pricing.rs) 12 (`cost_usd`/`resolve`/`family_of` — 회귀 사례 §19 단가·1h cache·prefix 매칭·web search·inference_geo 방어) + [`jsonl_aggregator.rs`](src-tauri/src/jsonl_aggregator.rs) 8 (`group_blocks` 5h 경계·`active_view`·`overall_stats` cache_hit·`family_totals` 정렬·`recent_blocks` cap). 그 외 (UI·통합·시각) 자동 테스트는 없음 — `tests/`, Vitest, Playwright 미구성. `period_totals` 는 `Local::now()` 의존이라 미테스트 (주입 리팩터 필요).
 - 나머지 검증은 수동(빌드된 .exe 실행 → UI 동작 확인)으로 한다.
 - Karpathy §4의 "테스트 작성 후 통과시키기" 패턴은 *순수 함수 영역* (pricing/jsonl_aggregator)에만 적용 가능. UI/시각 영역은 PR/커밋 시 *어떤 시나리오를 손으로 확인했는지* 텍스트로 명시 (예: "AOT toggle on/off, 옵션 패널 열고 닫기, sync 1회").
 

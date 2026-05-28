@@ -97,6 +97,15 @@ pub fn resolve(model: &str) -> Option<Pricing> {
     best.map(|(_, p)| p)
 }
 
+/// Web search server tool: $10 per 1,000 requests, billed on top of token
+/// costs. Web fetch is free, so it is not tracked here.
+const WEB_SEARCH_USD_PER_REQUEST: f64 = 0.01;
+
+/// `inference_geo: "us"` applies a 1.1x multiplier to all token pricing
+/// categories (Opus 4.6 / Sonnet 4.6 and later). It does not apply to the
+/// per-request web search charge.
+const US_INFERENCE_MULTIPLIER: f64 = 1.1;
+
 #[derive(Default, Clone)]
 pub struct UsageTokens {
     pub input: u64,
@@ -104,15 +113,23 @@ pub struct UsageTokens {
     pub cache_creation_5m: u64,
     pub cache_creation_1h: u64,
     pub cache_read: u64,
+    /// Server-side web search calls — billed per request, not as tokens.
+    pub web_search_requests: u64,
+    /// `inference_geo == "us"` → 1.1x on token costs.
+    pub inference_geo_us: bool,
 }
 
 pub fn cost_usd(model: &str, u: &UsageTokens) -> f64 {
     let Some(p) = resolve(model) else { return 0.0 };
-    (u.input as f64) * p.input / 1_000_000.0
+    let mut token_cost = (u.input as f64) * p.input / 1_000_000.0
         + (u.output as f64) * p.output / 1_000_000.0
         + (u.cache_creation_5m as f64) * p.cache_write_5m / 1_000_000.0
         + (u.cache_creation_1h as f64) * p.cache_write_1h / 1_000_000.0
-        + (u.cache_read as f64) * p.cache_read / 1_000_000.0
+        + (u.cache_read as f64) * p.cache_read / 1_000_000.0;
+    if u.inference_geo_us {
+        token_cost *= US_INFERENCE_MULTIPLIER;
+    }
+    token_cost + (u.web_search_requests as f64) * WEB_SEARCH_USD_PER_REQUEST
 }
 
 pub fn family_of(model: &str) -> &'static str {
@@ -139,6 +156,7 @@ mod tests {
             cache_creation_5m: c5m,
             cache_creation_1h: c1h,
             cache_read: read,
+            ..Default::default()
         }
     }
 
@@ -204,5 +222,28 @@ mod tests {
         assert_eq!(family_of("claude-sonnet-4-6"), "Sonnet");
         assert_eq!(family_of("claude-haiku-4-5-20251001"), "Haiku");
         assert_eq!(family_of("gpt-4"), "Other");
+    }
+
+    #[test]
+    fn web_search_billed_per_request() {
+        let mut t = toks(0, 0, 0, 0, 0);
+        t.web_search_requests = 1000;
+        approx(cost_usd("claude-opus-4-7", &t), 10.0); // $10 / 1,000
+    }
+
+    #[test]
+    fn inference_geo_us_multiplies_token_cost() {
+        let mut t = toks(1_000_000, 0, 0, 0, 0);
+        t.inference_geo_us = true;
+        approx(cost_usd("claude-opus-4-7", &t), 5.5); // $5 × 1.1
+    }
+
+    #[test]
+    fn inference_geo_us_does_not_touch_web_search() {
+        let mut t = toks(0, 0, 0, 0, 0);
+        t.web_search_requests = 1000;
+        t.inference_geo_us = true;
+        // token cost 0 → ×1.1 still 0; web search $10 unaffected.
+        approx(cost_usd("claude-opus-4-7", &t), 10.0);
     }
 }

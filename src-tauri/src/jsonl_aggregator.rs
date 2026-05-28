@@ -197,6 +197,17 @@ fn parse_jsonl(path: &Path) -> Vec<Record> {
                 .unwrap_or(0);
             (flat, 0)
         };
+        let web_search_requests = usage
+            .get("server_tool_use")
+            .and_then(|v| v.as_object())
+            .and_then(|o| o.get("web_search_requests"))
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        let inference_geo_us = usage
+            .get("inference_geo")
+            .and_then(|v| v.as_str())
+            .map(|s| s.eq_ignore_ascii_case("us"))
+            .unwrap_or(false);
         out.push(Record {
             ts: ts.with_timezone(&Utc),
             model,
@@ -209,6 +220,8 @@ fn parse_jsonl(path: &Path) -> Vec<Record> {
                     .get("cache_read_input_tokens")
                     .and_then(|v| v.as_u64())
                     .unwrap_or(0),
+                web_search_requests,
+                inference_geo_us,
             },
         });
     }
@@ -427,6 +440,7 @@ mod tests {
                 cache_creation_5m: 0,
                 cache_creation_1h: 0,
                 cache_read: 0,
+                ..Default::default()
             },
         }
     }

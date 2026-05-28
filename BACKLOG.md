@@ -40,6 +40,7 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
+| **fast mode 비용 분기** | 비용 정확도 | [회귀 §19](CLAUDE.md) | `speed:"fast"` 시 Opus 4.6/4.7 $30/$150 (6x) + cache multiplier 상호작용. `Pricing` 에 fast 단가 버전 필요. 저빈도·복잡이라 후순위. web search + inference_geo 는 v2.1.x 구현됨 (`server_tool_use.web_search_requests` × $10/1k, `inference_geo:"us"` 1.1x). |
 | **다크/라이트 토큰 분리 강화** | 디자인 | [src/styles/tokens.css](src/styles/tokens.css) | 현재 라이트·다크 별도 토큰. 시스템 테마 변경 watcher가 즉시 반영되는지 확인. |
 | **메인 → 워크트리 동기화 헬퍼** | 인프라 | [회귀 사례 §5](CLAUDE.md) | 워크트리 fast-forward 자동화 (현재 양쪽 수동). |
 | **`CLAUDE_CODE_OAUTH_TOKEN` env var fallback** | UX·인증 | (Claude Desktop App 사용자 호환) | `.credentials.json` 미존재 시 환경변수에서 token 읽어 API 호출. Claude Code CLI 미설치 환경에서도 동기화 가능. 사용자가 직접 token 발급·관리해야 하니 README 안내 필요. |
