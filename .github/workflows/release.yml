@@ -34,15 +34,24 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: Install dependencies
+        run: npm install
+
+      # cargo test 가 lib 을 컴파일하면 tauri::generate_context! 매크로가
+      # frontendDist("../dist") 를 macro-expansion 시점에 읽는다. dist 가 없으면
+      # 단위 테스트 빌드조차 proc macro panic 으로 실패 — clean CI 에서만 드러나고
+      # (로컬은 dist 가 남아 있어 통과) tauri-action 뒤로 가기 전 게이트를 막는다.
+      # 그래서 test 전에 frontend 를 먼저 빌드한다. tauri-action 이 뒤에서 다시
+      # 빌드하지만 vite build 는 빠르다. (회귀: v2.1.5 첫 발행 실패 원인)
+      - name: Build frontend (so cargo test can compile)
+        run: npm run build
+
       # 순수 함수 단위 테스트 (pricing 12 + jsonl_aggregator 8) 게이트.
       # tauri-action 앞에 둬서 실패 시 빌드·release 발행이 차단된다. 양 OS
       # matrix 에서 각각 실행 — 이전엔 Windows 로컬만 돌던 macOS 검증 공백을 메움.
       - name: Run Rust unit tests
         working-directory: ./src-tauri
         run: cargo test
-
-      - name: Install dependencies
-        run: npm install
 
       # docs/release-notes/<tag>.md 파일을 release body 로 주입. 파일 없으면
       # 빈 body + workflow warning. matrix 의 두 OS runner 가 동일 body 를
