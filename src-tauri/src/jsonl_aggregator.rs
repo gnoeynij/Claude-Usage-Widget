@@ -407,3 +407,110 @@ fn overall_stats(records: &[Record], blocks: &[Block]) -> StatsOut {
         cache_hit_pct,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    fn base() -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap()
+    }
+
+    fn rec(hours: i64, model: &str, input: u64) -> Record {
+        Record {
+            ts: base() + Duration::hours(hours),
+            model: model.to_string(),
+            tokens: UsageTokens {
+                input,
+                output: 0,
+                cache_creation_5m: 0,
+                cache_creation_1h: 0,
+                cache_read: 0,
+            },
+        }
+    }
+
+    #[test]
+    fn group_blocks_merges_within_5h() {
+        // 3 records within 5h of the first → one block, costs summed.
+        let recs = vec![
+            rec(0, "claude-opus-4-7", 1_000_000),
+            rec(2, "claude-opus-4-7", 1_000_000),
+            rec(4, "claude-opus-4-7", 1_000_000),
+        ];
+        let blocks = group_blocks(&recs);
+        assert_eq!(blocks.len(), 1);
+        assert!((blocks[0].cost - 15.0).abs() < 1e-9); // 3 × $5/M input
+    }
+
+    #[test]
+    fn group_blocks_splits_after_5h() {
+        let recs = vec![
+            rec(0, "claude-opus-4-7", 1_000_000),
+            rec(6, "claude-opus-4-7", 1_000_000),
+        ];
+        assert_eq!(group_blocks(&recs).len(), 2);
+    }
+
+    #[test]
+    fn group_blocks_exactly_5h_starts_new_block() {
+        // (ts - start).num_hours() < 5; exactly 5 is not < 5 → new block.
+        let recs = vec![
+            rec(0, "claude-opus-4-7", 1_000_000),
+            rec(5, "claude-opus-4-7", 1_000_000),
+        ];
+        assert_eq!(group_blocks(&recs).len(), 2);
+    }
+
+    #[test]
+    fn active_view_active_within_5h() {
+        let blocks = vec![Block { start: base(), cost: 1.0 }];
+        let v = active_view(&blocks, base() + Duration::hours(2), &[]).unwrap();
+        assert_eq!(v.elapsed_min, 120);
+        assert_eq!(v.remaining_min, 180);
+        assert_eq!(v.total_min, 300);
+    }
+
+    #[test]
+    fn active_view_none_when_stale() {
+        let blocks = vec![Block { start: base(), cost: 1.0 }];
+        assert!(active_view(&blocks, base() + Duration::hours(6), &[]).is_none());
+    }
+
+    #[test]
+    fn overall_stats_cache_hit_pct() {
+        let mut r = rec(0, "claude-opus-4-7", 100);
+        r.tokens.cache_read = 300;
+        let recs = vec![r];
+        let blocks = group_blocks(&recs);
+        let s = overall_stats(&recs, &blocks);
+        assert_eq!(s.total_messages, 1);
+        // 300 / (100 + 0 + 300) = 75%
+        assert!((s.cache_hit_pct - 75.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn family_totals_sorted_by_cost_desc() {
+        let recs = vec![
+            rec(0, "claude-haiku-4-5", 1_000_000), // $1/M
+            rec(1, "claude-opus-4-7", 1_000_000),  // $5/M
+        ];
+        let fams = family_totals(&recs);
+        assert_eq!(fams[0].family, "Opus");
+        assert_eq!(fams[1].family, "Haiku");
+    }
+
+    #[test]
+    fn recent_blocks_caps_at_5_newest_first() {
+        // 6 blocks 6h apart → keep newest 5, reversed.
+        let recs: Vec<Record> = (0..6)
+            .map(|i| rec(i * 6, "claude-opus-4-7", 1_000_000))
+            .collect();
+        let blocks = group_blocks(&recs);
+        assert_eq!(blocks.len(), 6);
+        let recent = recent_blocks(&blocks);
+        assert_eq!(recent.len(), RECENT_BLOCKS);
+        assert_eq!(recent[0].start, (base() + Duration::hours(30)).to_rfc3339());
+    }
+}
