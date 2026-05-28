@@ -44,7 +44,7 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
-| **fast mode 비용 분기** | 비용 정확도 | [회귀 §19](CLAUDE.md) | `speed:"fast"` 시 Opus 4.6/4.7 $30/$150 (6x) + cache multiplier 상호작용. `Pricing` 에 fast 단가 버전 필요. 저빈도·복잡이라 후순위. web search + inference_geo 는 v2.1.x 구현됨 (`server_tool_use.web_search_requests` × $10/1k, `inference_geo:"us"` 1.1x). |
+| **fast mode 비용 분기** | 비용 정확도 | [회귀 §19](CLAUDE.md) | `speed:"fast"` 시 Opus 4.6/4.7 $30/$150 (6x) + cache multiplier 상호작용. `Pricing` 에 fast 단가 버전 필요. 저빈도·복잡이라 후순위. web search + inference_geo 는 v2.1.x 구현됨 (`server_tool_use.web_search_requests` × $10/1k, `inference_geo:"us"` 1.1x). **2026-05-28 게이트 확인**: 사용자 JSONL `speed:"fast"` 0개 (전부 `standard`) → 사용자 화면 변화·실데이터 검증 둘 다 불가로 보류. 재개 시 단서: `speed` 는 `usage` 객체 *밖* 최상위 레코드 레벨 (`}],"speed":"standard"`; `inference_geo` 가 usage 안인 것과 다름) → `value.get("speed")` 로 읽을 것. fast 단가·cache 6x 여부는 Anthropic 공식 표 재확인 (always-spot-check). |
 | **다크/라이트 토큰 분리 강화** | 디자인 | [src/styles/tokens.css](src/styles/tokens.css) | 현재 라이트·다크 별도 토큰. 시스템 테마 변경 watcher가 즉시 반영되는지 확인. |
 | **메인 → 워크트리 동기화 헬퍼** | 인프라 | [회귀 사례 §5](CLAUDE.md) | 워크트리 fast-forward 자동화 (현재 양쪽 수동). |
 | **`CLAUDE_CODE_OAUTH_TOKEN` env var fallback** | UX·인증 | (Claude Desktop App 사용자 호환) | `.credentials.json` 미존재 시 환경변수에서 token 읽어 API 호출. Claude Code CLI 미설치 환경에서도 동기화 가능. 사용자가 직접 token 발급·관리해야 하니 README 안내 필요. |
@@ -85,4 +85,4 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
-| `.claude/worktrees/awesome-kepler-2868ae/` 빈 고아 디렉토리 | 인프라 | (점검 발견 2026-05-24) | `git worktree list` 미등록 + ChildCount 0. 정리 시점에 현 세션 cwd 였어서 in-use lock 으로 자동 삭제 불가. 다음 세션 외부 셸에서 `Remove-Item -Recurse -Force .claude/worktrees/awesome-kepler-2868ae`. |
+| `.claude/worktrees/clever-darwin-e89051/` 빈 고아 디렉토리 | 인프라 | (점검 발견 2026-05-28) | `git worktree list` 미등록 + 빈 디렉토리. 현 세션 cwd 라 in-use lock 으로 자동 삭제 불가. 다음 세션 외부 셸에서 `Remove-Item -Recurse -Force .claude/worktrees/clever-darwin-e89051`. **회귀 패턴** — harness 가 worktree 를 checkout 없이 빈 폴더로 남기는 사례 반복 (이전 `awesome-kepler-2868ae` 는 2026-05-28 확인 시 이미 정리됨). git 명령이 부모 메인 리포로 fall-through 하므로 작업엔 지장 없으나 누적되면 청소 필요. |
