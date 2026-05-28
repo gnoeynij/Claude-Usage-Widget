@@ -30,7 +30,7 @@ fn read_persisted_lang(app: &tauri::App) -> String {
 /// the NSVisualEffectView backdrop. Defaults to 0 — the slider's resting value
 /// and the "solid Liquid Glass" look — on any read miss, so the backdrop stays
 /// the safe fallback when the store is unreadable.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn read_persisted_opacity(app: &tauri::App) -> f64 {
     let Ok(store) = app.store("widget-settings.json") else {
         return 0.0;
@@ -93,9 +93,21 @@ pub fn run() {
 
             #[cfg(target_os = "windows")]
             {
-                match vibrancy_win::apply_mica(&window) {
-                    Ok(()) => log::info!("setup: Mica applied"),
-                    Err(e) => log::warn!("setup: Mica failed: {}", e),
+                // Mirror the macOS branch below: paint Mica only when opacity
+                // rests at 0. Above 0 the user wants a see-through panel, so
+                // start *cleared* — applying Mica here and clearing it later
+                // from the frontend's setOpacity left the wash visible until
+                // the next relayout, reading as "won't go transparent until I
+                // change mode". clear_vibrancy still rounds the OS corners.
+                let opacity = read_persisted_opacity(app);
+                let res = if opacity == 0.0 {
+                    vibrancy_win::apply_mica(&window)
+                } else {
+                    vibrancy_win::clear_vibrancy(&window)
+                };
+                match res {
+                    Ok(()) => log::info!("setup: vibrancy set (opacity={})", opacity),
+                    Err(e) => log::warn!("setup: vibrancy failed: {}", e),
                 }
             }
             #[cfg(target_os = "macos")]

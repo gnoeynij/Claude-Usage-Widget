@@ -437,9 +437,13 @@ export async function initStore() {
       (v) => setSyncIntervalMin(v),
       (v): v is number => typeof v === "number" && v >= 0,
     );
+    // Apply — not just store — so --bg-alpha-mult + Mica are correct on first
+    // paint. Deferring this to after the first sync left cards/borders opaque
+    // "until I switch modes" (sibling of the main.tsx .mac first-paint note).
+    // suppressPersist=true here, so setOpacity won't write the value back.
     await loadSetting<number>(
       "opacity",
-      (v) => setStore("opacity", v),
+      (v) => setOpacity(v),
       (v): v is number => typeof v === "number" && v >= 0 && v <= 100,
     );
     await loadSetting<Mode>(
@@ -529,10 +533,6 @@ export async function initStore() {
 
   await syncNow();
   scheduleAutoSync();
-
-  // Apply persisted opacity once on boot so Mica state + CSS mult are in sync
-  // with the slider value the user left things at last time.
-  setOpacity(store.opacity);
 
   // Silent auto-check 3s after boot — avoids racing the first usage sync and
   // keeps perceived startup snappy. Errors and "no update" stay silent.
