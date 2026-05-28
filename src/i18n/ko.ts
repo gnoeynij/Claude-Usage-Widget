@@ -30,7 +30,7 @@ export const ko: Strings = {
   updateReady: "재시작하여 설치",
   updateRestart: "지금 재시작",
   updateError: "업데이트 확인 실패",
-  updateUpToDate: "최신 버전입니다",
+  updateUpToDate: (v) => `최신 버전입니다 (v${v})`,
   updateNewVersion: (v) => `v${v} 사용 가능`,
   quit: "종료",
   show: "표시",

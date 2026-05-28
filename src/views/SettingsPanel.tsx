@@ -96,7 +96,7 @@ function UpdateSection() {
           <span class="t-body">{t().checkForUpdates}</span>
         </button>
         <Show when={flash() === "up_to_date"}>
-          <span class="t-body label-secondary">{t().updateUpToDate}</span>
+          <span class="t-body label-secondary">{t().updateUpToDate(store.version)}</span>
         </Show>
         <Show when={flash() === "error"}>
           <span class="t-body" style={{ color: "var(--danger)" }}>

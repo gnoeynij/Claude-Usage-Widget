@@ -28,7 +28,7 @@ export const en = {
   updateReady: "Restart to install",
   updateRestart: "Restart now",
   updateError: "Update check failed",
-  updateUpToDate: "You're on the latest version",
+  updateUpToDate: (v: string) => `You're on the latest version (v${v})`,
   updateNewVersion: (v: string) => `v${v} available`,
   quit: "Quit",
   show: "Show",
