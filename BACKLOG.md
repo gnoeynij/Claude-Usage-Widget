@@ -11,7 +11,11 @@
 
 ## P0 — 알파→베타 가기 전 막힘
 
-(현재 없음 — OAuth 직접 refresh 는 P1 으로 격하.)
+| 항목 | 영역 | 출처 | 비고 |
+|---|---|---|---|
+| **v2.1.5 릴리즈 — pricing fix 전 사용자 전달** | 릴리즈 | 이번 세션 로컬 5 커밋 (`git log origin/main..HEAD`) | Opus 단가 3배 과대 + 1h cache 과소 회귀 fix 가 *전 사용자 영향*이라 릴리즈 우선. 순서: ① 5 커밋 push, ② 버전 6곳 bump (`node scripts/bump-version.mjs 2.1.5`), ③ `docs/release-notes/v2.1.5.md` 작성, ④ tag push → CI. **always-spot-check**: 단가 공식 표 재확인 + **macOS 실측 또는 CI cargo test (이번 세션 Windows 만 검증)**. |
+
+(OAuth 직접 refresh 는 P1 으로 격하.)
 
 ---
 
@@ -27,7 +31,7 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
-| **자동화 테스트 도입 검토** | 인프라·품질 | [CLAUDE.md "테스트 프레임워크"](CLAUDE.md) | (a) **부분 이행** — `cargo test` 17개: `pricing.rs` 9 (cost_usd/resolve/family_of, 회귀 §19 방어) + `jsonl_aggregator.rs` 8 (group_blocks 5h 경계/active_view/overall_stats/family_totals/recent_blocks). 후속: `period_totals` (Local::now 주입 리팩터 필요) + `migration` 단위 테스트. (b) Vitest — `src/state/store.ts` Solid 신호 로직 미도입. (c) Playwright — Tauri WebView 한정이라 dev URL에서만, 실 .exe 시각 회귀는 여전히 `capture-widget.ps1` 의존. |
+| **자동화 테스트 도입 검토** | 인프라·품질 | [CLAUDE.md "테스트 프레임워크"](CLAUDE.md) | (a) **부분 이행** — `cargo test` 20개: `pricing.rs` 12 (cost_usd/resolve/family_of/web_search/inference_geo, 회귀 §19 방어) + `jsonl_aggregator.rs` 8 (group_blocks 5h 경계/active_view/overall_stats/family_totals/recent_blocks). 후속: `period_totals` (Local::now 주입 리팩터 필요) + `migration` 단위 테스트. (b) Vitest — `src/state/store.ts` Solid 신호 로직 미도입. (c) Playwright — Tauri WebView 한정이라 dev URL에서만, 실 .exe 시각 회귀는 여전히 `capture-widget.ps1` 의존. **(d) CI 미통합** — [release.yml](.github/workflows/release.yml) 이 양 OS 빌드하나 `cargo test` 스텝 없음 → macOS 자동 검증 공백. test 스텝 추가 권장. |
 | **Win10 호환 검증** | 시각 회귀 | [vibrancy_win.rs](src-tauri/src/vibrancy_win.rs) | Mica/Acrylic은 Win11 전제. Win10에서 fallback이 정상인지 실 머신 확인 필요. |
 | **Linux 지원** | 인프라 | (없음) | Tauri 2가 지원하나 OAuth + `.credentials.json` 경로 + vibrancy 미구현 + AppImage·deb 분기 등 macOS와 별개. 수요 신호 있을 때만. |
 | **자동 시작 (Windows + macOS 동시)** | UX | (없음) | 현재 자동 시작 기능 자체가 미구현. Windows 추가 시 macOS LaunchAgent 도 같이 (`~/Library/LaunchAgents/com.gnoeynij.claude-widget.plist`). Settings UI 토글 + cfg 분기 모듈. 수요 있을 때. |
