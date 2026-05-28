@@ -144,9 +144,9 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### 테스트 프레임워크
 
-- **자동화된 테스트 프레임워크는 구성되어 있지 않다.** 저장소에 `tests/`, `test_*.py`, `pytest.ini`, `tox.ini`, `pyproject.toml`, `setup.cfg` 가 모두 없다.
-- 검증은 수동(빌드된 .exe 실행 → UI 동작 확인)으로 한다.
-- 따라서 Karpathy §4의 "테스트 작성 후 통과시키기" 패턴은 **기본적으로 적용 불가**. 대안: PR/커밋 시 *어떤 시나리오를 손으로 확인했는지* 텍스트로 명시한다 (예: "AOT toggle on/off, 옵션 패널 열고 닫기, sync 1회").
+- **순수 함수 단위 테스트만 존재.** [`src-tauri/src/pricing.rs`](src-tauri/src/pricing.rs) `#[cfg(test)] mod tests` — `cost_usd` / `resolve` / `family_of` 9개 (회귀 사례 §19 단가·1h cache·prefix 매칭 방어). `cargo test` 로 실행. 그 외 (UI·통합·시각) 자동 테스트는 없음 — `tests/`, Vitest, Playwright 미구성.
+- 나머지 검증은 수동(빌드된 .exe 실행 → UI 동작 확인)으로 한다.
+- Karpathy §4의 "테스트 작성 후 통과시키기" 패턴은 *순수 함수 영역* (pricing/jsonl_aggregator)에만 적용 가능. UI/시각 영역은 PR/커밋 시 *어떤 시나리오를 손으로 확인했는지* 텍스트로 명시 (예: "AOT toggle on/off, 옵션 패널 열고 닫기, sync 1회").
 
 ### 프로젝트 구조
 

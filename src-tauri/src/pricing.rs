@@ -127,3 +127,82 @@ pub fn family_of(model: &str) -> &'static str {
         "Other"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn toks(input: u64, output: u64, c5m: u64, c1h: u64, read: u64) -> UsageTokens {
+        UsageTokens {
+            input,
+            output,
+            cache_creation_5m: c5m,
+            cache_creation_1h: c1h,
+            cache_read: read,
+        }
+    }
+
+    fn approx(a: f64, b: f64) {
+        assert!((a - b).abs() < 1e-9, "expected {b}, got {a}");
+    }
+
+    #[test]
+    fn opus_current_input_output() {
+        // Opus 4.5/4.6/4.7 = $5 in / $25 out (regression: was $15/$75).
+        approx(cost_usd("claude-opus-4-7", &toks(1_000_000, 0, 0, 0, 0)), 5.0);
+        approx(cost_usd("claude-opus-4-7", &toks(0, 1_000_000, 0, 0, 0)), 25.0);
+    }
+
+    #[test]
+    fn cache_5m_and_1h_priced_separately() {
+        // 5m write = $6.25, 1h write = $10 for Opus current.
+        approx(cost_usd("claude-opus-4-7", &toks(0, 0, 1_000_000, 0, 0)), 6.25);
+        approx(cost_usd("claude-opus-4-7", &toks(0, 0, 0, 1_000_000, 0)), 10.0);
+        // cache read = $0.50.
+        approx(cost_usd("claude-opus-4-7", &toks(0, 0, 0, 0, 1_000_000)), 0.5);
+    }
+
+    #[test]
+    fn date_suffix_resolves_to_longest_prefix() {
+        // claude-opus-4-7-<date> must hit opus_current ($5), not opus_legacy ($15)
+        // via the shorter `claude-opus-4` prefix.
+        approx(cost_usd("claude-opus-4-7-20250416", &toks(1_000_000, 0, 0, 0, 0)), 5.0);
+    }
+
+    #[test]
+    fn deprecated_opus_uses_legacy_pricing() {
+        approx(cost_usd("claude-opus-4-20250514", &toks(1_000_000, 0, 0, 0, 0)), 15.0);
+        approx(cost_usd("claude-opus-4-1", &toks(1_000_000, 0, 0, 0, 0)), 15.0);
+    }
+
+    #[test]
+    fn deprecated_sonnet4_not_zero_cost() {
+        // Regression: claude-sonnet-4-<date> resolved to None -> $0 before the fix.
+        approx(cost_usd("claude-sonnet-4-20250514", &toks(1_000_000, 0, 0, 0, 0)), 3.0);
+    }
+
+    #[test]
+    fn haiku_date_suffix_real_jsonl_id() {
+        // Exact model id observed in the user's jsonl.
+        approx(cost_usd("claude-haiku-4-5-20251001", &toks(1_000_000, 0, 0, 0, 0)), 1.0);
+    }
+
+    #[test]
+    fn partial_match_rejected() {
+        // A hypothetical future `claude-opus-40-…` must NOT match `claude-opus-4`.
+        assert!(resolve("claude-opus-40-foo").is_none());
+    }
+
+    #[test]
+    fn unknown_model_is_zero() {
+        approx(cost_usd("gpt-4", &toks(1_000_000, 1_000_000, 0, 0, 0)), 0.0);
+    }
+
+    #[test]
+    fn family_classification() {
+        assert_eq!(family_of("claude-opus-4-7"), "Opus");
+        assert_eq!(family_of("claude-sonnet-4-6"), "Sonnet");
+        assert_eq!(family_of("claude-haiku-4-5-20251001"), "Haiku");
+        assert_eq!(family_of("gpt-4"), "Other");
+    }
+}

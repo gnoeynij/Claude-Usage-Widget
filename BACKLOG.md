@@ -27,7 +27,7 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
-| **자동화 테스트 도입 검토** | 인프라·품질 | [CLAUDE.md "테스트 프레임워크"](CLAUDE.md) | 현재 0%. 후보: (a) Rust 단위 테스트 — `jsonl_aggregator`·`pricing`·`migration`이 순수 함수 비중 커서 ROI 높음. (b) Vitest — `src/state/store.ts` Solid 신호 로직. (c) Playwright — Tauri WebView 한정이라 dev URL에서만, 실 .exe 시각 회귀는 여전히 `capture-widget.ps1` 의존. 1인 사이드 프로젝트 ROI 고려해 (a)부터. |
+| **자동화 테스트 도입 검토** | 인프라·품질 | [CLAUDE.md "테스트 프레임워크"](CLAUDE.md) | (a) **부분 이행** — `pricing.rs` `cargo test` 9개 (cost_usd/resolve/family_of, 회귀 §19 방어). 후속: `jsonl_aggregator` (group_blocks/period_totals 시간 경계) + `migration` 단위 테스트. (b) Vitest — `src/state/store.ts` Solid 신호 로직 미도입. (c) Playwright — Tauri WebView 한정이라 dev URL에서만, 실 .exe 시각 회귀는 여전히 `capture-widget.ps1` 의존. |
 | **Win10 호환 검증** | 시각 회귀 | [vibrancy_win.rs](src-tauri/src/vibrancy_win.rs) | Mica/Acrylic은 Win11 전제. Win10에서 fallback이 정상인지 실 머신 확인 필요. |
 | **Linux 지원** | 인프라 | (없음) | Tauri 2가 지원하나 OAuth + `.credentials.json` 경로 + vibrancy 미구현 + AppImage·deb 분기 등 macOS와 별개. 수요 신호 있을 때만. |
 | **자동 시작 (Windows + macOS 동시)** | UX | (없음) | 현재 자동 시작 기능 자체가 미구현. Windows 추가 시 macOS LaunchAgent 도 같이 (`~/Library/LaunchAgents/com.gnoeynij.claude-widget.plist`). Settings UI 토글 + cfg 분기 모듈. 수요 있을 때. |
