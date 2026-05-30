@@ -46,9 +46,6 @@ Reads Claude Code's OAuth token from the platform-native store — `~/.claude/.c
 ### Bilingual (English / Korean)
 Every string switches instantly, including time labels and AM/PM.
 
-### Diagnostic log
-Settings → "Open logs folder" reveals `widget.log` with timestamped entries for every sync, error, update event, and UI action — useful for bug reports.
-
 ---
 
 ## 🚀 Installation & Usage
