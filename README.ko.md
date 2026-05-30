@@ -82,7 +82,7 @@ Settings → "로그 폴더 열기" 버튼이 `widget.log`를 보여줌. 모든 
   <img src="docs/screenshots/detail.png" alt="Detail 모드" width="420" />
 </p>
 <p align="center">
-  <img src="docs/screenshots/mini.png" alt="Mini 모드" width="320" />
+  <img src="docs/screenshots/mini.png" alt="Mini 모드" width="240" />
 </p>
 
 > ⚠️ 본 위젯은 Claude Code의 OAuth 사용량 엔드포인트를 호출합니다. Anthropic 측에서 해당 엔드포인트가 변경되거나 정책이 바뀔 경우 동작이 멈출 수 있습니다.

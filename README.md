@@ -82,7 +82,7 @@ Settings → "Open logs folder" reveals `widget.log` with timestamped entries fo
   <img src="docs/screenshots/detail.png" alt="Detail mode" width="420" />
 </p>
 <p align="center">
-  <img src="docs/screenshots/mini.png" alt="Mini mode" width="320" />
+  <img src="docs/screenshots/mini.png" alt="Mini mode" width="240" />
 </p>
 
 > ⚠️ The widget calls Claude Code's OAuth usage endpoint. If Anthropic changes the endpoint or policy, the widget may stop working until updated.
