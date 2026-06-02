@@ -13,6 +13,7 @@ export const en = {
   alwaysOnTop: "Always on top",
   darkMode: "Dark mode",
   opacity: "Background opacity",
+  plan: "Plan",
   notifyTitle: (pct: number) => `Claude usage at ${pct}%`,
   notifyBody85: "You've hit 85% of the current 5-hour session limit.",
   notifyBody95: "You're at 95% — close to the 5-hour session limit.",

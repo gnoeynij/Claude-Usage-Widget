@@ -87,6 +87,7 @@ pub fn run() {
             commands::hide_window,
             commands::run_migration,
             commands::open_log_dir,
+            commands::fetch_plan,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").expect("main window missing");

@@ -15,6 +15,7 @@ export const ko: Strings = {
   alwaysOnTop: "항상 위",
   darkMode: "다크 모드",
   opacity: "배경 투명도",
+  plan: "플랜",
   notifyTitle: (pct) => `Claude 사용량 ${pct}%`,
   notifyBody85: "현재 5시간 세션 한도의 85% 에 도달했어요.",
   notifyBody95: "95% — 5시간 세션 한도에 거의 도달했어요.",

@@ -7,6 +7,11 @@ pub async fn fetch_usage() -> Result<usage_api::UsageOutput, String> {
 }
 
 #[tauri::command]
+pub fn fetch_plan() -> usage_api::PlanOutput {
+    usage_api::read_plan()
+}
+
+#[tauri::command]
 pub fn credentials_mtime() -> Option<f64> {
     usage_api::credentials_mtime_ms()
 }

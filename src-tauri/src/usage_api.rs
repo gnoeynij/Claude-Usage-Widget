@@ -28,6 +28,10 @@ struct OAuthBlock {
     access_token: Option<String>,
     #[serde(rename = "expiresAt")]
     expires_at: Option<f64>,
+    #[serde(rename = "subscriptionType")]
+    subscription_type: Option<String>,
+    #[serde(rename = "rateLimitTier")]
+    rate_limit_tier: Option<String>,
 }
 
 fn credentials_path() -> Option<PathBuf> {
@@ -130,6 +134,26 @@ pub struct UsageOutput {
     pub seven_day_sonnet: f64,
     pub session_resets_at: Option<String>,
     pub weekly_resets_at: Option<String>,
+}
+
+#[derive(Serialize, Default, Debug)]
+pub struct PlanOutput {
+    pub subscription_type: Option<String>,
+    pub rate_limit_tier: Option<String>,
+}
+
+/// Read the subscription plan (e.g. "max") + rate-limit tier (e.g.
+/// "default_claude_max_20x") from the stored credentials. Read-only and
+/// independent of token expiry — the plan label should still render even when
+/// the access token needs a refresh. Returns an empty struct when not signed in.
+pub fn read_plan() -> PlanOutput {
+    match read_credentials() {
+        Some(o) => PlanOutput {
+            subscription_type: o.subscription_type,
+            rate_limit_tier: o.rate_limit_tier,
+        },
+        None => PlanOutput::default(),
+    }
 }
 
 pub async fn fetch_usage() -> Result<UsageOutput> {

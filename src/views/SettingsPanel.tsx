@@ -11,6 +11,7 @@ import {
   setAlwaysOnTop,
   setSyncIntervalMin,
   setOpacity,
+  planLabel,
   type Lang,
 } from "../state/store";
 import { checkForUpdate, installUpdate } from "../state/updater";
@@ -266,7 +267,24 @@ export function SettingsPanel() {
             gap: "var(--s-2)",
           }}
         >
-          <span class="t-headline">{t().settings}</span>
+          <div style={{ display: "flex", "align-items": "center", gap: "var(--s-2)" }}>
+            <span class="t-headline">{t().settings}</span>
+            <Show when={planLabel(store.plan)}>
+              {(label) => (
+                <span
+                  class="pill-accent"
+                  title={t().plan}
+                  style={{
+                    height: "var(--text-headline-lh)",
+                    "box-sizing": "border-box",
+                    "white-space": "nowrap",
+                  }}
+                >
+                  {label()}
+                </span>
+              )}
+            </Show>
+          </div>
           <button
             class="ring-hover"
             onClick={close}

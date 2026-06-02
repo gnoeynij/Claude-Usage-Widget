@@ -30,6 +30,11 @@ export type UsagePayload = {
   weekly_resets_at?: string | null;
 };
 
+export type PlanPayload = {
+  subscription_type: string | null;
+  rate_limit_tier: string | null;
+};
+
 export type DetailActive = {
   start: string;
   cost_usd: number;
@@ -107,6 +112,7 @@ type StoreShape = {
   opacity: number;
   settingsOpen: boolean;
   usage: UsagePayload;
+  plan: PlanPayload | null;
   detail: DetailPayload | null;
   lastSyncAt: string | null;
   syncing: boolean;
@@ -144,6 +150,7 @@ const [store, setStore] = createStore<StoreShape>({
   opacity: 0,
   settingsOpen: false,
   usage: { five_hour: 0, seven_day: 0, seven_day_sonnet: 0 },
+  plan: null,
   detail: null,
   lastSyncAt: null,
   syncing: false,
@@ -162,6 +169,23 @@ const [store, setStore] = createStore<StoreShape>({
 });
 
 export { store, setStore };
+
+/** Human-readable plan label, e.g. "Max 20×", or null when not signed in.
+ *  A `rate_limit_tier` like "default_claude_max_20x" supplies the "20×". */
+export function planLabel(p: PlanPayload | null): string | null {
+  const raw = p?.subscription_type;
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  const name =
+    lower === "max" ? "Max"
+    : lower === "pro" ? "Pro"
+    : lower === "free" ? "Free"
+    : lower === "team" ? "Team"
+    : lower === "enterprise" ? "Enterprise"
+    : raw.charAt(0).toUpperCase() + raw.slice(1);
+  const mult = p?.rate_limit_tier?.match(/(\d+)x/i)?.[1];
+  return mult ? `${name} ${mult}×` : name;
+}
 
 let syncTimer: number | null = null;
 let lastCredentialsMtime: number | null = null;
@@ -460,6 +484,12 @@ export async function initStore() {
   // neither key was persisted yet (fresh install).
   applyDarkClass(store.dark);
   document.documentElement.lang = store.lang;
+
+  // Plan label — read once from credentials. Independent of token validity,
+  // so it still shows in a TOKEN_EXPIRED state. Non-fatal on failure.
+  void invoke<PlanPayload>("fetch_plan")
+    .then((p) => setStore("plan", p))
+    .catch(() => {});
 
   // Restore per-mode sizes from disk before wiring the resize listener — we
   // don't want our own load to be picked up as a "user resize".
