@@ -12,11 +12,11 @@ pub struct Pricing {
 
 /// USD per million tokens.
 /// Official Anthropic pricing: https://platform.claude.com/docs/en/about-claude/pricing
-/// (last verified 2026-05-28). When Anthropic ships a new model generation,
+/// (last verified 2026-06-02). When Anthropic ships a new model generation,
 /// add an entry below and re-verify the existing ones.
 pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
     let opus_current = Pricing {
-        // Opus 4.5 / 4.6 / 4.7 — same price tier.
+        // Opus 4.5 / 4.6 / 4.7 / 4.8 — same price tier.
         input: 5.0,
         output: 25.0,
         cache_write_5m: 6.25,
@@ -56,6 +56,7 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
     };
 
     let mut m = HashMap::new();
+    m.insert("claude-opus-4-8", opus_current);
     m.insert("claude-opus-4-7", opus_current);
     m.insert("claude-opus-4-6", opus_current);
     m.insert("claude-opus-4-5", opus_current);
@@ -185,6 +186,15 @@ mod tests {
         // claude-opus-4-7-<date> must hit opus_current ($5), not opus_legacy ($15)
         // via the shorter `claude-opus-4` prefix.
         approx(cost_usd("claude-opus-4-7-20250416", &toks(1_000_000, 0, 0, 0, 0)), 5.0);
+    }
+
+    #[test]
+    fn opus_4_8_uses_current_pricing() {
+        // Opus 4.8 (released 2026-05-28) shares the current Opus tier ($5/$25),
+        // not opus_legacy via the shorter `claude-opus-4` prefix. Bare id (as
+        // seen in jsonl) and date-suffixed id must both resolve to $5/$25.
+        approx(cost_usd("claude-opus-4-8", &toks(1_000_000, 0, 0, 0, 0)), 5.0);
+        approx(cost_usd("claude-opus-4-8-20260528", &toks(0, 1_000_000, 0, 0, 0)), 25.0);
     }
 
     #[test]
