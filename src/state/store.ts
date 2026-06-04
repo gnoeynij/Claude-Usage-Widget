@@ -156,7 +156,7 @@ const [store, setStore] = createStore<StoreShape>({
   syncing: false,
   syncError: null,
   errorCode: null,
-  version: "2.1.6",
+  version: "2.1.7",
   tickMinute: 0,
   updateStatus: "idle",
   updateInfo: null,
