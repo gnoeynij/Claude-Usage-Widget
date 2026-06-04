@@ -31,6 +31,7 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
+| **6/15 usage 엔드포인트 생존 재확인** | 인증·리스크 | (이번 세션 2026-06-04) | 6/15 = Anthropic 자동화 워크로드 구독한도→별도 크레딧 전환일. 로컬에서 `/api/oauth/usage` 라이브 HTTP 200 확인(credentials accessToken, 마스킹) + 6/15 정책이 usage *조회* 에도 적용됐는지 WebSearch 재검토. 위젯은 추론 안 하고 조회만 해 직접 대상 아닐 것으로 분석(6/4 기준 200 동작)됐으나 그날 실측 필요. **remote 스케줄 불가**(로컬 credentials 접근 X) → 그날 사용자가 직접 트리거 ("위젯 6/15 확인"). |
 | **자동화 테스트 도입 검토** | 인프라·품질 | [CLAUDE.md "테스트 프레임워크"](CLAUDE.md) | (a) **부분 이행** — `cargo test` 20개: `pricing.rs` 12 (cost_usd/resolve/family_of/web_search/inference_geo, 회귀 §19 방어) + `jsonl_aggregator.rs` 8 (group_blocks 5h 경계/active_view/overall_stats/family_totals/recent_blocks). 후속: `period_totals` (Local::now 주입 리팩터 필요) + `migration` 단위 테스트. (b) Vitest — `src/state/store.ts` Solid 신호 로직 미도입. (c) Playwright — Tauri WebView 한정이라 dev URL에서만, 실 .exe 시각 회귀는 여전히 `capture-widget.ps1` 의존. **(d) ✓ CI 통합 완료** — [release.yml](.github/workflows/release.yml) rust-cache 후 `cargo test` 게이트 추가 (양 OS matrix, tauri-action 전). macOS 자동 검증 공백 해소. (본 커밋) |
 | **Win10 호환 검증** | 시각 회귀 | [vibrancy_win.rs](src-tauri/src/vibrancy_win.rs) | Mica/Acrylic은 Win11 전제. Win10에서 fallback이 정상인지 실 머신 확인 필요. |
 | **Linux 지원** | 인프라 | (없음) | Tauri 2가 지원하나 OAuth + `.credentials.json` 경로 + vibrancy 미구현 + AppImage·deb 분기 등 macOS와 별개. 수요 신호 있을 때만. |
