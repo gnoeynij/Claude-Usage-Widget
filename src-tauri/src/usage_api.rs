@@ -141,8 +141,11 @@ struct UsageResponse {
     // UsageBlock would fail to deserialize the null.
     #[serde(default)]
     seven_day_opus: Option<UsageBlock>,
+    // Same null-safety as seven_day_opus: the API may send `extra_usage: null`
+    // for accounts without a separate-credit pool. A bare struct would fail the
+    // whole response on explicit null (serde `default` fills only *absent* fields).
     #[serde(default)]
-    extra_usage: ExtraUsageBlock,
+    extra_usage: Option<ExtraUsageBlock>,
 }
 
 #[derive(Serialize, Default, Debug)]
@@ -245,18 +248,49 @@ async fn call_usage(access_token: &str) -> Result<UsageOutput> {
 
     let body: UsageResponse = resp.json().await.context("JSON_PARSE_ERROR")?;
 
+    let extra = body.extra_usage.unwrap_or_default();
     Ok(UsageOutput {
         five_hour: body.five_hour.utilization.unwrap_or(0.0),
         seven_day: body.seven_day.utilization.unwrap_or(0.0),
         seven_day_sonnet: body.seven_day_sonnet.utilization.unwrap_or(0.0),
         seven_day_opus: body.seven_day_opus.and_then(|b| b.utilization),
-        extra_usage_enabled: body.extra_usage.is_enabled,
-        extra_usage: if body.extra_usage.is_enabled {
-            body.extra_usage.utilization
-        } else {
-            None
-        },
+        extra_usage_enabled: extra.is_enabled,
+        extra_usage: if extra.is_enabled { extra.utilization } else { None },
         session_resets_at: body.five_hour.resets_at,
         weekly_resets_at: body.seven_day.resets_at,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Regression: optional top-level usage blocks must tolerate an explicit
+    // `null` (not just absence). serde's `default` fills only *absent* fields,
+    // so a bare struct field fails the *entire* response on `null` — which would
+    // blank the whole usage panel, not just that one row.
+    #[test]
+    fn usage_response_tolerates_null_and_missing_optional_blocks() {
+        let variants = [
+            r#"{"five_hour":{"utilization":50.0},"seven_day":{"utilization":60.0},"seven_day_sonnet":{"utilization":0.0},"seven_day_opus":null,"extra_usage":null}"#,
+            r#"{"five_hour":{"utilization":50.0},"seven_day_opus":{"utilization":10.0},"extra_usage":{"is_enabled":true,"utilization":42.0}}"#,
+            r#"{"five_hour":{"utilization":50.0},"seven_day":{"utilization":60.0}}"#,
+            r#"{"extra_usage":{}}"#,
+        ];
+        for v in variants {
+            let parsed: Result<UsageResponse, _> = serde_json::from_str(v);
+            assert!(parsed.is_ok(), "should parse but failed: {v} -> {:?}", parsed.err());
+        }
+    }
+
+    #[test]
+    fn extra_usage_hidden_when_disabled_or_null() {
+        let disabled: UsageResponse =
+            serde_json::from_str(r#"{"extra_usage":{"is_enabled":false,"utilization":99.0}}"#)
+                .unwrap();
+        assert!(!disabled.extra_usage.unwrap_or_default().is_enabled);
+
+        let null: UsageResponse = serde_json::from_str(r#"{"extra_usage":null}"#).unwrap();
+        assert!(!null.extra_usage.unwrap_or_default().is_enabled);
+    }
 }

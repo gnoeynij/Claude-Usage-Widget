@@ -144,7 +144,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### 테스트 프레임워크
 
-- **순수 함수 단위 테스트만 존재.** `cargo test` 21개: [`pricing.rs`](src-tauri/src/pricing.rs) 13 (`cost_usd`/`resolve`/`family_of` — 회귀 사례 §19 단가·1h cache·prefix 매칭·web search·inference_geo 방어) + [`jsonl_aggregator.rs`](src-tauri/src/jsonl_aggregator.rs) 8 (`group_blocks` 5h 경계·`active_view`·`overall_stats` cache_hit·`family_totals` 정렬·`recent_blocks` cap). 그 외 (UI·통합·시각) 자동 테스트는 없음 — `tests/`, Vitest, Playwright 미구성. `period_totals` 는 `Local::now()` 의존이라 미테스트 (주입 리팩터 필요).
+- **순수 함수 단위 테스트만 존재.** `cargo test` 23개: [`pricing.rs`](src-tauri/src/pricing.rs) 13 (`cost_usd`/`resolve`/`family_of` — 회귀 사례 §19 단가·1h cache·prefix 매칭·web search·inference_geo 방어) + [`usage_api.rs`](src-tauri/src/usage_api.rs) 2 (응답 신필드 null 방어) + [`jsonl_aggregator.rs`](src-tauri/src/jsonl_aggregator.rs) 8 (`group_blocks` 5h 경계·`active_view`·`overall_stats` cache_hit·`family_totals` 정렬·`recent_blocks` cap). 그 외 (UI·통합·시각) 자동 테스트는 없음 — `tests/`, Vitest, Playwright 미구성. `period_totals` 는 `Local::now()` 의존이라 미테스트 (주입 리팩터 필요).
 - 나머지 검증은 수동(빌드된 .exe 실행 → UI 동작 확인)으로 한다.
 - Karpathy §4의 "테스트 작성 후 통과시키기" 패턴은 *순수 함수 영역* (pricing/jsonl_aggregator)에만 적용 가능. UI/시각 영역은 PR/커밋 시 *어떤 시나리오를 손으로 확인했는지* 텍스트로 명시 (예: "AOT toggle on/off, 옵션 패널 열고 닫기, sync 1회").
 
@@ -289,7 +289,7 @@ gh release create vX.Y.Z --target main --title "..." --notes "..." \
 
 - **버전**: `v2.1.7` ([package.json](package.json), [package-lock.json](package-lock.json), [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json), [src-tauri/Cargo.toml](src-tauri/Cargo.toml), [src-tauri/Cargo.lock](src-tauri/Cargo.lock), [src/state/store.ts](src/state/store.ts) 모두 동일. **bump 헬퍼** `node scripts/bump-version.mjs <semver>` (또는 `--check`) — 회귀 사례 §3 재발 방어.
 - **빌드**: `npm run tauri build` exit 0. Windows MSVC 14.44.35207 + rustc 1.95.0 + Node 환경에서 51~96s (v2.1.0 측정 1m 36s — notification plugin 첫 컴파일). macOS Apple Silicon (rustc 1.95.0 + Node 20.20.2) 에서 19~31s. **CI 자동 빌드** ([.github/workflows/release.yml](.github/workflows/release.yml)) — tag push 시 양 OS runner 동시 (~5~10분).
-- **자동화 테스트**: 순수 함수 `cargo test` 21개 (pricing 13 + jsonl_aggregator 8, CI 게이트). UI·통합·시각 자동 테스트는 없음 — 빌드된 `.exe`/`.app` 실행 + UI 동작 + 캡처 스크립트로 수동 (`capture-widget.ps1` / `capture-widget.sh`).
+- **자동화 테스트**: 순수 함수 `cargo test` 23개 (pricing 13 + jsonl_aggregator 8 + usage_api 2, CI 게이트). UI·통합·시각 자동 테스트는 없음 — 빌드된 `.exe`/`.app` 실행 + UI 동작 + 캡처 스크립트로 수동 (`capture-widget.ps1` / `capture-widget.sh`).
 - **자동 업데이트**: 양 OS 활성 (v2.1.7). `releases/latest/download/latest.json` endpoint, minisign 서명 검증. macOS 는 ad-hoc 서명 (Apple Developer 미가입), Gatekeeper 첫 실행 우회 README 안내.
 - **알려진 빈 구멍** ([BACKLOG.md](BACKLOG.md) 참조):
   - OAuth 토큰 **full refresh (B 방식 — refresh_token 으로 새 access token 발급)** 미구현 — recovery (만료 banner + mtime polling + 자동 retry) 는 v2.0.0 에서 완료 (BACKLOG ✓ 60). 토큰 만료 시 사용자가 `claude` CLI 1회 실행 필요. B 방식은 Anthropic spec 미공개·client_id 폐기 위험으로 P0 → P1 격하.
