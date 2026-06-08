@@ -45,6 +45,17 @@ fn read_persisted_opacity(app: &tauri::App) -> f64 {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Single-instance guard MUST be the first plugin registered (Tauri
+        // requirement). A second launch fires this callback in the *already
+        // running* process — surface its window — then the second process
+        // exits, so the widget only ever runs once.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(
             // File logger so users can attach `widget.log` to bug reports.
             // INFO covers the failure modes that users actually report

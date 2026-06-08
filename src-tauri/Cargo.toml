@@ -27,6 +27,7 @@ tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-log = "2"
 tauri-plugin-notification = "2"
+tauri-plugin-single-instance = "2"
 log = "0.4"
 window-vibrancy = "0.5"
 serde = { version = "1", features = ["derive"] }
