@@ -80,6 +80,8 @@ export type DetailPayload = {
   recent: DetailBlock[];
   by_family: DetailFamily[];
   stats: DetailStats;
+  new_cost_since: number;
+  max_ts_ms: number;
 };
 
 export type UpdateStatus =
@@ -136,6 +138,12 @@ type StoreShape = {
    *  Only consumers that read it re-render (Solid fine-grained), so the cost
    *  is one timer + a couple of text nodes. */
   tickSecond: number;
+  /** Non-decreasing per-device lifetime cost — sum of every record ever seen,
+   *  kept even after their JSONL files are cleaned. Accumulated incrementally
+   *  via lifetimeCountedUntilMs. */
+  lifetimeCost: number;
+  /** Newest record ts (ms) already folded into lifetimeCost. */
+  lifetimeCountedUntilMs: number;
   updateStatus: UpdateStatus;
   updateInfo: UpdateInfo | null;
   updateDownloadPct: number;
@@ -174,6 +182,8 @@ const [store, setStore] = createStore<StoreShape>({
   version: "2.1.7",
   tickMinute: 0,
   tickSecond: 0,
+  lifetimeCost: 0,
+  lifetimeCountedUntilMs: 0,
   updateStatus: "idle",
   updateInfo: null,
   updateDownloadPct: 0,
@@ -529,6 +539,16 @@ export async function initStore() {
   // Restore per-mode sizes from disk before wiring the resize listener — we
   // don't want our own load to be picked up as a "user resize".
   await loadModeSizes();
+  await loadSetting<number>(
+    "lifetimeCost",
+    (v) => setStore("lifetimeCost", v),
+    (v): v is number => typeof v === "number" && v >= 0,
+  );
+  await loadSetting<number>(
+    "lifetimeCountedUntilMs",
+    (v) => setStore("lifetimeCountedUntilMs", v),
+    (v): v is number => typeof v === "number" && v >= 0,
+  );
   await loadSetting<string | null>(
     "notifiedBlock",
     (v) => setStore("notifiedBlock", v),
@@ -681,8 +701,22 @@ export function setMode(mode: Mode) {
 
 export async function refreshDetail() {
   try {
-    const detail = await invoke<DetailPayload>("aggregate_detail");
+    const detail = await invoke<DetailPayload>("aggregate_detail", {
+      countedUntilMs: store.lifetimeCountedUntilMs,
+    });
     setStore("detail", detail);
+    // Fold newly-seen cost into the non-decreasing lifetime total. The
+    // counted-until guard makes this idempotent across repeated refreshes.
+    if (
+      detail.new_cost_since > 0 ||
+      detail.max_ts_ms > store.lifetimeCountedUntilMs
+    ) {
+      const next = store.lifetimeCost + detail.new_cost_since;
+      setStore("lifetimeCost", next);
+      setStore("lifetimeCountedUntilMs", detail.max_ts_ms);
+      void persistSetting("lifetimeCost", next);
+      void persistSetting("lifetimeCountedUntilMs", detail.max_ts_ms);
+    }
   } catch (e) {
     setStore("syncError", toErrorMessage(e));
   }

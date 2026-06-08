@@ -386,6 +386,25 @@ function StatsCard() {
       <div class="t-section" style={{ "margin-bottom": "var(--s-3)" }}>
         {t().stats}
       </div>
+      {/* Lifetime — non-decreasing per-device total (survives log cleanup).
+          The "all devices" line is added by the cross-device feature (#2). */}
+      <div
+        style={{
+          display: "flex",
+          "align-items": "baseline",
+          "justify-content": "space-between",
+        }}
+      >
+        <span class="t-body label-secondary">{t().lifetimeDevice}</span>
+        <span class="t-title3 tabular-nums">{formatCost(store.lifetimeCost)}</span>
+      </div>
+      <div
+        style={{
+          height: "1px",
+          background: "var(--separator)",
+          margin: "var(--s-2) 0 var(--s-3)",
+        }}
+      />
       <div
         style={{
           display: "grid",
@@ -393,7 +412,7 @@ function StatsCard() {
           gap: "var(--s-3) var(--s-4)",
         }}
       >
-        <KPI label={t().cost} value={formatCost(s()?.total_cost ?? 0)} />
+        <KPI label={t().onDisk} value={formatCost(s()?.total_cost ?? 0)} />
         <KPI
           label={t().messages}
           value={(s()?.total_messages ?? 0).toLocaleString()}

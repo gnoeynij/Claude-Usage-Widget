@@ -66,6 +66,8 @@ export const ko: Strings = {
   messages: "메시지",
   avgPerBlock: "블록당 평균",
   cacheHit: "캐시 적중",
+  lifetimeDevice: "누적 · 이 기기",
+  onDisk: "현재 디스크",
   peak: "최고",
   peakLabel: (pct, peak) => `피크 ${peak} 대비 ${pct}%`,
 

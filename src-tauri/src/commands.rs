@@ -17,8 +17,8 @@ pub fn credentials_mtime() -> Option<f64> {
 }
 
 #[tauri::command]
-pub async fn aggregate_detail() -> Result<jsonl_aggregator::AggregateOut, String> {
-    match tauri::async_runtime::spawn_blocking(jsonl_aggregator::aggregate).await {
+pub async fn aggregate_detail(counted_until_ms: f64) -> Result<jsonl_aggregator::AggregateOut, String> {
+    match tauri::async_runtime::spawn_blocking(move || jsonl_aggregator::aggregate(counted_until_ms)).await {
         Ok(Ok(out)) => Ok(out),
         Ok(Err(e)) => Err(e.to_string()),
         Err(e) => Err(e.to_string()),

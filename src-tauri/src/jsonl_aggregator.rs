@@ -88,9 +88,16 @@ pub struct AggregateOut {
     pub recent: Vec<BlockOut>,
     pub by_family: Vec<FamilyOut>,
     pub stats: StatsOut,
+    /// Cost of records newer than the caller's `counted_until_ms` — lets the
+    /// frontend keep a non-decreasing lifetime total without re-summing
+    /// already-counted records (so it survives later JSONL log cleanup).
+    pub new_cost_since: f64,
+    /// Newest record timestamp in ms (or `counted_until_ms` if none is newer);
+    /// the frontend stores this back as the next `counted_until_ms`.
+    pub max_ts_ms: f64,
 }
 
-pub fn aggregate() -> Result<AggregateOut> {
+pub fn aggregate(counted_until_ms: f64) -> Result<AggregateOut> {
     let root = match projects_root() {
         Some(p) if p.exists() => p,
         Some(p) => {
@@ -105,6 +112,22 @@ pub fn aggregate() -> Result<AggregateOut> {
 
     let mut records = collect_records(&root);
     records.sort_by_key(|r| r.ts);
+
+    // Lifetime delta: cost of records newer than what the caller already
+    // folded in, plus the newest timestamp seen. Lets the frontend keep a
+    // non-decreasing lifetime total. resolve() is memoized so this extra pass
+    // is cheap even for heavy users.
+    let mut new_cost_since = 0.0_f64;
+    let mut max_ts_ms = counted_until_ms;
+    for r in &records {
+        let ms = r.ts.timestamp_millis() as f64;
+        if ms > counted_until_ms {
+            new_cost_since += cost_usd(&r.model, &r.tokens);
+        }
+        if ms > max_ts_ms {
+            max_ts_ms = ms;
+        }
+    }
 
     let blocks = group_blocks(&records);
     let now = Utc::now();
@@ -127,6 +150,8 @@ pub fn aggregate() -> Result<AggregateOut> {
         recent: recent_blocks(&blocks),
         by_family: family_totals(&records),
         stats: overall_stats(&records, &blocks),
+        new_cost_since,
+        max_ts_ms,
     })
 }
 

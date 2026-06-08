@@ -64,6 +64,8 @@ export const en = {
   messages: "Messages",
   avgPerBlock: "Avg per block",
   cacheHit: "Cache hit",
+  lifetimeDevice: "Lifetime · this device",
+  onDisk: "On disk",
   peak: "peak",
   peakLabel: (pct: number, peak: string) => `${pct}% of ${peak} peak`,
 
