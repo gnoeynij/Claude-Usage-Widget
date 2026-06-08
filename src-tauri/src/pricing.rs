@@ -1,5 +1,6 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 #[derive(Clone, Copy)]
 pub struct Pricing {
@@ -78,7 +79,27 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
 /// `opus_legacy` via `claude-opus-4`. The boundary after the base must be
 /// either end-of-string or `-`, so a hypothetical future `claude-opus-40-…`
 /// would not accidentally match `claude-opus-4`.
+///
+/// Memoized: `cost_usd` runs once per JSONL record, and heavy users have 100k+
+/// records resolving the same handful of model ids — without the cache the
+/// prefix scan below would repeat tens of thousands of times per aggregate.
+/// Pricing is static, so the cache never needs invalidation.
+static RESOLVE_CACHE: Lazy<Mutex<HashMap<String, Option<Pricing>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
 pub fn resolve(model: &str) -> Option<Pricing> {
+    if let Some(hit) = RESOLVE_CACHE.lock().unwrap().get(model) {
+        return *hit;
+    }
+    let result = resolve_uncached(model);
+    RESOLVE_CACHE
+        .lock()
+        .unwrap()
+        .insert(model.to_string(), result);
+    result
+}
+
+fn resolve_uncached(model: &str) -> Option<Pricing> {
     if let Some(p) = PRICING.get(model) {
         return Some(*p);
     }

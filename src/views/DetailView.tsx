@@ -272,11 +272,12 @@ function ModelsCard() {
   const peak = createMemo(() => Math.max(...rows().map((f) => f.cost), 0.01));
   const total = createMemo(() => rows().reduce((a, f) => a + f.cost, 0));
   // One-line model mix: each family's share of total spend.
-  const mix = () =>
+  const mix = createMemo(() =>
     rows()
       .filter((f) => f.cost > 0)
       .map((f) => `${f.family} ${Math.round((f.cost / Math.max(total(), 0.01)) * 100)}%`)
-      .join(" · ");
+      .join(" · "),
+  );
   return (
     <GlassCard>
       <div class="t-section" style={{ "margin-bottom": "var(--s-3)" }}>
