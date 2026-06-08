@@ -7,6 +7,7 @@ import { NormalView } from "./views/NormalView";
 import { MiniView } from "./views/MiniView";
 import { DetailView } from "./views/DetailView";
 import { SettingsPanel } from "./views/SettingsPanel";
+import { GlassToast } from "./components/GlassToast";
 import { store, initStore } from "./state/store";
 
 export function App() {
@@ -25,6 +26,7 @@ export function App() {
       <Show when={store.settingsOpen && store.mode !== "mini"}>
         <SettingsPanel />
       </Show>
+      <GlassToast />
     </LiquidGlass>
   );
 }

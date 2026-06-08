@@ -99,6 +99,10 @@ export type UpdateInfo = {
 export type ModeSize = { w: number; h: number };
 export type ModeSizes = Record<Mode, ModeSize | null>;
 
+/** Transient in-widget Liquid Glass toast — used for usage-threshold alerts
+ *  while the widget is on screen; OS notifications cover the tray-hidden case. */
+export type Toast = { id: number; title: string; body: string; tone: "warn" | "danger" };
+
 /** Per-mode default (w, h, minW, minH). Mini covers donut + 2 capsule rows.
  *  Normal keeps the historical 360×420. Detail's width clears the 560px
  *  container-query breakpoint that switches the detail grid to 2 columns. */
@@ -128,6 +132,10 @@ type StoreShape = {
    *  dot) can fade based on the age of `lastSyncAt` without needing their
    *  own timer. */
   tickMinute: number;
+  /** Increments every 1s for live countdowns (session reset, active block).
+   *  Only consumers that read it re-render (Solid fine-grained), so the cost
+   *  is one timer + a couple of text nodes. */
+  tickSecond: number;
   updateStatus: UpdateStatus;
   updateInfo: UpdateInfo | null;
   updateDownloadPct: number;
@@ -144,6 +152,8 @@ type StoreShape = {
    *  doesn't clear pending session notifications and vice versa. */
   notifiedWeek: string | null;
   notifiedWeekLevels: number[];
+  /** Active in-widget toasts (transient — not persisted). */
+  toasts: Toast[];
 };
 
 const [store, setStore] = createStore<StoreShape>({
@@ -163,6 +173,7 @@ const [store, setStore] = createStore<StoreShape>({
   errorCode: null,
   version: "2.1.7",
   tickMinute: 0,
+  tickSecond: 0,
   updateStatus: "idle",
   updateInfo: null,
   updateDownloadPct: 0,
@@ -171,6 +182,7 @@ const [store, setStore] = createStore<StoreShape>({
   notifiedLevels: [],
   notifiedWeek: null,
   notifiedWeekLevels: [],
+  toasts: [],
 });
 
 export { store, setStore };
@@ -300,27 +312,48 @@ function pickDueAndReset(
   );
 }
 
-function fireForScope(scope: NotifyScope, due: number[], pct: number) {
+let toastSeq = 0;
+const TOAST_TTL_MS = 6000;
+
+/** Show a transient in-widget toast and auto-dismiss it after TOAST_TTL_MS. */
+export function pushToast(title: string, body: string, tone: "warn" | "danger") {
+  const id = ++toastSeq;
+  setStore("toasts", (ts) => [...ts, { id, title, body, tone }]);
+  window.setTimeout(() => dismissToast(id), TOAST_TTL_MS);
+}
+
+export function dismissToast(id: number) {
+  setStore("toasts", (ts) => ts.filter((toast) => toast.id !== id));
+}
+
+function fire(scope: NotifyScope, due: number[], pct: number, hidden: boolean) {
   const isWeekly = scope === "weekly";
   for (const level of due) {
-    try {
-      const title = isWeekly
-        ? t().notifyTitleWeekly(Math.round(pct))
-        : t().notifyTitle(Math.round(pct));
-      const body = isWeekly
-        ? level >= 95
-          ? t().notifyBodyWeekly95
-          : t().notifyBodyWeekly85
-        : level >= 95
-          ? t().notifyBody95
-          : t().notifyBody85;
-      sendNotification({ title, body });
-      void info(
-        `notification fired ${scope} at ${level}% (actual ${pct.toFixed(1)}%)`,
-      );
-    } catch (e) {
-      void warn(`notification send failed: ${toErrorMessage(e)}`);
+    const title = isWeekly
+      ? t().notifyTitleWeekly(Math.round(pct))
+      : t().notifyTitle(Math.round(pct));
+    const body = isWeekly
+      ? level >= 95
+        ? t().notifyBodyWeekly95
+        : t().notifyBodyWeekly85
+      : level >= 95
+        ? t().notifyBody95
+        : t().notifyBody85;
+    if (hidden) {
+      // Widget is in the tray — fall back to an OS notification.
+      try {
+        sendNotification({ title, body });
+      } catch (e) {
+        void warn(`notification send failed: ${toErrorMessage(e)}`);
+      }
+    } else {
+      // Widget is on screen — in-widget Liquid Glass toast (matches the
+      // widget look, needs no OS permission).
+      pushToast(title, body, level >= 95 ? "danger" : "warn");
     }
+    void info(
+      `threshold fired ${scope} at ${level}% (actual ${pct.toFixed(1)}%) via ${hidden ? "OS" : "toast"}`,
+    );
   }
   const keys = SCOPE_KEYS[scope];
   const next = [...store[keys.levels], ...due];
@@ -328,11 +361,11 @@ function fireForScope(scope: NotifyScope, due: number[], pct: number) {
   void persistSetting(keys.levels, next);
 }
 
-/** Fire an OS notification when 5h session or 7-day weekly crosses 85% /
- *  95%. Idempotent per block. Permission is requested lazily on first
- *  crossing, not at boot. */
+/** Alert when 5h session or 7-day weekly crosses 85% / 95%. Idempotent per
+ *  block. While the widget is on screen it shows an in-widget Liquid Glass
+ *  toast (no OS permission); when hidden to the tray it falls back to an OS
+ *  notification (permission requested lazily on first crossing). */
 async function maybeNotifyThreshold(usage: UsagePayload) {
-  if (notificationPermissionDenied) return;
   const sessionDue = pickDueAndReset(
     "session",
     usage.five_hour,
@@ -345,24 +378,30 @@ async function maybeNotifyThreshold(usage: UsagePayload) {
   );
   if (sessionDue.length === 0 && weeklyDue.length === 0) return;
 
-  let granted = false;
-  try {
-    granted = await isPermissionGranted();
-    if (!granted) {
-      granted = (await requestPermission()) === "granted";
+  // Visible → in-widget toast; hidden (tray) → OS notification.
+  const hidden = typeof document !== "undefined" && document.hidden;
+
+  if (hidden) {
+    if (notificationPermissionDenied) return;
+    let granted = false;
+    try {
+      granted = await isPermissionGranted();
+      if (!granted) {
+        granted = (await requestPermission()) === "granted";
+      }
+    } catch (e) {
+      void warn(`notification permission failed: ${toErrorMessage(e)}`);
+      return;
     }
-  } catch (e) {
-    void warn(`notification permission failed: ${toErrorMessage(e)}`);
-    return;
-  }
-  if (!granted) {
-    notificationPermissionDenied = true;
-    void info("notification permission denied — won't re-prompt this session");
-    return;
+    if (!granted) {
+      notificationPermissionDenied = true;
+      void info("notification permission denied — won't re-prompt this session");
+      return;
+    }
   }
 
-  if (sessionDue.length > 0) fireForScope("session", sessionDue, usage.five_hour);
-  if (weeklyDue.length > 0) fireForScope("weekly", weeklyDue, usage.seven_day);
+  if (sessionDue.length > 0) fire("session", sessionDue, usage.five_hour, hidden);
+  if (weeklyDue.length > 0) fire("weekly", weeklyDue, usage.seven_day, hidden);
 }
 
 async function loadModeSizes() {
@@ -550,6 +589,10 @@ export async function initStore() {
   // Minute heartbeat for time-based UI (header dot freshness, "X min ago"
   // labels). Independent of sync — never causes network traffic.
   window.setInterval(() => setStore("tickMinute", (v) => v + 1), 60_000);
+
+  // Second heartbeat for live countdowns (session reset, active block). Cheap —
+  // WebView auto-throttles timers to ~1/min when the window is hidden to tray.
+  window.setInterval(() => setStore("tickSecond", (v) => v + 1), 1_000);
 
   // Watch `.credentials.json` for refresh events. When Claude Code CLI
   // rotates the token, mtime changes — that's our signal to retry a failed
