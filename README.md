@@ -82,7 +82,7 @@ Every string switches instantly, including time labels and AM/PM.
   <img src="docs/screenshots/mini.png" alt="Mini mode" width="240" />
 </p>
 
-> ⚠️ The widget calls Claude Code's OAuth usage endpoint. If Anthropic changes the endpoint or policy, the widget may stop working until updated.
+> ⚠️ The widget reuses the OAuth token that Claude Code stores locally (`~/.claude/.credentials.json` on Windows/Linux, the login Keychain on macOS) to call Anthropic's OAuth usage endpoint. Anthropic's Consumer Terms (updated 2026-02-19) state that OAuth tokens from Claude Free/Pro/Max accounts are not authorized for use outside Claude Code and claude.ai — so this read-only reuse is an unofficial, best-effort approach that carries some account/ToS risk and may stop working if Anthropic changes the endpoint or enforces the policy. Use at your own discretion.
 
 ---
 
@@ -125,6 +125,9 @@ npm run tauri build
 
 ### v2.0.x (Tauri 2 + SolidJS line)
 
+- [**v2.1.7**](docs/release-notes/v2.1.7.md) — Opus 4.8 cost fix (it was billed at the legacy $15/$75 tier — a 3× overcount — now the correct $5/$25) + subscription plan chip (e.g. "Max 20×") in the Settings panel header.
+- [**v2.1.6**](docs/release-notes/v2.1.6.md) — macOS background opacity now applies immediately on slider change / launch (previously a mode switch was needed for it to take effect).
+- [**v2.1.5**](docs/release-notes/v2.1.5.md) — cost-accuracy pass: Opus pricing corrected to the official table (~3× → actual), separate 5m/1h cache pricing, web-search surcharge, deprecated-model fallback, version shown in the update check.
 - [**v2.1.4**](docs/release-notes/v2.1.4.md) — Tray icon shows immediate sync status (green dot = OK, red dot = failure), tray glyph rendered at the right system size, macOS widget corners rounded to 24px. Internal: halo-gauge design retired (-430 net lines).
 - [**v2.1.3**](docs/release-notes/v2.1.3.md) — macOS background opacity matches Windows; boot + hover frosted-opaque regression fixed.
 - [**v2.1.2**](docs/release-notes/v2.1.2.md) — Background opacity slider now works on macOS (`macos-private-api` opt-in unlocks the wry `transparent` feature path).

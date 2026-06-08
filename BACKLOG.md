@@ -13,7 +13,7 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
-| **v2.1.7 릴리즈 — Opus 4.8 단가 + 플랜 칩 전달** | 릴리즈 | 로컬 2 커밋 `a2df72e`(Opus 4.8 단가) + `b63c044`(플랜 칩), origin 미push | Opus 4.8 비용 3배 과대 fix 가 *전 사용자 영향*이라 릴리즈 우선. 순서: ① `node scripts/bump-version.mjs 2.1.7`, ② `docs/release-notes/v2.1.7.md` 작성, ③ `git push`, ④ tag push → CI. **always-spot-check**: 단가 공식 표 재확인 (2026-06-02 검증 완료) + CI cargo test (이번 세션 Windows 만 검증, macOS Keychain `subscriptionType` 미검증). **사용자 결정으로 릴리즈 보류 중** (2026-06-02). |
+| _(현재 막힘 없음 — 직전 P0 "v2.1.7 릴리즈"는 2026-06-04 발행 완료. ✓ 섹션 참조)_ | — | — | — |
 
 (OAuth 직접 refresh 는 P1 으로 격하.)
 
@@ -32,7 +32,7 @@
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
 | **6/15 usage 엔드포인트 생존 재확인** | 인증·리스크 | (이번 세션 2026-06-04) | 6/15 = Anthropic 자동화 워크로드 구독한도→별도 크레딧 전환일. 로컬에서 `/api/oauth/usage` 라이브 HTTP 200 확인(credentials accessToken, 마스킹) + 6/15 정책이 usage *조회* 에도 적용됐는지 WebSearch 재검토. 위젯은 추론 안 하고 조회만 해 직접 대상 아닐 것으로 분석(6/4 기준 200 동작)됐으나 그날 실측 필요. **remote 스케줄 불가**(로컬 credentials 접근 X) → 그날 사용자가 직접 트리거 ("위젯 6/15 확인"). |
-| **자동화 테스트 도입 검토** | 인프라·품질 | [CLAUDE.md "테스트 프레임워크"](CLAUDE.md) | (a) **부분 이행** — `cargo test` 20개: `pricing.rs` 12 (cost_usd/resolve/family_of/web_search/inference_geo, 회귀 §19 방어) + `jsonl_aggregator.rs` 8 (group_blocks 5h 경계/active_view/overall_stats/family_totals/recent_blocks). 후속: `period_totals` (Local::now 주입 리팩터 필요) + `migration` 단위 테스트. (b) Vitest — `src/state/store.ts` Solid 신호 로직 미도입. (c) Playwright — Tauri WebView 한정이라 dev URL에서만, 실 .exe 시각 회귀는 여전히 `capture-widget.ps1` 의존. **(d) ✓ CI 통합 완료** — [release.yml](.github/workflows/release.yml) rust-cache 후 `cargo test` 게이트 추가 (양 OS matrix, tauri-action 전). macOS 자동 검증 공백 해소. (본 커밋) |
+| **자동화 테스트 도입 검토** | 인프라·품질 | [CLAUDE.md "테스트 프레임워크"](CLAUDE.md) | (a) **부분 이행** — `cargo test` 21개: `pricing.rs` 13 (cost_usd/resolve/family_of/web_search/inference_geo, 회귀 §19 방어) + `jsonl_aggregator.rs` 8 (group_blocks 5h 경계/active_view/overall_stats/family_totals/recent_blocks). 후속: `period_totals` (Local::now 주입 리팩터 필요) + `migration` 단위 테스트. (b) Vitest — `src/state/store.ts` Solid 신호 로직 미도입. (c) Playwright — Tauri WebView 한정이라 dev URL에서만, 실 .exe 시각 회귀는 여전히 `capture-widget.ps1` 의존. **(d) ✓ CI 통합 완료** — [release.yml](.github/workflows/release.yml) rust-cache 후 `cargo test` 게이트 추가 (양 OS matrix, tauri-action 전). macOS 자동 검증 공백 해소. (본 커밋) |
 | **Win10 호환 검증** | 시각 회귀 | [vibrancy_win.rs](src-tauri/src/vibrancy_win.rs) | Mica/Acrylic은 Win11 전제. Win10에서 fallback이 정상인지 실 머신 확인 필요. |
 | **Linux 지원** | 인프라 | (없음) | Tauri 2가 지원하나 OAuth + `.credentials.json` 경로 + vibrancy 미구현 + AppImage·deb 분기 등 macOS와 별개. 수요 신호 있을 때만. |
 | **자동 시작 (Windows + macOS 동시)** | UX | (없음) | 현재 자동 시작 기능 자체가 미구현. Windows 추가 시 macOS LaunchAgent 도 같이 (`~/Library/LaunchAgents/com.gnoeynij.claude-widget.plist`). Settings UI 토글 + cfg 분기 모듈. 수요 있을 때. |
@@ -81,6 +81,7 @@
 | **CI cargo test 통합 (P2 d)** — [release.yml](.github/workflows/release.yml) 에 `Run Rust unit tests` step (rust-cache 후·tauri-action 전, `working-directory: ./src-tauri`, 양 OS matrix). 테스트 실패 시 빌드·release 발행 차단 게이트. 이전엔 Windows 로컬만 돌던 단위 테스트 20개(pricing 12 + jsonl_aggregator 8)가 macOS runner 에서도 자동 검증. 로컬 `cargo test` 20 passed 확인. | (본 커밋) | 2026-05-28 |
 | **Opus 4.8 단가 추가** ([회귀 §19](CLAUDE.md)) — `pricing.rs` 에 `claude-opus-4-8` → `opus_current` ($5/$25). 미등록이라 `resolve()` 가 `claude-opus-4`(opus_legacy $15/$75) 로 longest-prefix 매칭 → Opus 4.8 사용분 3배 과대. 공식 가격표(2026-06-02 재검증) 대조 + 5개 단가 그룹 전부 일치 확인. 회귀 테스트 `opus_4_8_uses_current_pricing` (bare + date-suffix). 사용자 JSONL 에 opus-4-8 434건 기록 중이라 실 영향. cargo test 21 passed. | `a2df72e` | 2026-06-02 |
 | **구독 플랜 칩 (옵션 패널 헤더)** — credentials `subscriptionType`+`rateLimitTier` → "Max 20×" 라벨을 `SettingsPanel` 헤더 타이틀 옆 `.pill-accent` 칩으로 (height 를 `--text-headline-lh` 로 맞춰 타이틀과 정렬). `usage_api.rs read_plan()` (토큰 만료 무관 읽기 전용) + `fetch_plan` command + `store.ts planLabel()` (`(\d+)x`→배수, 미지값 capitalize fallback) + i18n plan 키. 사용량 계산 무관 정보 라벨, 미로그인 시 자동 숨김. typecheck + cargo test 21 passed. | `b63c044` | 2026-06-02 |
+| **v2.1.7 릴리즈 발행** — Opus 4.8 단가 정정(`a2df72e`) + 구독 플랜 칩(`b63c044`) 을 6 파일 bump + `docs/release-notes/v2.1.7.md` + tag push → CI 양 OS 빌드로 발행. GitHub Release 2026-06-04 게시 (이전 "보류" 결정에서 발행으로 전환, origin push 완료). | `5628ec7` (tag `v2.1.7`) | 2026-06-04 |
 
 ---
 
