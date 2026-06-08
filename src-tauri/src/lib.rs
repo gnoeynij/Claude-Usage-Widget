@@ -70,7 +70,6 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -83,10 +82,7 @@ pub fn run() {
             commands::set_mica_enabled,
             commands::set_tray_state,
             commands::set_window_size,
-            commands::quit_app,
             commands::hide_window,
-            commands::run_migration,
-            commands::open_log_dir,
             commands::fetch_plan,
         ])
         .setup(|app| {

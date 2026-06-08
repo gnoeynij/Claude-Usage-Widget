@@ -33,13 +33,6 @@ pub fn run_once(app: &App) -> anyhow::Result<()> {
     }
 }
 
-pub fn run_once_invoked() -> anyhow::Result<bool> {
-    // The real migration is performed once during App::setup(). When the
-    // frontend calls this command later it's effectively a no-op — but we
-    // still report success so the UI flow stays simple.
-    Ok(false)
-}
-
 #[cfg(target_os = "windows")]
 fn run_windows(app: &tauri::AppHandle) -> anyhow::Result<()> {
     use tauri_plugin_store::StoreExt;

@@ -75,11 +75,6 @@ pub fn set_tray_state(app: tauri::AppHandle, state: String) -> Result<(), String
     Ok(())
 }
 
-#[tauri::command]
-pub fn quit_app(app: tauri::AppHandle) {
-    app.exit(0);
-}
-
 /// 위젯을 트레이로 hide. FooterBar X 버튼이 frontend
 /// `getCurrentWindow().hide()` 로 안 되는 신고가 있어 backend 우회.
 /// 다른 command 들과 동일한 invoke 패턴으로 안정성 ↑.
@@ -106,47 +101,5 @@ pub async fn set_window_size(
     window
         .set_size(LogicalSize::new(width, height))
         .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn run_migration() -> Result<bool, String> {
-    crate::migration::run_once_invoked().map_err(|e| e.to_string())
-}
-
-/// Open the OS file explorer at the app's log directory. Used by the
-/// "Open logs folder" button in Settings so users can attach `widget.log`
-/// to a bug report without hunting through %LOCALAPPDATA%.
-#[tauri::command]
-pub fn open_log_dir(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::Manager;
-    let log_dir = app
-        .path()
-        .app_log_dir()
-        .map_err(|e| e.to_string())?;
-    // Make sure it exists — first call before any log line is written would
-    // otherwise hand explorer an invalid path.
-    std::fs::create_dir_all(&log_dir).map_err(|e| e.to_string())?;
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("explorer")
-            .arg(&log_dir)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(&log_dir)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(&log_dir)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
     Ok(())
 }

@@ -12,7 +12,6 @@
     "core:event:default",
     "core:resources:default",
     "fs:default",
-    "http:default",
     "store:default",
     "process:default",
     "os:default",

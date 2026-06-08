@@ -4,7 +4,6 @@
 :root {
   /* ─── Brand ─────────────────────────────────────────────────────────── */
   --accent: #d97757;
-  --accent-hover: #c5644a;
   --accent-tint: rgba(217, 119, 87, 0.16);
   --accent-tint-strong: rgba(217, 119, 87, 0.28);
 
@@ -31,7 +30,6 @@
   --fill-1: rgba(120, 120, 128, 0.20);
   --fill-2: rgba(120, 120, 128, 0.14);
   --fill-3: rgba(120, 120, 128, 0.10);
-  --fill-4: rgba(120, 120, 128, 0.06);
 
   --separator: rgba(60, 60, 67, 0.18);
   --hairline: rgba(0, 0, 0, 0.08);
@@ -64,10 +62,8 @@
      At mult=0 the panel/card surfaces vanish and Mica/Acrylic shows through
      unchanged behind the widgets. */
   --bg-alpha-mult: 1;
-  --glass-base: rgba(var(--glass-base-rgb), calc(var(--glass-base-alpha) * var(--bg-alpha-mult)));
   --glass-base-blur: 40px;
   --glass-card: rgba(var(--glass-card-rgb), calc(var(--glass-card-alpha) * var(--bg-alpha-mult)));
-  --glass-card-accent: rgba(var(--glass-card-accent-rgb), calc(var(--glass-card-accent-alpha) * var(--bg-alpha-mult)));
   --glass-card-blur: 18px;
   --specular: rgba(255, 255, 255, 0.85);
   --specular-edge: rgba(255, 255, 255, 0.45);
@@ -91,7 +87,6 @@
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 16px;
-  --r-xl: 20px;
   --r-window: 10px; /* matches Win11 DWMWCP_ROUND (~8-10px) to avoid corner halo */
   --r-pill: 9999px;
 
@@ -132,7 +127,6 @@
   /* ─── Component metrics ──────────────────────────────────────────────── */
   --capsule-h: 10px;
   --capsule-h-sm: 6px;
-  --donut-stroke: 8px;
 }
 
 /* macOS window corner radius varies by app (~10–13px); 24px is well above
@@ -157,7 +151,6 @@
   --fill-1: rgba(235, 237, 250, 0.28);
   --fill-2: rgba(235, 237, 250, 0.19);
   --fill-3: rgba(235, 237, 250, 0.13);
-  --fill-4: rgba(235, 237, 250, 0.08);
 
   --separator: rgba(235, 237, 250, 0.24);
   --hairline: rgba(255, 255, 255, 0.16);
@@ -174,8 +167,8 @@
   --glass-card-alpha: 0.85;
   --glass-card-accent-rgb: 72, 76, 92;
   --glass-card-accent-alpha: 0.92;
-  /* --glass-base / --glass-card / --glass-card-accent are derived from the
-     RGB/alpha pair in :root, so we don't need to redeclare them here. */
+  /* --glass-card is derived from its RGB/alpha pair in :root, so we don't
+     need to redeclare the composed token here. */
   /* On dark backgrounds the system success green is plenty visible — keep
      it as-is for the dot. */
   --success-dim: #34c759;

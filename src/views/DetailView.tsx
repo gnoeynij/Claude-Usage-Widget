@@ -252,7 +252,7 @@ function ModelsCard() {
       </div>
       <For each={rows()}>
         {(fam) => {
-          const pct = () => (peak() > 0 ? (fam.cost / peak()) * 100 : 0);
+          const pct = () => (fam.cost / peak()) * 100;
           const color = modelColor(fam.family);
           return (
             <div
