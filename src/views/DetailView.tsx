@@ -43,8 +43,18 @@ function ActiveCard() {
       </div>
       <Show when={a()} fallback={<EmptyHint />}>
         {(act) => {
+          // Live elapsed/remaining from the block start + tickSecond, so the
+          // active-session donut counts down in real time between syncs.
+          const liveElapsedMin = () => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            store.tickSecond;
+            const e = (Date.now() - new Date(act().start).getTime()) / 60_000;
+            return Math.max(0, Math.min(e, act().total_min));
+          };
+          const liveRemainingMin = () =>
+            Math.max(0, Math.round(act().total_min - liveElapsedMin()));
           const timePct = () =>
-            act().total_min > 0 ? (act().elapsed_min / act().total_min) * 100 : 0;
+            act().total_min > 0 ? (liveElapsedMin() / act().total_min) * 100 : 0;
           const costPct = () =>
             peak() > 0 ? (act().cost_usd / peak()) * 100 : 0;
           return (
@@ -59,7 +69,7 @@ function ActiveCard() {
                 value={timePct()}
                 size={88}
                 stroke={7}
-                label={`${Math.floor(act().remaining_min / 60)}h ${act().remaining_min % 60}m`}
+                label={`${Math.floor(liveRemainingMin() / 60)}h ${liveRemainingMin() % 60}m`}
                 onClick={() => void syncNow()}
               />
               <div
@@ -137,6 +147,15 @@ function PeriodsCard() {
       0.01,
     );
   };
+  // Linear month-end projection from spend-so-far (label says "est." — assumes
+  // the current daily pace holds for the rest of the month).
+  const monthProjection = () => {
+    const m = p()?.month_cost ?? 0;
+    const now = new Date();
+    const day = now.getDate();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    return day > 0 ? (m / day) * daysInMonth : m;
+  };
   return (
     <GlassCard>
       <div class="t-section" style={{ "margin-bottom": "var(--s-3)" }}>
@@ -158,6 +177,12 @@ function PeriodsCard() {
         value={p()?.month_cost ?? 0}
         max={peak()}
       />
+      <div
+        class="t-caption label-tertiary"
+        style={{ "text-align": "right", "padding-top": "var(--s-1)" }}
+      >
+        {t().projectedMonth} {formatCost(monthProjection())}
+      </div>
     </GlassCard>
   );
 }
@@ -245,6 +270,13 @@ function ModelsCard() {
     return [...fixed, ...extras];
   });
   const peak = createMemo(() => Math.max(...rows().map((f) => f.cost), 0.01));
+  const total = createMemo(() => rows().reduce((a, f) => a + f.cost, 0));
+  // One-line model mix: each family's share of total spend.
+  const mix = () =>
+    rows()
+      .filter((f) => f.cost > 0)
+      .map((f) => `${f.family} ${Math.round((f.cost / Math.max(total(), 0.01)) * 100)}%`)
+      .join(" · ");
   return (
     <GlassCard>
       <div class="t-section" style={{ "margin-bottom": "var(--s-3)" }}>
@@ -315,6 +347,14 @@ function ModelsCard() {
           );
         }}
       </For>
+      <Show when={total() > 0}>
+        <div
+          class="t-caption label-tertiary"
+          style={{ "padding-top": "var(--s-2)", "text-align": "center" }}
+        >
+          {mix()}
+        </div>
+      </Show>
     </GlassCard>
   );
 }

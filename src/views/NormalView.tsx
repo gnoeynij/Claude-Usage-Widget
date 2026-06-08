@@ -4,6 +4,7 @@ import { CapsuleProgress } from "../components/CapsuleProgress";
 import { store, syncNow } from "../state/store";
 import { t } from "../i18n";
 import { clamp } from "../utils/math";
+import { formatCountdown } from "../utils/format";
 import { startWindowDrag } from "../utils/drag";
 
 function formatResetsIn(iso?: string | null) {
@@ -42,13 +43,12 @@ function MiniMetric(props: { label: string; value: number }) {
 }
 
 export function NormalView() {
-  // Touch tickMinute so the countdown recomputes every minute between syncs,
-  // matching the header status dot (HeaderBar.tsx). Without it the "resets in
-  // Xh Ym" label stays frozen until the next sync.
-  const sessionReset = () => {
+  // Session reset ticks live (per-second, store.tickSecond). Weekly stays
+  // minute-granular (it's days away) via the HeaderBar tickMinute pattern.
+  const sessionCountdown = () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    store.tickMinute;
-    return formatResetsIn(store.usage.session_resets_at);
+    store.tickSecond;
+    return formatCountdown(store.usage.session_resets_at);
   };
   const weeklyReset = () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
@@ -103,8 +103,12 @@ export function NormalView() {
           label={t().session.toLowerCase()}
           onClick={() => void syncNow()}
         />
-        <Show when={sessionReset()}>
-          {(s) => <span class="t-caption label-tertiary">{s()}</span>}
+        <Show when={sessionCountdown()}>
+          {(c) => (
+            <span class="t-caption label-tertiary">
+              {t().resetsInLive(c().h, c().m, c().s)}
+            </span>
+          )}
         </Show>
       </div>
 

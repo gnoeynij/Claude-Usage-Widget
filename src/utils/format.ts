@@ -17,3 +17,19 @@ export function formatTokens(n: number): string {
   if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   return `${(n / 1_000_000_000).toFixed(1)}B`;
 }
+
+/** Live countdown parts to an ISO reset time. Returns null once the time has
+ *  passed or the input is empty. Caller reads a tick signal for reactivity. */
+export function formatCountdown(
+  iso?: string | null,
+): { h: number; m: number; s: number; totalMs: number } | null {
+  if (!iso) return null;
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return null;
+  return {
+    h: Math.floor(ms / 3_600_000),
+    m: Math.floor((ms % 3_600_000) / 60_000),
+    s: Math.floor((ms % 60_000) / 1000),
+    totalMs: ms,
+  };
+}

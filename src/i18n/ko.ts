@@ -8,6 +8,8 @@ export const ko: Strings = {
   opusOnly: "Opus 전용",
   extraCredits: (pct) => `추가 크레딧 ${pct}%`,
   resetsIn: (h, m) => `${h}시간 ${m}분 뒤 초기화`,
+  resetsInLive: (h, m, s) =>
+    h > 0 ? `${h}시간 ${m}분 ${s}초 뒤 초기화` : `${m}분 ${s}초 뒤 초기화`,
   resetsOn: (s) => `${s} 초기화`,
 
   syncNow: "지금 동기화",
@@ -56,6 +58,7 @@ export const ko: Strings = {
   yesterday: "어제",
   thisWeek: "이번 주",
   thisMonth: "이번 달",
+  projectedMonth: "월말 예상",
   recent: "최근 블록",
   models: "모델별",
   stats: "통계",

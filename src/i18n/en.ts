@@ -6,6 +6,8 @@ export const en = {
   opusOnly: "Opus only",
   extraCredits: (pct: number) => `Extra credits ${pct}%`,
   resetsIn: (h: number, m: number) => `Resets in ${h}h ${m}m`,
+  resetsInLive: (h: number, m: number, s: number) =>
+    h > 0 ? `Resets in ${h}h ${m}m ${s}s` : `Resets in ${m}m ${s}s`,
   resetsOn: (s: string) => `Resets ${s}`,
 
   syncNow: "Sync now",
@@ -54,6 +56,7 @@ export const en = {
   yesterday: "Yesterday",
   thisWeek: "This week",
   thisMonth: "This month",
+  projectedMonth: "Est. month-end",
   recent: "Recent blocks",
   models: "Models",
   stats: "Stats",
