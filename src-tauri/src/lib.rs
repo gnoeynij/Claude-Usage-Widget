@@ -1,4 +1,5 @@
 mod commands;
+mod device_sync;
 mod jsonl_aggregator;
 mod migration;
 mod pricing;
@@ -84,6 +85,8 @@ pub fn run() {
             commands::set_window_size,
             commands::hide_window,
             commands::fetch_plan,
+            commands::detect_sync_folders,
+            commands::sync_device_cost,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").expect("main window missing");

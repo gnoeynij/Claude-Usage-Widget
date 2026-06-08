@@ -398,6 +398,24 @@ function StatsCard() {
         <span class="t-body label-secondary">{t().lifetimeDevice}</span>
         <span class="t-title3 tabular-nums">{formatCost(store.lifetimeCost)}</span>
       </div>
+      <Show when={store.syncFolder !== "" && store.combinedDevices > 0}>
+        <div
+          style={{
+            display: "flex",
+            "align-items": "baseline",
+            "justify-content": "space-between",
+            "padding-top": "var(--s-1)",
+          }}
+        >
+          <span class="t-body label-secondary">
+            {t().lifetimeAll}{" "}
+            <span class="label-tertiary">
+              · {t().deviceCount(store.combinedDevices)}
+            </span>
+          </span>
+          <span class="t-title3 tabular-nums">{formatCost(store.combinedCost)}</span>
+        </div>
+      </Show>
       <div
         style={{
           height: "1px",

@@ -65,7 +65,14 @@ export const en = {
   avgPerBlock: "Avg per block",
   cacheHit: "Cache hit",
   lifetimeDevice: "Lifetime · this device",
+  lifetimeAll: "Lifetime · all devices",
   onDisk: "On disk",
+  deviceSync: "Combined across devices",
+  deviceSyncHint:
+    "Pick a cloud-synced folder (OneDrive / iCloud / Dropbox…) shared by your PCs to combine lifetime cost across devices.",
+  deviceCount: (n: number) => `${n} device${n === 1 ? "" : "s"}`,
+  folderManual: "Or type a folder path…",
+  disableSync: "Turn off",
   peak: "peak",
   peakLabel: (pct: number, peak: string) => `${pct}% of ${peak} peak`,
 

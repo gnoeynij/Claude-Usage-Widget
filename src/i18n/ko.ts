@@ -67,7 +67,14 @@ export const ko: Strings = {
   avgPerBlock: "블록당 평균",
   cacheHit: "캐시 적중",
   lifetimeDevice: "누적 · 이 기기",
+  lifetimeAll: "누적 · 전체 기기",
   onDisk: "현재 디스크",
+  deviceSync: "기기 통합 누적",
+  deviceSyncHint:
+    "여러 PC가 공유하는 클라우드 동기화 폴더(OneDrive / iCloud / Dropbox…)를 고르면 기기 전체의 누적 비용을 합산합니다.",
+  deviceCount: (n) => `${n}대`,
+  folderManual: "또는 폴더 경로 입력…",
+  disableSync: "끄기",
   peak: "최고",
   peakLabel: (pct, peak) => `피크 ${peak} 대비 ${pct}%`,
 

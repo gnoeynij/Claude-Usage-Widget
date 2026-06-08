@@ -11,6 +11,23 @@ pub fn fetch_plan() -> usage_api::PlanOutput {
     usage_api::read_plan()
 }
 
+/// Cloud-synced folder roots detected on this machine (Settings picker).
+#[tauri::command]
+pub fn detect_sync_folders() -> Vec<String> {
+    crate::device_sync::detect_folders()
+}
+
+/// Write this device's lifetime cost into the shared folder and return the
+/// combined total across all devices found there.
+#[tauri::command]
+pub fn sync_device_cost(
+    folder: String,
+    device_id: String,
+    cost: f64,
+) -> Result<crate::device_sync::CombinedOut, String> {
+    crate::device_sync::sync(&folder, &device_id, cost).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn credentials_mtime() -> Option<f64> {
     usage_api::credentials_mtime_ms()

@@ -144,6 +144,13 @@ type StoreShape = {
   lifetimeCost: number;
   /** Newest record ts (ms) already folded into lifetimeCost. */
   lifetimeCountedUntilMs: number;
+  /** Stable per-device id (generated once) for cross-device combining. */
+  deviceId: string;
+  /** Shared cloud-synced folder for cross-device combining ("" = off). */
+  syncFolder: string;
+  /** Combined lifetime cost across all devices in syncFolder (0 when off). */
+  combinedCost: number;
+  combinedDevices: number;
   updateStatus: UpdateStatus;
   updateInfo: UpdateInfo | null;
   updateDownloadPct: number;
@@ -184,6 +191,10 @@ const [store, setStore] = createStore<StoreShape>({
   tickSecond: 0,
   lifetimeCost: 0,
   lifetimeCountedUntilMs: 0,
+  deviceId: "",
+  syncFolder: "",
+  combinedCost: 0,
+  combinedDevices: 0,
   updateStatus: "idle",
   updateInfo: null,
   updateDownloadPct: 0,
@@ -549,6 +560,24 @@ export async function initStore() {
     (v) => setStore("lifetimeCountedUntilMs", v),
     (v): v is number => typeof v === "number" && v >= 0,
   );
+  await loadSetting<string>(
+    "deviceId",
+    (v) => setStore("deviceId", v),
+    (v): v is string => typeof v === "string" && v.length > 0,
+  );
+  if (!store.deviceId) {
+    const id =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `dev-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+    setStore("deviceId", id);
+    void persistSetting("deviceId", id);
+  }
+  await loadSetting<string>(
+    "syncFolder",
+    (v) => setStore("syncFolder", v),
+    (v): v is string => typeof v === "string",
+  );
   await loadSetting<string | null>(
     "notifiedBlock",
     (v) => setStore("notifiedBlock", v),
@@ -717,8 +746,44 @@ export async function refreshDetail() {
       void persistSetting("lifetimeCost", next);
       void persistSetting("lifetimeCountedUntilMs", detail.max_ts_ms);
     }
+    if (store.syncFolder) void syncDevices();
   } catch (e) {
     setStore("syncError", toErrorMessage(e));
+  }
+}
+
+/** Combined lifetime cost across devices via a shared cloud folder. Writes this
+ *  device's total, then sums every device file found in the folder. */
+async function syncDevices() {
+  if (!store.syncFolder || !store.deviceId) return;
+  try {
+    const out = await invoke<{ total: number; devices: number }>(
+      "sync_device_cost",
+      { folder: store.syncFolder, deviceId: store.deviceId, cost: store.lifetimeCost },
+    );
+    setStore("combinedCost", out.total);
+    setStore("combinedDevices", out.devices);
+  } catch (e) {
+    void warn(`device sync failed: ${toErrorMessage(e)}`);
+  }
+}
+
+export async function detectSyncFolders(): Promise<string[]> {
+  try {
+    return await invoke<string[]>("detect_sync_folders");
+  } catch {
+    return [];
+  }
+}
+
+export function setSyncFolder(path: string) {
+  setStore("syncFolder", path);
+  if (!suppressPersist) void persistSetting("syncFolder", path);
+  if (path) {
+    void syncDevices();
+  } else {
+    setStore("combinedCost", 0);
+    setStore("combinedDevices", 0);
   }
 }
 

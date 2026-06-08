@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createSignal, onCleanup, onMount, For, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import { RefreshCw, X } from "lucide-solid";
 import { Switch } from "../components/Switch";
@@ -11,10 +11,13 @@ import {
   setAlwaysOnTop,
   setSyncIntervalMin,
   setOpacity,
+  setSyncFolder,
+  detectSyncFolders,
   planLabel,
   type Lang,
 } from "../state/store";
 import { checkForUpdate, installUpdate } from "../state/updater";
+import { formatCost } from "../utils/format";
 import { t } from "../i18n";
 
 function Section(props: { label: string; children: JSX.Element }) {
@@ -216,6 +219,86 @@ function UpdateSection() {
   );
 }
 
+function DeviceSyncSection() {
+  const [detected, setDetected] = createSignal<string[]>([]);
+  const [manual, setManual] = createSignal("");
+  onMount(() => {
+    void detectSyncFolders().then(setDetected).catch(() => {});
+  });
+  const pick = (p: string) => {
+    const v = p.trim();
+    if (v) setSyncFolder(v);
+  };
+  return (
+    <Section label={t().deviceSync}>
+      <span class="t-caption label-tertiary">{t().deviceSyncHint}</span>
+      <Show
+        when={store.syncFolder}
+        fallback={
+          <>
+            <For each={detected()}>
+              {(f) => (
+                <button
+                  class="ring-hover"
+                  onClick={() => pick(f)}
+                  style={{
+                    "text-align": "left",
+                    padding: "6px 10px",
+                    "border-radius": "8px",
+                    background: "var(--fill-3)",
+                    "word-break": "break-all",
+                  }}
+                >
+                  <span class="t-caption">{f}</span>
+                </button>
+              )}
+            </For>
+            <input
+              type="text"
+              placeholder={t().folderManual}
+              value={manual()}
+              onInput={(e) => setManual(e.currentTarget.value)}
+              onChange={(e) => pick(e.currentTarget.value)}
+              style={{
+                padding: "6px 10px",
+                "border-radius": "8px",
+                background: "var(--fill-3)",
+                border: "1px solid var(--separator)",
+                color: "var(--label)",
+              }}
+            />
+          </>
+        }
+      >
+        <span
+          class="t-caption label-secondary"
+          style={{ "word-break": "break-all" }}
+        >
+          {store.syncFolder}
+        </span>
+        <Show when={store.combinedDevices > 0}>
+          <span class="t-caption label-tertiary">
+            {t().deviceCount(store.combinedDevices)} · {formatCost(store.combinedCost)}
+          </span>
+        </Show>
+        <button
+          class="ring-hover"
+          onClick={() => setSyncFolder("")}
+          style={{
+            "align-self": "flex-start",
+            padding: "6px 10px",
+            "border-radius": "8px",
+            background: "var(--fill-3)",
+            color: "var(--label-secondary)",
+          }}
+        >
+          <span class="t-caption">{t().disableSync}</span>
+        </button>
+      </Show>
+    </Section>
+  );
+}
+
 export function SettingsPanel() {
   // Close on ESC for visionOS-style "press to dismiss" feel.
   function handleKey(e: KeyboardEvent) {
@@ -349,6 +432,7 @@ export function SettingsPanel() {
             onInput={(e) => setOpacity(Number(e.currentTarget.value))}
           />
         </Section>
+        <DeviceSyncSection />
         <UpdateSection />
       </div>
     </div>
