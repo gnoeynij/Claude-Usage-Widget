@@ -42,8 +42,19 @@ function MiniMetric(props: { label: string; value: number }) {
 }
 
 export function NormalView() {
-  const sessionReset = () => formatResetsIn(store.usage.session_resets_at);
-  const weeklyReset = () => formatResetsIn(store.usage.weekly_resets_at);
+  // Touch tickMinute so the countdown recomputes every minute between syncs,
+  // matching the header status dot (HeaderBar.tsx). Without it the "resets in
+  // Xh Ym" label stays frozen until the next sync.
+  const sessionReset = () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    store.tickMinute;
+    return formatResetsIn(store.usage.session_resets_at);
+  };
+  const weeklyReset = () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    store.tickMinute;
+    return formatResetsIn(store.usage.weekly_resets_at);
+  };
   return (
     <main
       class="view-in"
@@ -108,6 +119,9 @@ export function NormalView() {
       >
         <MiniMetric label={t().allModels} value={store.usage.seven_day} />
         <MiniMetric label={t().sonnetOnly} value={store.usage.seven_day_sonnet} />
+        <Show when={store.usage.seven_day_opus != null}>
+          <MiniMetric label={t().opusOnly} value={store.usage.seven_day_opus ?? 0} />
+        </Show>
         <Show when={weeklyReset()}>
           {(s) => (
             <span
@@ -120,6 +134,14 @@ export function NormalView() {
               {s()}
             </span>
           )}
+        </Show>
+        <Show when={store.usage.extra_usage_enabled}>
+          <span
+            class="t-caption label-tertiary"
+            style={{ "text-align": "center" }}
+          >
+            {t().extraCredits(Math.round(store.usage.extra_usage ?? 0))}
+          </span>
         </Show>
       </div>
     </main>

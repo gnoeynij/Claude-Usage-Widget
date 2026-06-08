@@ -26,6 +26,11 @@ export type UsagePayload = {
   five_hour: number;
   seven_day: number;
   seven_day_sonnet: number;
+  /** Opus-specific weekly cap; null when the plan has none (row hidden). */
+  seven_day_opus?: number | null;
+  /** 2026-06-15 separate-credit pool; shown only when enabled. */
+  extra_usage_enabled?: boolean;
+  extra_usage?: number | null;
   session_resets_at?: string | null;
   weekly_resets_at?: string | null;
 };
@@ -407,24 +412,15 @@ function parseErrorCode(message: string): ErrorCode {
   if (message.includes("TOKEN_EXPIRED")) return "TOKEN_EXPIRED";
   if (message.includes("NO_CREDENTIALS")) return "NO_CREDENTIALS";
   if (message.includes("RATE_LIMITED")) return "RATE_LIMITED";
-  if (
-    message.includes("network error") ||
-    message.includes("timeout") ||
-    message.includes("dns")
-  ) {
-    return "NETWORK";
-  }
+  // The Rust side wraps all reqwest send failures as `.context("network
+  // error")` and `commands.rs` stringifies via anyhow Display, which only
+  // surfaces that top-level context — the underlying timeout/dns text never
+  // reaches here, so matching "network error" alone covers every network case.
+  if (message.includes("network error")) return "NETWORK";
   return null;
 }
 
 export async function initStore() {
-  // Best-effort one-shot migration from the legacy QSettings registry keys.
-  try {
-    await invoke<boolean>("run_migration");
-  } catch {
-    /* migration is non-fatal */
-  }
-
   // Restore user preferences from disk before any UI / IPC side-effects fire.
   // suppressPersist prevents the setter chain from writing the same value
   // back to disk (read-after-write loop).

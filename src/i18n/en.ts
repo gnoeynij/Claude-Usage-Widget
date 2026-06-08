@@ -3,6 +3,8 @@ export const en = {
   weekly: "Weekly limits",
   allModels: "All models",
   sonnetOnly: "Sonnet only",
+  opusOnly: "Opus only",
+  extraCredits: (pct: number) => `Extra credits ${pct}%`,
   resetsIn: (h: number, m: number) => `Resets in ${h}h ${m}m`,
   resetsOn: (s: string) => `Resets ${s}`,
 

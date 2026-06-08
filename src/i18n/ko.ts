@@ -5,6 +5,8 @@ export const ko: Strings = {
   weekly: "주간 한도",
   allModels: "전체 모델",
   sonnetOnly: "Sonnet 전용",
+  opusOnly: "Opus 전용",
+  extraCredits: (pct) => `추가 크레딧 ${pct}%`,
   resetsIn: (h, m) => `${h}시간 ${m}분 뒤 초기화`,
   resetsOn: (s) => `${s} 초기화`,
 

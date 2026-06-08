@@ -117,6 +117,17 @@ struct UsageBlock {
     resets_at: Option<String>,
 }
 
+/// `extra_usage` carries the separate-credit pool introduced by the
+/// 2026-06-15 "automated workloads move off the subscription limit" policy.
+/// Only meaningful when `is_enabled`; otherwise the widget hides it.
+#[derive(Deserialize, Debug, Default)]
+struct ExtraUsageBlock {
+    #[serde(default)]
+    is_enabled: bool,
+    #[serde(default)]
+    utilization: Option<f64>,
+}
+
 #[derive(Deserialize, Debug, Default)]
 struct UsageResponse {
     #[serde(default)]
@@ -125,6 +136,13 @@ struct UsageResponse {
     seven_day: UsageBlock,
     #[serde(default)]
     seven_day_sonnet: UsageBlock,
+    // Opus has its own weekly cap on some plans; the API sends `null` when the
+    // account has no Opus-specific weekly limit, so this must be Option — a bare
+    // UsageBlock would fail to deserialize the null.
+    #[serde(default)]
+    seven_day_opus: Option<UsageBlock>,
+    #[serde(default)]
+    extra_usage: ExtraUsageBlock,
 }
 
 #[derive(Serialize, Default, Debug)]
@@ -132,6 +150,11 @@ pub struct UsageOutput {
     pub five_hour: f64,
     pub seven_day: f64,
     pub seven_day_sonnet: f64,
+    /// `None` when the account has no Opus-specific weekly cap (API sent null);
+    /// the frontend hides the row in that case.
+    pub seven_day_opus: Option<f64>,
+    pub extra_usage_enabled: bool,
+    pub extra_usage: Option<f64>,
     pub session_resets_at: Option<String>,
     pub weekly_resets_at: Option<String>,
 }
@@ -226,6 +249,13 @@ async fn call_usage(access_token: &str) -> Result<UsageOutput> {
         five_hour: body.five_hour.utilization.unwrap_or(0.0),
         seven_day: body.seven_day.utilization.unwrap_or(0.0),
         seven_day_sonnet: body.seven_day_sonnet.utilization.unwrap_or(0.0),
+        seven_day_opus: body.seven_day_opus.and_then(|b| b.utilization),
+        extra_usage_enabled: body.extra_usage.is_enabled,
+        extra_usage: if body.extra_usage.is_enabled {
+            body.extra_usage.utilization
+        } else {
+            None
+        },
         session_resets_at: body.five_hour.resets_at,
         weekly_resets_at: body.seven_day.resets_at,
     })
