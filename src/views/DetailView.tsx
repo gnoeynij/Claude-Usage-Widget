@@ -407,12 +407,7 @@ function StatsCard() {
             "padding-top": "var(--s-1)",
           }}
         >
-          <span class="t-body label-secondary">
-            {t().lifetimeAll}{" "}
-            <span class="label-tertiary">
-              · {t().deviceCount(store.combinedDevices)}
-            </span>
-          </span>
+          <span class="t-body label-secondary">{t().lifetimeAll}</span>
           <span class="t-title3 tabular-nums">{formatCost(store.combinedCost)}</span>
         </div>
       </Show>

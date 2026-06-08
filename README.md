@@ -21,7 +21,7 @@ A lightweight desktop tool that sits in a corner of your screen and tracks your 
 ### Three-mode widget
 - **Mini** (240×112) — Donut + 2-row capsule. Minimum footprint
 - **Normal** (320×360) — Donut hero + weekly capsules. Default
-- **Detail** (592×619, minSize 520×520) — 4-card dashboard: Active session, Periods (today / yesterday / week / month), Recent 5h blocks, per-model usage
+- **Detail** (592×619, minSize 520×520) — dashboard: Active session (live countdown), Periods (+ month-end cost projection), Recent 5h blocks, Models (+ mix %), Stats (lifetime cost · messages · cache hit)
 
 Switch via footer SegmentedControl or tray menu. Each mode has its own default size + minSize, and any size you drag-adjust is remembered per mode.
 
@@ -39,9 +39,16 @@ Silent check 3 seconds after boot + manual button in Settings. When an update is
 Reads Claude Code's OAuth token from the platform-native store — `~/.claude/.credentials.json` on Windows, the **macOS Keychain** (`Claude Code-credentials` service) on macOS. On expiry, the in-app banner tells you to run `claude` once and the widget self-heals on the next sync.
 
 ### Usage notifications
-- OS notification when you cross **85%** or **95%** of the current 5-hour session limit *or* the 7-day weekly limit
-- One notification per threshold per block — no repeats on every sync
-- Permission requested lazily on the first crossing (not at boot); OS Settings governs whether they're shown
+- An alert fires when you cross **85%** or **95%** of the 5-hour session *or* 7-day weekly limit
+- **In-app Liquid Glass toast** while the widget is on screen — matches the widget's look, needs no OS permission; falls back to an **OS notification** when the widget is hidden to the tray
+- One alert per threshold per block — no repeats on every sync; OS permission requested lazily on the first tray-hidden crossing
+
+### Lifetime cost & cross-device combining
+- **Lifetime · this device** — a non-decreasing running total that survives Claude Code log cleanup (the *on-disk* figure can drop as old JSONL sessions are pruned; lifetime keeps every cost it has counted)
+- **Lifetime · all devices** — point each PC's *Combined across devices* setting at the same cloud-synced folder (OneDrive / iCloud / Dropbox / Google Drive) and the widget sums every device's lifetime into one figure. No server — each device writes only its own file and the cloud handles propagation
+
+### Real-time countdowns
+The session reset and the active 5-hour block tick down live, second by second, between syncs. (All cost figures are local estimates: `~/.claude/projects` JSONL × the official pricing table.)
 
 ### Bilingual (English / Korean)
 Every string switches instantly, including time labels and AM/PM.
@@ -125,6 +132,7 @@ npm run tauri build
 
 ### v2.0.x (Tauri 2 + SolidJS line)
 
+- [**v2.2.0**](docs/release-notes/v2.2.0.md) — Lifetime cost that doesn't reset (per-device + combined across all your devices via a shared cloud folder) + live second-by-second session/block countdowns + in-app Liquid Glass notification toasts + Detail insights (month-end cost projection, model mix %). Also fixes a sync-breaking bug on the new `extra_usage` API field, plus internal cleanup (dead code, unused HTTP plugin / CSS tokens) and a `resolve()` pricing cache.
 - [**v2.1.7**](docs/release-notes/v2.1.7.md) — Opus 4.8 cost fix (it was billed at the legacy $15/$75 tier — a 3× overcount — now the correct $5/$25) + subscription plan chip (e.g. "Max 20×") in the Settings panel header.
 - [**v2.1.6**](docs/release-notes/v2.1.6.md) — macOS background opacity now applies immediately on slider change / launch (previously a mode switch was needed for it to take effect).
 - [**v2.1.5**](docs/release-notes/v2.1.5.md) — cost-accuracy pass: Opus pricing corrected to the official table (~3× → actual), separate 5m/1h cache pricing, web-search surcharge, deprecated-model fallback, version shown in the update check.
