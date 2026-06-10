@@ -13,9 +13,17 @@ pub struct Pricing {
 
 /// USD per million tokens.
 /// Official Anthropic pricing: https://platform.claude.com/docs/en/about-claude/pricing
-/// (last verified 2026-06-02). When Anthropic ships a new model generation,
+/// (last verified 2026-06-10). When Anthropic ships a new model generation,
 /// add an entry below and re-verify the existing ones.
 pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
+    let fable = Pricing {
+        // Fable 5 — Mythos-class tier above Opus (released 2026-06-09).
+        input: 10.0,
+        output: 50.0,
+        cache_write_5m: 12.5,
+        cache_write_1h: 20.0,
+        cache_read: 1.0,
+    };
     let opus_current = Pricing {
         // Opus 4.5 / 4.6 / 4.7 / 4.8 — same price tier.
         input: 5.0,
@@ -57,6 +65,7 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
     };
 
     let mut m = HashMap::new();
+    m.insert("claude-fable-5", fable);
     m.insert("claude-opus-4-8", opus_current);
     m.insert("claude-opus-4-7", opus_current);
     m.insert("claude-opus-4-6", opus_current);
@@ -156,7 +165,9 @@ pub fn cost_usd(model: &str, u: &UsageTokens) -> f64 {
 
 pub fn family_of(model: &str) -> &'static str {
     let lower = model.to_lowercase();
-    if lower.contains("opus") {
+    if lower.contains("fable") {
+        "Fable"
+    } else if lower.contains("opus") {
         "Opus"
     } else if lower.contains("sonnet") {
         "Sonnet"
@@ -219,6 +230,19 @@ mod tests {
     }
 
     #[test]
+    fn fable_5_pricing() {
+        // Fable 5 (released 2026-06-09): $10 in / $50 out, cache 5m $12.50 /
+        // 1h $20 / read $1. Bare id is what Claude Code jsonl records.
+        approx(cost_usd("claude-fable-5", &toks(1_000_000, 0, 0, 0, 0)), 10.0);
+        approx(cost_usd("claude-fable-5", &toks(0, 1_000_000, 0, 0, 0)), 50.0);
+        approx(cost_usd("claude-fable-5", &toks(0, 0, 1_000_000, 0, 0)), 12.5);
+        approx(cost_usd("claude-fable-5", &toks(0, 0, 0, 1_000_000, 0)), 20.0);
+        approx(cost_usd("claude-fable-5", &toks(0, 0, 0, 0, 1_000_000)), 1.0);
+        // Future date-suffixed variant must resolve to the same tier.
+        approx(cost_usd("claude-fable-5-20260609", &toks(1_000_000, 0, 0, 0, 0)), 10.0);
+    }
+
+    #[test]
     fn deprecated_opus_uses_legacy_pricing() {
         approx(cost_usd("claude-opus-4-20250514", &toks(1_000_000, 0, 0, 0, 0)), 15.0);
         approx(cost_usd("claude-opus-4-1", &toks(1_000_000, 0, 0, 0, 0)), 15.0);
@@ -249,6 +273,7 @@ mod tests {
 
     #[test]
     fn family_classification() {
+        assert_eq!(family_of("claude-fable-5"), "Fable");
         assert_eq!(family_of("claude-opus-4-7"), "Opus");
         assert_eq!(family_of("claude-sonnet-4-6"), "Sonnet");
         assert_eq!(family_of("claude-haiku-4-5-20251001"), "Haiku");

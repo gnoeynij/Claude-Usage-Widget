@@ -23,6 +23,7 @@ const MODEL_FAMILIES = ["Opus", "Sonnet", "Haiku"];
 
 function modelColor(family: string) {
   const lower = family.toLowerCase();
+  if (lower.includes("fable")) return "#bf5af2";
   if (lower.includes("opus")) return "var(--accent)";
   if (lower.includes("sonnet")) return "#0a84ff";
   if (lower.includes("haiku")) return "#30d158";
