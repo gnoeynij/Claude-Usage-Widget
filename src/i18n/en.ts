@@ -62,6 +62,8 @@ export const en = {
   history: "Daily cost",
   historyEmpty: "Builds up as you use Claude",
   todayMark: "today",
+  deviceThis: "This device",
+  deviceAll: "All devices",
   avgShort: "avg",
   perDay: "/day",
   vsPrev: "vs prev",

@@ -64,6 +64,8 @@ export const ko: Strings = {
   history: "일별 비용",
   historyEmpty: "Claude를 쓸수록 쌓입니다",
   todayMark: "오늘",
+  deviceThis: "이 기기",
+  deviceAll: "전체 기기",
   avgShort: "평균",
   perDay: "/일",
   vsPrev: "이전 대비",

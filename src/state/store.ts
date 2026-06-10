@@ -185,6 +185,9 @@ type StoreShape = {
   toasts: Toast[];
   /** Durable daily×family cost history (persisted) — survives JSONL cleanup. */
   costHistory: CostHistory;
+  /** Fleet-wide daily history summed across devices in syncFolder. Recomputed
+   *  on every device sync (not persisted — empty until the first sync). */
+  combinedHistory: CostHistory;
 };
 
 const [store, setStore] = createStore<StoreShape>({
@@ -221,6 +224,7 @@ const [store, setStore] = createStore<StoreShape>({
   notifiedWeekLevels: [],
   toasts: [],
   costHistory: {},
+  combinedHistory: {},
 });
 
 export { store, setStore };
@@ -825,17 +829,24 @@ export async function refreshDetail() {
   }
 }
 
-/** Combined lifetime cost across devices via a shared cloud folder. Writes this
- *  device's total, then sums every device file found in the folder. */
+/** Combined lifetime cost + daily history across devices via a shared cloud
+ *  folder. Writes this device's totals (including its durable costHistory),
+ *  then sums every device file found in the folder. */
 async function syncDevices() {
   if (!store.syncFolder || !store.deviceId) return;
   try {
-    const out = await invoke<{ total: number; devices: number }>(
+    const out = await invoke<{ total: number; devices: number; daily: CostHistory }>(
       "sync_device_cost",
-      { folder: store.syncFolder, deviceId: store.deviceId, cost: store.lifetimeCost },
+      {
+        folder: store.syncFolder,
+        deviceId: store.deviceId,
+        cost: store.lifetimeCost,
+        daily: store.costHistory,
+      },
     );
     setStore("combinedCost", out.total);
     setStore("combinedDevices", out.devices);
+    setStore("combinedHistory", out.daily ?? {});
   } catch (e) {
     void warn(`device sync failed: ${toErrorMessage(e)}`);
   }

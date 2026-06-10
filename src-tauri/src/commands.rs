@@ -17,15 +17,16 @@ pub fn detect_sync_folders() -> Vec<String> {
     crate::device_sync::detect_folders()
 }
 
-/// Write this device's lifetime cost into the shared folder and return the
-/// combined total across all devices found there.
+/// Write this device's lifetime cost + daily history into the shared folder
+/// and return the combined totals across all devices found there.
 #[tauri::command]
 pub fn sync_device_cost(
     folder: String,
     device_id: String,
     cost: f64,
+    daily: crate::device_sync::DailyMap,
 ) -> Result<crate::device_sync::CombinedOut, String> {
-    crate::device_sync::sync(&folder, &device_id, cost).map_err(|e| e.to_string())
+    crate::device_sync::sync(&folder, &device_id, cost, daily).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

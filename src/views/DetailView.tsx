@@ -106,6 +106,13 @@ type DayPoint = {
 function DailyCostCard() {
   const [range, setRange] = createSignal<7 | 14 | 30>(7);
   const [selected, setSelected] = createSignal<string | null>(null);
+  // Chart source: this device's durable history, or the fleet-wide sum from
+  // the cloud folder. The toggle only shows when a second device exists;
+  // combinedHistory is recomputed on every device sync.
+  const [source, setSource] = createSignal<"device" | "all">("device");
+  const canToggle = () => store.syncFolder !== "" && store.combinedDevices > 1;
+  const hist = () =>
+    source() === "all" && canToggle() ? store.combinedHistory : store.costHistory;
   const locale = () => (store.lang === "ko" ? "ko-KR" : "en-US");
 
   const todayStr = () => {
@@ -115,7 +122,7 @@ function DailyCostCard() {
   };
 
   const windowDays = createMemo<DayPoint[]>(() => {
-    const hist = store.costHistory;
+    const h = hist();
     const n = range();
     const out: DayPoint[] = [];
     const base = new Date(`${todayStr()}T00:00:00`);
@@ -123,7 +130,7 @@ function DailyCostCard() {
       const d = new Date(base);
       d.setDate(base.getDate() - i);
       const date = localDateStr(d);
-      const fams = Object.entries(hist[date] ?? {})
+      const fams = Object.entries(h[date] ?? {})
         .map(([family, e]) => ({ family, cost: e.cost }))
         .sort((a, b) => b.cost - a.cost);
       out.push({ date, total: fams.reduce((s, f) => s + f.cost, 0), fams });
@@ -132,7 +139,7 @@ function DailyCostCard() {
   });
 
   const hasAnyData = () => windowDays().some((d) => d.total > 0)
-    || Object.keys(store.costHistory).length > 0;
+    || Object.keys(hist()).length > 0;
   const maxTotal = () => Math.max(...windowDays().map((d) => d.total), 0.01);
   const peakIdx = createMemo(() => {
     let mi = 0;
@@ -152,14 +159,14 @@ function DailyCostCard() {
 
   // Trend: this window's daily average vs the previous same-length window.
   const prevAvg = createMemo(() => {
-    const hist = store.costHistory;
+    const h = hist();
     const n = range();
     const base = new Date(`${todayStr()}T00:00:00`);
     let sum = 0;
     for (let i = n; i < n * 2; i++) {
       const d = new Date(base);
       d.setDate(base.getDate() - i);
-      const fams = hist[localDateStr(d)];
+      const fams = h[localDateStr(d)];
       if (fams) sum += Object.values(fams).reduce((s, e) => s + e.cost, 0);
     }
     return sum / n;
@@ -205,26 +212,62 @@ function DailyCostCard() {
         }}
       >
         <span class="t-section">{t().history}</span>
-        <div style={{ display: "flex", gap: "2px" }}>
-          <For each={[7, 14, 30] as const}>
-            {(n) => (
-              <button
-                onClick={() => pickRange(n)}
-                class="t-caption tabular-nums"
-                style={{
-                  padding: "3px 9px",
-                  border: "none",
-                  "border-radius": "var(--r-sm)",
-                  background: range() === n ? "var(--accent)" : "transparent",
-                  color: range() === n ? "#2a1000" : "var(--label-tertiary)",
-                  "font-weight": range() === n ? 600 : 400,
-                  cursor: "pointer",
-                }}
-              >
-                {n}
-              </button>
-            )}
-          </For>
+        <div style={{ display: "flex", "align-items": "center", gap: "var(--s-2)" }}>
+          <Show when={canToggle()}>
+            <div
+              style={{
+                display: "flex",
+                gap: "2px",
+                "border-right": "1px solid var(--separator)",
+                "padding-right": "var(--s-2)",
+              }}
+            >
+              <For each={[["device", t().deviceThis], ["all", t().deviceAll]] as const}>
+                {([key, label]) => (
+                  <button
+                    onClick={() => setSource(key)}
+                    class="t-caption"
+                    style={{
+                      padding: "3px 9px",
+                      border: "none",
+                      "border-radius": "var(--r-sm)",
+                      background: source() === key ? "var(--fill-2)" : "transparent",
+                      color:
+                        source() === key
+                          ? "var(--label)"
+                          : "var(--label-tertiary)",
+                      "font-weight": source() === key ? 600 : 400,
+                      cursor: "pointer",
+                      "white-space": "nowrap",
+                    }}
+                  >
+                    {label}
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
+          <div style={{ display: "flex", gap: "2px" }}>
+            <For each={[7, 14, 30] as const}>
+              {(n) => (
+                <button
+                  onClick={() => pickRange(n)}
+                  class="t-caption tabular-nums"
+                  style={{
+                    padding: "3px 9px",
+                    border: "none",
+                    "border-radius": "var(--r-sm)",
+                    background: range() === n ? "var(--accent)" : "transparent",
+                    color: range() === n ? "#2a1000" : "var(--label-tertiary)",
+                    "font-weight": range() === n ? 600 : 400,
+                    cursor: "pointer",
+                  }}
+                >
+                  {n}
+                </button>
+              )}
+            </For>
+          </div>
         </div>
       </div>
 
