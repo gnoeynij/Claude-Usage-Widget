@@ -607,6 +607,18 @@ export async function initStore() {
   // user-resize 로 잘못 기록하지 않음.
   applyModeSize(store.mode);
 
+  // Re-assert always-on-top *after* the boot resize. The early apply during
+  // the suppressPersist block (loadSetting "alwaysOnTop") runs before the
+  // window has settled — on Windows the freshly-created window doesn't reliably
+  // keep WS_EX_TOPMOST from that early call, so a restart with AOT persisted
+  // came up not-on-top until the user re-toggled it. Re-invoking here (over the
+  // same IPC channel, so it lands after set_window_size) makes it stick.
+  if (store.alwaysOnTop) {
+    void invoke("set_always_on_top", { value: true }).catch((e) =>
+      console.error("re-assert always_on_top failed", e),
+    );
+  }
+
   // Watch user-driven resizes. Debounce so a drag doesn't write 100 times,
   // and ignore any change within ~1s of a programmatic setMode invoke.
   const win = getCurrentWindow();
