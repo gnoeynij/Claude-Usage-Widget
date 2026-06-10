@@ -59,6 +59,8 @@ export const en = {
   projectedMonth: "Est. month-end",
   recent: "Recent blocks",
   models: "Models",
+  history: "Daily history",
+  historyEmpty: "Builds up as you use Claude",
   stats: "Stats",
   cost: "Cost",
   messages: "Messages",

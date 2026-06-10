@@ -73,6 +73,14 @@ export type DetailStats = {
   cache_hit_pct: number;
 };
 
+/** One local day's per-family breakdown as derived from on-disk JSONL. */
+export type DetailDay = {
+  date: string; // "YYYY-MM-DD"
+  cost: number;
+  tokens: number;
+  families: DetailFamily[];
+};
+
 export type DetailPayload = {
   active: DetailActive | null;
   peak_block_cost: number;
@@ -82,7 +90,13 @@ export type DetailPayload = {
   stats: DetailStats;
   new_cost_since: number;
   max_ts_ms: number;
+  daily: DetailDay[];
 };
+
+/** Durable cost history that outlives JSONL cleanup: date → family → totals.
+ *  Built by max-merging `DetailPayload.daily` every sync (see refreshDetail). */
+export type CostHistoryEntry = { tokens: number; cost: number };
+export type CostHistory = Record<string, Record<string, CostHistoryEntry>>;
 
 export type UpdateStatus =
   | "idle"
@@ -169,6 +183,8 @@ type StoreShape = {
   notifiedWeekLevels: number[];
   /** Active in-widget toasts (transient — not persisted). */
   toasts: Toast[];
+  /** Durable daily×family cost history (persisted) — survives JSONL cleanup. */
+  costHistory: CostHistory;
 };
 
 const [store, setStore] = createStore<StoreShape>({
@@ -204,6 +220,7 @@ const [store, setStore] = createStore<StoreShape>({
   notifiedWeek: null,
   notifiedWeekLevels: [],
   toasts: [],
+  costHistory: {},
 });
 
 export { store, setStore };
@@ -600,6 +617,11 @@ export async function initStore() {
     (v) => setStore("notifiedWeekLevels", v),
     (v): v is number[] => Array.isArray(v) && v.every((n) => typeof n === "number"),
   );
+  await loadSetting<CostHistory>(
+    "costHistory",
+    (v) => setStore("costHistory", v),
+    (v): v is CostHistory => typeof v === "object" && v !== null && !Array.isArray(v),
+  );
 
   // Apply current mode's size on boot — otherwise tauri.conf.json 의 초기
   // 사이즈가 그대로 보임 (사용자 신고: "처음 Normal 화면이 옛 사이즈, 모드
@@ -747,12 +769,44 @@ export function setMode(mode: Mode) {
   }
 }
 
+/** Max-merge the on-disk daily breakdown into the durable costHistory.
+ *  Per (day, family) we keep the *highest* cost ever seen: days still on disk
+ *  get refreshed (today grows; a mis-priced past day self-corrects while its
+ *  files remain), while days no longer on disk are left frozen — so the history
+ *  survives cleanup and never loses a day's complete value to partial deletion. */
+function foldCostHistory(daily: DetailDay[] | undefined) {
+  if (!daily || daily.length === 0) return;
+  const hist: CostHistory = { ...store.costHistory };
+  let changed = false;
+  for (const day of daily) {
+    const cur = hist[day.date] ?? {};
+    const next = { ...cur };
+    let dayChanged = false;
+    for (const f of day.families) {
+      const ex = cur[f.family];
+      if (!ex || f.cost > ex.cost) {
+        next[f.family] = { tokens: f.tokens, cost: f.cost };
+        dayChanged = true;
+      }
+    }
+    if (dayChanged) {
+      hist[day.date] = next;
+      changed = true;
+    }
+  }
+  if (changed) {
+    setStore("costHistory", hist);
+    void persistSetting("costHistory", hist);
+  }
+}
+
 export async function refreshDetail() {
   try {
     const detail = await invoke<DetailPayload>("aggregate_detail", {
       countedUntilMs: store.lifetimeCountedUntilMs,
     });
     setStore("detail", detail);
+    foldCostHistory(detail.daily);
     // Fold newly-seen cost into the non-decreasing lifetime total. The
     // counted-until guard makes this idempotent across repeated refreshes.
     if (

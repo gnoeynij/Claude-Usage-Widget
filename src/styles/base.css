@@ -178,6 +178,7 @@ a {
 @container (min-width: 560px) {
   .detail-grid { grid-template-columns: 1fr 1fr; }
   .detail-grid > :first-child { grid-column: span 2; }
+  .detail-grid > :last-child { grid-column: span 2; }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

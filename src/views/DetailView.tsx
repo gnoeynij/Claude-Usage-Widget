@@ -444,6 +444,89 @@ function StatsCard() {
   );
 }
 
+// Durable daily history (survives JSONL cleanup). Most-recent days first.
+// Each row: date · stacked per-family cost bar · day total. The full
+// daily×family data lives in store.costHistory for richer stats later.
+const HISTORY_DAYS = 10;
+
+function HistoryCard() {
+  const days = createMemo(() => {
+    const h = store.costHistory;
+    return Object.keys(h)
+      .sort((a, b) => b.localeCompare(a))
+      .slice(0, HISTORY_DAYS)
+      .map((date) => {
+        const fams = h[date];
+        const entries = Object.entries(fams).sort((a, b) => b[1].cost - a[1].cost);
+        const total = entries.reduce((s, [, e]) => s + e.cost, 0);
+        return { date, total, entries };
+      });
+  });
+  const maxTotal = () => Math.max(...days().map((d) => d.total), 0.01);
+  const locale = () => (store.lang === "ko" ? "ko-KR" : "en-US");
+  const fmtDate = (d: string) => {
+    const dt = new Date(`${d}T00:00:00`);
+    return dt.toLocaleDateString(locale(), { month: "short", day: "numeric" });
+  };
+  return (
+    <GlassCard>
+      <div class="t-section" style={{ "margin-bottom": "var(--s-3)" }}>
+        {t().history}
+      </div>
+      <Show when={days().length > 0} fallback={<EmptyHint />}>
+        <div style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>
+          <For each={days()}>
+            {(d) => (
+              <div
+                style={{
+                  display: "grid",
+                  "grid-template-columns": "56px 1fr 72px",
+                  "align-items": "center",
+                  gap: "var(--s-3)",
+                }}
+                title={d.entries
+                  .map(([fam, e]) => `${fam} ${formatCost(e.cost)}`)
+                  .join("  ·  ")}
+              >
+                <span class="t-caption label-secondary">{fmtDate(d.date)}</span>
+                {/* Stacked per-family bar — segment width ∝ family cost, width of
+                    the whole bar ∝ day total vs the busiest day shown. */}
+                <div
+                  style={{
+                    display: "flex",
+                    height: "8px",
+                    width: `${Math.max((d.total / maxTotal()) * 100, 2)}%`,
+                    "border-radius": "var(--r-pill)",
+                    overflow: "hidden",
+                    background: "var(--fill-2)",
+                  }}
+                >
+                  <For each={d.entries}>
+                    {([fam, e]) => (
+                      <div
+                        style={{
+                          width: `${(e.cost / d.total) * 100}%`,
+                          background: modelColor(fam),
+                        }}
+                      />
+                    )}
+                  </For>
+                </div>
+                <span
+                  class="t-caption tabular-nums"
+                  style={{ "text-align": "right" }}
+                >
+                  {formatCost(d.total)}
+                </span>
+              </div>
+            )}
+          </For>
+        </div>
+      </Show>
+    </GlassCard>
+  );
+}
+
 export function DetailView() {
   return (
     <main
@@ -479,6 +562,7 @@ export function DetailView() {
         <RecentCard />
         <ModelsCard />
         <StatsCard />
+        <HistoryCard />
       </div>
     </main>
   );

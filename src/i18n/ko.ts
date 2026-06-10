@@ -61,6 +61,8 @@ export const ko: Strings = {
   projectedMonth: "월말 예상",
   recent: "최근 블록",
   models: "모델별",
+  history: "일별 히스토리",
+  historyEmpty: "Claude를 쓸수록 쌓입니다",
   stats: "통계",
   cost: "비용",
   messages: "메시지",

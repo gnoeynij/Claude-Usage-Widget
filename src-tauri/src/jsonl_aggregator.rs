@@ -72,6 +72,26 @@ pub struct FamilyOut {
     pub tokens: u64,
 }
 
+#[derive(Serialize)]
+pub struct DayFamilyOut {
+    pub family: String,
+    pub cost: f64,
+    pub tokens: u64,
+}
+
+/// One local calendar day, broken down by model family. Emitted only for days
+/// still present on disk; the frontend folds these into a durable, non-volatile
+/// `costHistory` (max-merge per day+family) so the breakdown survives Claude
+/// Code's `cleanupPeriodDays` JSONL deletion. Presentation-agnostic on purpose
+/// — daily×family is a clean base for later charts/stats.
+#[derive(Serialize)]
+pub struct DayOut {
+    pub date: String, // local "YYYY-MM-DD"
+    pub cost: f64,
+    pub tokens: u64,
+    pub families: Vec<DayFamilyOut>,
+}
+
 #[derive(Serialize, Default)]
 pub struct StatsOut {
     pub total_cost: f64,
@@ -95,6 +115,9 @@ pub struct AggregateOut {
     /// Newest record timestamp in ms (or `counted_until_ms` if none is newer);
     /// the frontend stores this back as the next `counted_until_ms`.
     pub max_ts_ms: f64,
+    /// Per-day × per-family rollup for days still on disk. Frontend max-merges
+    /// these into a durable `costHistory` so the breakdown outlives JSONL cleanup.
+    pub daily: Vec<DayOut>,
 }
 
 pub fn aggregate(counted_until_ms: f64) -> Result<AggregateOut> {
@@ -152,6 +175,7 @@ pub fn aggregate(counted_until_ms: f64) -> Result<AggregateOut> {
         stats: overall_stats(&records, &blocks),
         new_cost_since,
         max_ts_ms,
+        daily: daily_totals(&records),
     })
 }
 
@@ -381,6 +405,53 @@ fn period_totals(records: &[Record]) -> PeriodsOut {
     out
 }
 
+/// Per-local-day × per-family rollup. Bucketed by each record's timestamp
+/// converted to the local date (deterministic given the record ts — no
+/// `now()` dependency, unlike period_totals). Days are returned oldest-first.
+fn daily_totals(records: &[Record]) -> Vec<DayOut> {
+    // date -> family -> (cost, tokens)
+    let mut acc: HashMap<String, HashMap<&'static str, (f64, u64)>> = HashMap::new();
+    for r in records {
+        let date = r
+            .ts
+            .with_timezone(&chrono::Local)
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string();
+        let cost = cost_usd(&r.model, &r.tokens);
+        let toks = r.tokens.input
+            + r.tokens.output
+            + r.tokens.cache_creation_5m
+            + r.tokens.cache_creation_1h
+            + r.tokens.cache_read;
+        let fam = acc.entry(date).or_default().entry(family_of(&r.model)).or_insert((0.0, 0));
+        fam.0 += cost;
+        fam.1 += toks;
+    }
+    let mut days: Vec<DayOut> = acc
+        .into_iter()
+        .map(|(date, fams)| {
+            let mut families: Vec<DayFamilyOut> = fams
+                .into_iter()
+                .map(|(family, (cost, tokens))| DayFamilyOut {
+                    family: family.to_string(),
+                    cost,
+                    tokens,
+                })
+                .collect();
+            families.sort_by(|a, b| b.cost.total_cmp(&a.cost));
+            DayOut {
+                cost: families.iter().map(|f| f.cost).sum(),
+                tokens: families.iter().map(|f| f.tokens).sum(),
+                date,
+                families,
+            }
+        })
+        .collect();
+    days.sort_by(|a, b| a.date.cmp(&b.date));
+    days
+}
+
 fn recent_blocks(blocks: &[Block]) -> Vec<BlockOut> {
     blocks
         .iter()
@@ -515,6 +586,38 @@ mod tests {
     fn active_view_none_when_stale() {
         let blocks = vec![Block { start: base(), cost: 1.0 }];
         assert!(active_view(&blocks, base() + Duration::hours(6), &[]).is_none());
+    }
+
+    #[test]
+    fn daily_totals_buckets_by_day_and_family() {
+        // Two records at the SAME instant (same local day in any TZ) with
+        // different families, plus one 72h later (a different local day in any
+        // TZ). Assertions are timezone-robust — no exact date strings.
+        let recs = vec![
+            rec(0, "claude-opus-4-7", 1_000_000), // $5
+            rec(0, "claude-fable-5", 1_000_000),  // $10
+            rec(72, "claude-opus-4-7", 1_000_000), // $5, different day
+        ];
+        let days = daily_totals(&recs);
+        assert!(days.len() >= 2, "72h apart must split into ≥2 days");
+        // oldest-first
+        for w in days.windows(2) {
+            assert!(w[0].date <= w[1].date);
+        }
+        // Grand totals are invariant under bucketing.
+        let total_cost: f64 = days.iter().map(|d| d.cost).sum();
+        let total_tokens: u64 = days.iter().map(|d| d.tokens).sum();
+        assert!((total_cost - 20.0).abs() < 1e-9);
+        assert_eq!(total_tokens, 3_000_000);
+        // Each day's cost == sum of its families.
+        for d in &days {
+            let famsum: f64 = d.families.iter().map(|f| f.cost).sum();
+            assert!((d.cost - famsum).abs() < 1e-9);
+        }
+        // The same-instant day has both families, sorted by cost desc (Fable $10 > Opus $5).
+        let multi = days.iter().find(|d| d.families.len() >= 2).unwrap();
+        assert_eq!(multi.families.len(), 2);
+        assert_eq!(multi.families[0].family, "Fable");
     }
 
     #[test]
