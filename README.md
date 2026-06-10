@@ -132,6 +132,7 @@ npm run tauri build
 
 ### v2.0.x (Tauri 2 + SolidJS line)
 
+- [**v2.3.1**](docs/release-notes/v2.3.1.md) — Daily cost history that survives JSONL cleanup (per-day model-mix breakdown in Detail) + lifetime cost now accrues in every mode, not just Detail + fast-mode (`speed: fast`) pricing and Claude Mythos 5. Fixes: notification toasts no longer push widget content down (Portal overlay), no more duplicate 85%/95% toast on a 100% sync, and "always on top" now sticks across restarts.
 - [**v2.3.0**](docs/release-notes/v2.3.0.md) — Single-instance lock (re-launching focuses the existing window instead of spawning a duplicate) + Claude Fable 5 pricing ($10/$50, released 2026-06-09) + a notification fix (a 100%-on-sync crossing no longer fires both the 85% and 95% toast at once — only the highest level alerts).
 - [**v2.2.0**](docs/release-notes/v2.2.0.md) — Lifetime cost that doesn't reset (per-device + combined across all your devices via a shared cloud folder) + live second-by-second session/block countdowns + in-app Liquid Glass notification toasts + Detail insights (month-end cost projection, model mix %). Also fixes a sync-breaking bug on the new `extra_usage` API field, plus internal cleanup (dead code, unused HTTP plugin / CSS tokens) and a `resolve()` pricing cache.
 - [**v2.1.7**](docs/release-notes/v2.1.7.md) — Opus 4.8 cost fix (it was billed at the legacy $15/$75 tier — a 3× overcount — now the correct $5/$25) + subscription plan chip (e.g. "Max 20×") in the Settings panel header.

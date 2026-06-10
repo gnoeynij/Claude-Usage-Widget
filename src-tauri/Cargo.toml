@@ -1,6 +1,6 @@
 [package]
 name = "claude-widget"
-version = "2.3.0"
+version = "2.3.1"
 description = "Claude Usage Widget — Liquid Glass"
 edition = "2021"
 rust-version = "1.77"
