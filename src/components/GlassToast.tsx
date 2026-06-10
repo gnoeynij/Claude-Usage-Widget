@@ -1,12 +1,20 @@
 import { For } from "solid-js";
+import { Portal } from "solid-js/web";
 import { AlertTriangle, AlertCircle } from "lucide-solid";
 import { store, dismissToast } from "../state/store";
 
 /** Transient in-widget alerts (usage thresholds) styled as Liquid Glass.
  *  Kept readable regardless of the opacity slider — an alert should stay
- *  visible even when the panel is dialed transparent. Click to dismiss. */
+ *  visible even when the panel is dialed transparent. Click to dismiss.
+ *
+ *  Mounted via <Portal> to document.body, NOT inside .glass-panel: the panel
+ *  is `overflow: hidden` + `backdrop-filter` (which makes it the containing
+ *  block for fixed descendants), so a toast rendered inside it gets clipped
+ *  and the `.glass-panel > *` flow rule pushed widget content down instead of
+ *  overlaying it. Portaling out anchors `position: fixed` to the viewport. */
 export function GlassToast() {
   return (
+    <Portal>
     <div
       style={{
         position: "fixed",
@@ -74,5 +82,6 @@ export function GlassToast() {
         }}
       </For>
     </div>
+    </Portal>
   );
 }
