@@ -715,9 +715,14 @@ export async function syncNow() {
     const usage = await invoke<UsagePayload>("fetch_usage");
     setStore("usage", usage);
     setStore("lastSyncAt", new Date().toISOString());
-    if (store.mode === "detail") {
-      await refreshDetail();
-    }
+    // Accumulate lifetimeCost on *every* sync, not just in Detail mode. The
+    // lifetime total is captured by folding each record's cost in before its
+    // JSONL file gets cleaned (Claude Code retention) — so it has to run while
+    // the user sits in Normal/Mini too, otherwise cost from files cleaned
+    // between Detail-mode visits is lost for good. The full walk is mtime-cached
+    // (jsonl_aggregator FILE_CACHE), so re-running it per sync only re-reads
+    // changed files. store.detail is set even when not shown — harmless.
+    await refreshDetail();
     void maybeNotifyThreshold(usage);
     void invoke("set_tray_state", { state: "ok" }).catch(() => {});
     void info(`sync ok ${Date.now() - t0}ms`);
