@@ -170,16 +170,8 @@ a {
    Detail responsive grid — uses CSS container queries so the layout adapts
    to the widget width, not the viewport.
    ────────────────────────────────────────────────────────────────────────── */
-.detail-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--s-3);
-}
-@container (min-width: 560px) {
-  .detail-grid { grid-template-columns: 1fr 1fr; }
-  .detail-grid > :first-child { grid-column: span 2; }
-  .detail-grid > :last-child { grid-column: span 2; }
-}
+/* Detail is a single-column stack since the v2.4 trend-first redesign —
+   the old 2-col .detail-grid (container query) was removed with it. */
 
 /* ──────────────────────────────────────────────────────────────────────────
    Custom range input — Apple-flavored slider for opacity control.
