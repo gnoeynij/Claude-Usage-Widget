@@ -349,33 +349,35 @@ export function dismissToast(id: number) {
 
 function fire(scope: NotifyScope, due: number[], pct: number, hidden: boolean) {
   const isWeekly = scope === "weekly";
-  for (const level of due) {
-    const title = isWeekly
-      ? t().notifyTitleWeekly(Math.round(pct))
-      : t().notifyTitle(Math.round(pct));
-    const body = isWeekly
-      ? level >= 95
-        ? t().notifyBodyWeekly95
-        : t().notifyBodyWeekly85
-      : level >= 95
-        ? t().notifyBody95
-        : t().notifyBody85;
-    if (hidden) {
-      // Widget is in the tray — fall back to an OS notification.
-      try {
-        sendNotification({ title, body });
-      } catch (e) {
-        void warn(`notification send failed: ${toErrorMessage(e)}`);
-      }
-    } else {
-      // Widget is on screen — in-widget Liquid Glass toast (matches the
-      // widget look, needs no OS permission).
-      pushToast(title, body, level >= 95 ? "danger" : "warn");
+  // One sync can cross both thresholds at once (e.g. usage jumps 0% → 100%).
+  // Alert only the highest level so the user sees a single toast; the lower
+  // levels are still recorded as fired below so they never alert afterwards.
+  const level = Math.max(...due);
+  const title = isWeekly
+    ? t().notifyTitleWeekly(Math.round(pct))
+    : t().notifyTitle(Math.round(pct));
+  const body = isWeekly
+    ? level >= 95
+      ? t().notifyBodyWeekly95
+      : t().notifyBodyWeekly85
+    : level >= 95
+      ? t().notifyBody95
+      : t().notifyBody85;
+  if (hidden) {
+    // Widget is in the tray — fall back to an OS notification.
+    try {
+      sendNotification({ title, body });
+    } catch (e) {
+      void warn(`notification send failed: ${toErrorMessage(e)}`);
     }
-    void info(
-      `threshold fired ${scope} at ${level}% (actual ${pct.toFixed(1)}%) via ${hidden ? "OS" : "toast"}`,
-    );
+  } else {
+    // Widget is on screen — in-widget Liquid Glass toast (matches the
+    // widget look, needs no OS permission).
+    pushToast(title, body, level >= 95 ? "danger" : "warn");
   }
+  void info(
+    `threshold fired ${scope} at ${level}% (actual ${pct.toFixed(1)}%, due [${due.join(",")}]) via ${hidden ? "OS" : "toast"}`,
+  );
   const keys = SCOPE_KEYS[scope];
   const next = [...store[keys.levels], ...due];
   setStore(keys.levels, next);
