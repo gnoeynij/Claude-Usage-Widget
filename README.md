@@ -132,6 +132,7 @@ npm run tauri build
 
 ### v2.0.x (Tauri 2 + SolidJS line)
 
+- [**v2.3.0**](docs/release-notes/v2.3.0.md) — Single-instance lock (re-launching focuses the existing window instead of spawning a duplicate) + Claude Fable 5 pricing ($10/$50, released 2026-06-09) + a notification fix (a 100%-on-sync crossing no longer fires both the 85% and 95% toast at once — only the highest level alerts).
 - [**v2.2.0**](docs/release-notes/v2.2.0.md) — Lifetime cost that doesn't reset (per-device + combined across all your devices via a shared cloud folder) + live second-by-second session/block countdowns + in-app Liquid Glass notification toasts + Detail insights (month-end cost projection, model mix %). Also fixes a sync-breaking bug on the new `extra_usage` API field, plus internal cleanup (dead code, unused HTTP plugin / CSS tokens) and a `resolve()` pricing cache.
 - [**v2.1.7**](docs/release-notes/v2.1.7.md) — Opus 4.8 cost fix (it was billed at the legacy $15/$75 tier — a 3× overcount — now the correct $5/$25) + subscription plan chip (e.g. "Max 20×") in the Settings panel header.
 - [**v2.1.6**](docs/release-notes/v2.1.6.md) — macOS background opacity now applies immediately on slider change / launch (previously a mode switch was needed for it to take effect).
