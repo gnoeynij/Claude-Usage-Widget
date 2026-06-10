@@ -66,6 +66,10 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
 
     let mut m = HashMap::new();
     m.insert("claude-fable-5", fable);
+    // Mythos 5 — same Mythos-class tier/price as Fable 5 ($10/$50). Limited
+    // availability (Project Glasswing), so it won't normally appear in Claude
+    // Code JSONL, but priced here so it isn't silently counted as $0.
+    m.insert("claude-mythos-5", fable);
     m.insert("claude-opus-4-8", opus_current);
     m.insert("claude-opus-4-7", opus_current);
     m.insert("claude-opus-4-6", opus_current);
@@ -137,6 +141,46 @@ const WEB_SEARCH_USD_PER_REQUEST: f64 = 0.01;
 /// per-request web search charge.
 const US_INFERENCE_MULTIPLIER: f64 = 1.1;
 
+/// Fast mode (`speed: "fast"`) reprices supported Opus models. Cache rates
+/// derive from the fast base input (5m=1.25x, 1h=2x, read=0.1x), same as the
+/// standard tiers. Official fast pricing (verified 2026-06-10):
+/// Opus 4.8 = $10/$50; Opus 4.6/4.7 = $30/$150. Fable/Sonnet/Haiku have no
+/// fast tier — `speed:"fast"` shouldn't appear for them, and resolve falls
+/// back to standard if it ever does.
+fn resolve_fast(model: &str) -> Option<Pricing> {
+    let opus_48_fast = Pricing {
+        input: 10.0,
+        output: 50.0,
+        cache_write_5m: 12.5,
+        cache_write_1h: 20.0,
+        cache_read: 1.0,
+    };
+    let opus_67_fast = Pricing {
+        input: 30.0,
+        output: 150.0,
+        cache_write_5m: 37.5,
+        cache_write_1h: 60.0,
+        cache_read: 3.0,
+    };
+    // Boundary-checked prefix match (same rule as resolve_uncached): the base
+    // must be followed by end-of-string or '-' so a date suffix matches but a
+    // hypothetical `claude-opus-48` would not.
+    for (base, pricing) in [
+        ("claude-opus-4-8", opus_48_fast),
+        ("claude-opus-4-7", opus_67_fast),
+        ("claude-opus-4-6", opus_67_fast),
+    ] {
+        if model == base
+            || model
+                .strip_prefix(base)
+                .map_or(false, |rest| rest.starts_with('-'))
+        {
+            return Some(pricing);
+        }
+    }
+    None
+}
+
 #[derive(Default, Clone)]
 pub struct UsageTokens {
     pub input: u64,
@@ -148,10 +192,20 @@ pub struct UsageTokens {
     pub web_search_requests: u64,
     /// `inference_geo == "us"` → 1.1x on token costs.
     pub inference_geo_us: bool,
+    /// `speed == "fast"` → fast-mode pricing on supported Opus models.
+    pub speed_fast: bool,
 }
 
 pub fn cost_usd(model: &str, u: &UsageTokens) -> f64 {
-    let Some(p) = resolve(model) else { return 0.0 };
+    // Fast mode reprices the model; fall back to standard pricing when the
+    // model has no fast tier (Fable/Sonnet/Haiku) so cost is never $0 just
+    // because speed was "fast".
+    let resolved = if u.speed_fast {
+        resolve_fast(model).or_else(|| resolve(model))
+    } else {
+        resolve(model)
+    };
+    let Some(p) = resolved else { return 0.0 };
     let mut token_cost = (u.input as f64) * p.input / 1_000_000.0
         + (u.output as f64) * p.output / 1_000_000.0
         + (u.cache_creation_5m as f64) * p.cache_write_5m / 1_000_000.0
@@ -165,7 +219,7 @@ pub fn cost_usd(model: &str, u: &UsageTokens) -> f64 {
 
 pub fn family_of(model: &str) -> &'static str {
     let lower = model.to_lowercase();
-    if lower.contains("fable") {
+    if lower.contains("fable") || lower.contains("mythos") {
         "Fable"
     } else if lower.contains("opus") {
         "Opus"
@@ -240,6 +294,63 @@ mod tests {
         approx(cost_usd("claude-fable-5", &toks(0, 0, 0, 0, 1_000_000)), 1.0);
         // Future date-suffixed variant must resolve to the same tier.
         approx(cost_usd("claude-fable-5-20260609", &toks(1_000_000, 0, 0, 0, 0)), 10.0);
+    }
+
+    #[test]
+    fn mythos_5_priced_like_fable() {
+        // Mythos 5 shares the Fable tier ($10/$50); not silently $0.
+        approx(cost_usd("claude-mythos-5", &toks(1_000_000, 0, 0, 0, 0)), 10.0);
+        approx(cost_usd("claude-mythos-5", &toks(0, 1_000_000, 0, 0, 0)), 50.0);
+        assert_eq!(family_of("claude-mythos-5"), "Fable");
+    }
+
+    #[test]
+    fn fast_mode_reprices_opus() {
+        let fast = |model: &str, input: u64, output: u64| {
+            cost_usd(
+                model,
+                &UsageTokens {
+                    input,
+                    output,
+                    speed_fast: true,
+                    ..Default::default()
+                },
+            )
+        };
+        // Opus 4.8 fast = $10/$50 (2x standard $5/$25).
+        approx(fast("claude-opus-4-8", 1_000_000, 0), 10.0);
+        approx(fast("claude-opus-4-8", 0, 1_000_000), 50.0);
+        // Opus 4.7 fast = $30/$150 (6x). Date-suffixed id resolves too.
+        approx(fast("claude-opus-4-7", 1_000_000, 0), 30.0);
+        approx(fast("claude-opus-4-7-20250416", 0, 1_000_000), 150.0);
+        // Opus 4.6 fast = $30/$150.
+        approx(fast("claude-opus-4-6", 1_000_000, 0), 30.0);
+    }
+
+    #[test]
+    fn fast_mode_cache_rates_derive_from_fast_input() {
+        // Opus 4.8 fast: 5m write = 1.25x10 = 12.5, 1h = 2x10 = 20, read = 0.1x10 = 1.
+        let t = UsageTokens { cache_creation_5m: 1_000_000, speed_fast: true, ..Default::default() };
+        approx(cost_usd("claude-opus-4-8", &t), 12.5);
+        let t = UsageTokens { cache_creation_1h: 1_000_000, speed_fast: true, ..Default::default() };
+        approx(cost_usd("claude-opus-4-8", &t), 20.0);
+        let t = UsageTokens { cache_read: 1_000_000, speed_fast: true, ..Default::default() };
+        approx(cost_usd("claude-opus-4-8", &t), 1.0);
+    }
+
+    #[test]
+    fn fast_mode_falls_back_to_standard_for_non_fast_models() {
+        // Fable/Sonnet have no fast tier — speed_fast must not zero them out;
+        // fall back to standard pricing.
+        let t = UsageTokens { input: 1_000_000, speed_fast: true, ..Default::default() };
+        approx(cost_usd("claude-sonnet-4-6", &t), 3.0); // standard sonnet input
+        approx(cost_usd("claude-fable-5", &t), 10.0); // standard fable input
+    }
+
+    #[test]
+    fn standard_speed_unaffected_by_fast_logic() {
+        // speed_fast=false must keep standard Opus pricing.
+        approx(cost_usd("claude-opus-4-8", &toks(1_000_000, 0, 0, 0, 0)), 5.0);
     }
 
     #[test]

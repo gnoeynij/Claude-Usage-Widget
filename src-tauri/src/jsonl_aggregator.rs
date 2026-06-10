@@ -257,6 +257,14 @@ fn parse_jsonl(path: &Path) -> Vec<Record> {
             .and_then(|v| v.as_str())
             .map(|s| s.eq_ignore_ascii_case("us"))
             .unwrap_or(false);
+        // Fast mode (Opus only) bills 2–6x; without this the cost would be
+        // under-counted at standard rates. All records seen so far are
+        // "standard", so this is a forward guard.
+        let speed_fast = usage
+            .get("speed")
+            .and_then(|v| v.as_str())
+            .map(|s| s.eq_ignore_ascii_case("fast"))
+            .unwrap_or(false);
         out.push(Record {
             ts: ts.with_timezone(&Utc),
             model,
@@ -271,6 +279,7 @@ fn parse_jsonl(path: &Path) -> Vec<Record> {
                     .unwrap_or(0),
                 web_search_requests,
                 inference_geo_us,
+                speed_fast,
             },
         });
     }
