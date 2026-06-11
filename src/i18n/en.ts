@@ -16,6 +16,7 @@ export const en = {
 
   syncNow: "Sync now",
   settings: "Settings",
+  guide: "Guide",
   language: "Language",
   autoSync: "Auto sync",
   alwaysOnTop: "Always on top",

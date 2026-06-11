@@ -1103,7 +1103,7 @@ export function setOpacity(opacityPct: number) {
   void invoke("set_mica_enabled", { enabled: clamped === 0 }).catch(() => {});
 }
 
-function applyDarkClass(dark: boolean) {
+export function applyDarkClass(dark: boolean) {
   const html = document.documentElement;
   if (dark) html.classList.add("dark");
   else html.classList.remove("dark");

@@ -34,6 +34,29 @@ pub fn credentials_mtime() -> Option<f64> {
     usage_api::credentials_mtime_ms()
 }
 
+/// Open (or focus) the standalone guide window. `lang`/`dark` are passed from
+/// the widget so the guide matches the current theme/language; the frontend
+/// renders `<GuideApp>` when the URL carries `?guide`.
+#[tauri::command]
+pub async fn open_guide_window(app: tauri::AppHandle, lang: String, dark: bool) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window("guide") {
+        w.show().map_err(|e| e.to_string())?;
+        w.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    let url = format!("index.html?guide&lang={lang}&dark={}", if dark { 1 } else { 0 });
+    tauri::WebviewWindowBuilder::new(&app, "guide", tauri::WebviewUrl::App(url.into()))
+        .title("Claude Usage Widget — Guide")
+        .inner_size(780.0, 580.0)
+        .min_inner_size(680.0, 520.0)
+        .resizable(true)
+        .center()
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn aggregate_detail(counted_until_ms: f64) -> Result<jsonl_aggregator::AggregateOut, String> {
     match tauri::async_runtime::spawn_blocking(move || jsonl_aggregator::aggregate(counted_until_ms)).await {

@@ -18,6 +18,7 @@ export const ko: Strings = {
 
   syncNow: "지금 동기화",
   settings: "설정",
+  guide: "가이드",
   language: "언어",
   autoSync: "자동 동기화",
   alwaysOnTop: "항상 위",

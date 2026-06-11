@@ -1,6 +1,7 @@
 import { createSignal, onCleanup, onMount, For, Show } from "solid-js";
 import type { JSX } from "solid-js";
-import { RefreshCw, X } from "lucide-solid";
+import { invoke } from "@tauri-apps/api/core";
+import { RefreshCw, X, BookOpen } from "lucide-solid";
 import { Switch } from "../components/Switch";
 import { SegmentedControl } from "../components/SegmentedControl";
 import {
@@ -388,6 +389,28 @@ export function SettingsPanel() {
             <X size={14} />
           </button>
         </div>
+
+        <button
+          class="ring-hover"
+          onClick={() =>
+            void invoke("open_guide_window", { lang: store.lang, dark: store.dark })
+          }
+          style={{
+            display: "inline-flex",
+            "align-items": "center",
+            "justify-content": "center",
+            gap: "6px",
+            padding: "6px 10px",
+            "border-radius": "8px",
+            background: "var(--accent-tint)",
+            color: "var(--accent)",
+            "font-weight": 500,
+            "align-self": "flex-start",
+          }}
+        >
+          <BookOpen size={12} />
+          <span class="t-body">{t().guide}</span>
+        </button>
 
         <Section label={t().language}>
           <SegmentedControl<Lang>

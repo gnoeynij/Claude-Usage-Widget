@@ -5,9 +5,14 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/glass.css";
 import { App } from "./App";
+import { GuideApp } from "./views/GuideView";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root not found");
+
+// Separate guide window (opened from Settings) loads the same bundle with
+// `?guide` — render the standalone guide instead of the widget.
+const isGuide = new URLSearchParams(window.location.search).has("guide");
 
 // macOS: tag the document *before first paint* so `:root.mac` strips
 // backdrop-filter (see glass.css). If the class lands after the panel's first
@@ -17,4 +22,4 @@ if (/Mac/i.test(navigator.userAgent)) {
   document.documentElement.classList.add("mac");
 }
 
-render(() => <App />, root);
+render(() => (isGuide ? <GuideApp /> : <App />), root);
