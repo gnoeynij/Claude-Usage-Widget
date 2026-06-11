@@ -3,8 +3,24 @@ import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
 import { store, setMode, syncNow } from "../state/store";
 import { t } from "../i18n";
-import { projectLimit, SESSION_WINDOW_MS, WEEKLY_WINDOW_MS } from "../utils/project";
+import {
+  projectLimit,
+  SESSION_WINDOW_MS,
+  WEEKLY_WINDOW_MS,
+  type LimitProjection,
+} from "../utils/project";
 import { startWindowDrag } from "../utils/drag";
+
+/** Plain-text projection summary for the badge tooltip (no markup — it's a
+ *  native title attribute). Mirrors RiskCaption's day/hour split. */
+function projText(p: LimitProjection | null): string {
+  if (!p) return "";
+  if (!p.hitsBeforeReset) return t().projSafe(Math.floor(p.projectedPct));
+  const ms = p.msToLimit;
+  return ms >= 48 * 3_600_000
+    ? t().projRiskDays(Math.floor(ms / 86_400_000), Math.floor((ms % 86_400_000) / 3_600_000))
+    : t().projRisk(Math.floor(ms / 3_600_000), Math.floor((ms % 3_600_000) / 60_000));
+}
 
 function MiniRow(props: { label: string; value: number; projected?: number | null }) {
   return (
@@ -58,6 +74,23 @@ export function MiniView() {
   // badge. Icon (shape), not color, so it reads even amber-on-amber where the
   // ghost marker blends with an already-amber arc.
   const atRisk = () => Boolean(sessionProj()?.hitsBeforeReset || weeklyProj()?.hitsBeforeReset);
+  // Native-title summary shown on badge hover: each tracked limit's current %
+  // plus its projection (omitted when there isn't enough signal to project).
+  const riskTooltip = () => {
+    const line = (label: string, pct: number, p: LimitProjection | null) => {
+      const pj = projText(p);
+      return `${label} ${Math.round(pct || 0)}%${pj ? ` · ${pj}` : ""}`;
+    };
+    const lines = [
+      line(t().session, store.usage.five_hour, sessionProj()),
+      line(t().allModels, store.usage.seven_day, weeklyProj()),
+      line(t().sonnetOnly, store.usage.seven_day_sonnet, null),
+    ];
+    if (store.usage.seven_day_opus != null) {
+      lines.push(line(t().opusOnly, store.usage.seven_day_opus, null));
+    }
+    return lines.join("\n");
+  };
   return (
     <main
       class="drag view-in"
@@ -75,6 +108,8 @@ export function MiniView() {
     >
       <Show when={atRisk()}>
         <span
+          class="no-drag"
+          title={riskTooltip()}
           style={{
             position: "absolute",
             // Inset past the 10px window corner radius (--r-window) so the
@@ -85,7 +120,7 @@ export function MiniView() {
             "line-height": 1,
             color: "var(--warning)",
             "z-index": 2,
-            "pointer-events": "none",
+            cursor: "default",
           }}
         >
           ⚠
