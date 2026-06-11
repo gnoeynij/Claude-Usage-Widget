@@ -5,7 +5,34 @@ import { store, syncNow } from "../state/store";
 import { t } from "../i18n";
 import { clamp } from "../utils/math";
 import { formatCountdown } from "../utils/format";
+import {
+  projectLimit,
+  SESSION_WINDOW_MS,
+  WEEKLY_WINDOW_MS,
+  type LimitProjection,
+} from "../utils/project";
 import { startWindowDrag } from "../utils/drag";
+
+/** Shared "at this pace …" caption — safe (calm tertiary) or risk (amber). */
+function ProjCaption(props: { proj: LimitProjection }) {
+  return (
+    <Show
+      when={props.proj.hitsBeforeReset}
+      fallback={
+        <span class="t-caption label-tertiary">
+          {t().projSafe(Math.round(props.proj.projectedPct))}
+        </span>
+      }
+    >
+      <span class="t-caption" style={{ color: "var(--warning)" }}>
+        {t().projRisk(
+          Math.floor(props.proj.msToLimit / 3_600_000),
+          Math.floor((props.proj.msToLimit % 3_600_000) / 60_000),
+        )}
+      </span>
+    </Show>
+  );
+}
 
 function formatResetsIn(iso?: string | null) {
   if (!iso) return null;
@@ -54,6 +81,28 @@ export function NormalView() {
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     store.tickMinute;
     return formatResetsIn(store.usage.weekly_resets_at);
+  };
+  // "At this pace …" projections. Session re-evaluates per-second (tickSecond),
+  // weekly per-minute (it's days away) — same cadence as their countdowns.
+  const sessionProj = () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    store.tickSecond;
+    return projectLimit(
+      store.usage.five_hour,
+      store.usage.session_resets_at,
+      SESSION_WINDOW_MS,
+      Date.now(),
+    );
+  };
+  const weeklyProj = () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    store.tickMinute;
+    return projectLimit(
+      store.usage.seven_day,
+      store.usage.weekly_resets_at,
+      WEEKLY_WINDOW_MS,
+      Date.now(),
+    );
   };
   return (
     <main
@@ -110,6 +159,7 @@ export function NormalView() {
             </span>
           )}
         </Show>
+        <Show when={sessionProj()}>{(p) => <ProjCaption proj={p()} />}</Show>
       </div>
 
       {/* Secondary metrics — weekly limits as thin rows */}
@@ -136,6 +186,13 @@ export function NormalView() {
               }}
             >
               {s()}
+            </span>
+          )}
+        </Show>
+        <Show when={weeklyProj()}>
+          {(p) => (
+            <span style={{ "text-align": "center" }}>
+              <ProjCaption proj={p()} />
             </span>
           )}
         </Show>

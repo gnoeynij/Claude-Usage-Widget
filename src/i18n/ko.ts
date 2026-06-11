@@ -11,6 +11,9 @@ export const ko: Strings = {
   resetsInLive: (h, m, s) =>
     h > 0 ? `${h}시간 ${m}분 ${s}초 뒤 초기화` : `${m}분 ${s}초 뒤 초기화`,
   resetsOn: (s) => `${s} 초기화`,
+  projSafe: (p) => `이 속도면 reset 시 ~${p}%`,
+  projRisk: (h, m) =>
+    h > 0 ? `⚠ 이 속도면 ${h}시간 ${m}분 뒤 한도` : `⚠ 이 속도면 ${m}분 뒤 한도`,
 
   syncNow: "지금 동기화",
   settings: "설정",

@@ -9,6 +9,9 @@ export const en = {
   resetsInLive: (h: number, m: number, s: number) =>
     h > 0 ? `Resets in ${h}h ${m}m ${s}s` : `Resets in ${m}m ${s}s`,
   resetsOn: (s: string) => `Resets ${s}`,
+  projSafe: (p: number) => `At this pace ~${p}% by reset`,
+  projRisk: (h: number, m: number) =>
+    h > 0 ? `⚠ At this pace, limit in ~${h}h ${m}m` : `⚠ At this pace, limit in ~${m}m`,
 
   syncNow: "Sync now",
   settings: "Settings",
