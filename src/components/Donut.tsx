@@ -66,7 +66,11 @@ export function Donut(props: Props) {
         width={size()}
         height={size()}
         viewBox={`0 0 ${size()} ${size()}`}
-        style={{ display: "block" }}
+        // overflow visible so the projection dot — which is larger than the
+        // stroke and centered on the ring centerline (whose outer edge touches
+        // the viewBox) — isn't clipped on its outer side, which read as the dot
+        // sitting inward of the line.
+        style={{ display: "block", overflow: "visible" }}
       >
         <circle
           cx={size() / 2}
