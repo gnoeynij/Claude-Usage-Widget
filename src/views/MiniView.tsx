@@ -114,10 +114,18 @@ export function MiniView() {
       <Show when={atRisk()}>
         <span
           class="no-drag"
+          role="button"
+          tabindex={0}
           title={riskTooltip()}
           onClick={(e) => {
             e.stopPropagation();
             setMode("normal");
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setMode("normal");
+            }
           }}
           style={{
             position: "absolute",
