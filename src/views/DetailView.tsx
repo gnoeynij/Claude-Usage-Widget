@@ -2,7 +2,7 @@ import { Show, For, createMemo, createSignal } from "solid-js";
 import { GlassCard } from "../components/GlassCard";
 import { store } from "../state/store";
 import { t } from "../i18n";
-import { formatCost } from "../utils/format";
+import { formatCost, formatTokens } from "../utils/format";
 import { startWindowDrag } from "../utils/drag";
 
 // Detail = "how have I been spending" (trend/history). "Right now" lives in
@@ -552,31 +552,9 @@ function DailyCostCard() {
   );
 }
 
-function PeriodCell(props: { label: string; value: number; caption?: string }) {
-  return (
-    <div
-      style={{
-        background: "var(--fill-1)",
-        "border-radius": "var(--r-md)",
-        padding: "8px 10px",
-        "min-width": 0,
-      }}
-    >
-      <div class="t-caption label-tertiary" style={{ "font-size": "10px", "white-space": "nowrap" }}>
-        {props.label}
-        <Show when={props.caption}>
-          {" "}
-          <span style={{ opacity: 0.7 }}>{props.caption}</span>
-        </Show>
-      </div>
-      <div class="t-body tabular-nums" style={{ "font-weight": 600 }}>
-        {formatCost(props.value)}
-      </div>
-    </div>
-  );
-}
-
-function PeriodsStrip() {
+/** One-line calendar week + month totals (+ month-end projection). today /
+ *  yesterday were dropped — the daily chart already shows them as bars. */
+function WeekMonthCaption() {
   const p = () => store.detail?.periods;
   const monthProjection = () => {
     const m = p()?.month_cost ?? 0;
@@ -586,47 +564,34 @@ function PeriodsStrip() {
     return day > 0 ? (m / day) * daysInMonth : m;
   };
   return (
-    <div
-      style={{
-        display: "grid",
-        "grid-template-columns": "repeat(4, 1fr)",
-        gap: "var(--s-2)",
-      }}
-    >
-      <PeriodCell label={t().today} value={p()?.today_cost ?? 0} />
-      <PeriodCell label={t().yesterday} value={p()?.yesterday_cost ?? 0} />
-      <PeriodCell label={t().thisWeek} value={p()?.week_cost ?? 0} />
-      <PeriodCell
-        label={t().thisMonth}
-        value={p()?.month_cost ?? 0}
-        caption={`→${compactCost(monthProjection())}`}
-      />
+    <div class="t-caption label-tertiary" style={{ "text-align": "center" }}>
+      {t().thisWeek}{" "}
+      <span class="tabular-nums" style={{ color: "var(--label)", "font-weight": 600 }}>
+        {formatCost(p()?.week_cost ?? 0)}
+      </span>
+      {"  ·  "}
+      {t().thisMonth}{" "}
+      <span class="tabular-nums" style={{ color: "var(--label)", "font-weight": 600 }}>
+        {formatCost(p()?.month_cost ?? 0)}
+      </span>{" "}
+      <span style={{ opacity: 0.7 }} class="tabular-nums">
+        → {compactCost(monthProjection())}
+      </span>
     </div>
   );
 }
 
-function KPI(props: { label: string; value: string }) {
-  return (
-    <div>
-      <div
-        class="t-caption label-tertiary"
-        style={{
-          "letter-spacing": "0.06em",
-          "text-transform": "uppercase",
-          "font-size": "10px",
-        }}
-      >
-        {props.label}
-      </div>
-      <div class="t-body tabular-nums" style={{ "font-weight": 600, "margin-top": "2px" }}>
-        {props.value}
-      </div>
-    </div>
+/** All-time totals: lifetime headline (device / all devices) → per-family
+ *  breakdown (cost-desc, with tokens) in a full-width 2-col grid → cache hit
+ *  footer. The weak On disk / Messages KPIs were dropped. by_family is the
+ *  same all-time data the old Models card used. */
+function TotalsCard() {
+  const fams = createMemo(() =>
+    [...(store.detail?.by_family ?? [])]
+      .filter((f) => f.cost > 0 || f.tokens > 0)
+      .sort((a, b) => b.cost - a.cost),
   );
-}
-
-function LifetimeCard() {
-  const s = () => store.detail?.stats;
+  const cacheHit = () => store.detail?.stats?.cache_hit_pct ?? 0;
   return (
     <GlassCard>
       <div
@@ -652,23 +617,66 @@ function LifetimeCard() {
           <span class="t-title3 tabular-nums">{formatCost(store.combinedCost)}</span>
         </div>
       </Show>
+
       <div
+        class="t-caption label-tertiary"
         style={{
-          height: "1px",
-          background: "var(--separator)",
-          margin: "var(--s-2) 0 var(--s-3)",
-        }}
-      />
-      <div
-        style={{
-          display: "grid",
-          "grid-template-columns": "repeat(3, 1fr)",
-          gap: "var(--s-3)",
+          "letter-spacing": "0.05em",
+          "text-transform": "uppercase",
+          "font-size": "10px",
+          margin: "var(--s-3) 0 var(--s-2)",
+          "padding-top": "var(--s-3)",
+          "border-top": "1px solid var(--separator)",
         }}
       >
-        <KPI label={t().onDisk} value={formatCost(s()?.total_cost ?? 0)} />
-        <KPI label={t().messages} value={(s()?.total_messages ?? 0).toLocaleString()} />
-        <KPI label={t().cacheHit} value={`${Math.round(s()?.cache_hit_pct ?? 0)}%`} />
+        {t().modelsAllTime}
+      </div>
+      <Show when={fams().length > 0} fallback={<EmptyHint />}>
+        <div
+          style={{
+            display: "grid",
+            "grid-template-columns": "1fr 1fr",
+            gap: "8px var(--s-5)",
+          }}
+        >
+          <For each={fams()}>
+            {(f) => (
+              <div style={{ display: "flex", "align-items": "center", gap: "8px", "min-width": 0 }}>
+                <span
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    "border-radius": "2px",
+                    background: modelColor(f.family),
+                    "flex-shrink": 0,
+                  }}
+                />
+                <span class="t-body" style={{ flex: 1, "min-width": 0 }}>
+                  {f.family}
+                </span>
+                <span class="t-body tabular-nums" style={{ "font-weight": 600 }}>
+                  {formatCost(f.cost)}
+                </span>
+                <span
+                  class="t-caption label-tertiary tabular-nums"
+                  style={{ width: "44px", "text-align": "right" }}
+                >
+                  {formatTokens(f.tokens)}
+                </span>
+              </div>
+            )}
+          </For>
+        </div>
+      </Show>
+
+      <div
+        class="t-caption label-tertiary"
+        style={{ "text-align": "right", "margin-top": "var(--s-2)" }}
+      >
+        {t().cacheHit}{" "}
+        <span class="tabular-nums" style={{ color: "var(--label-secondary)", "font-weight": 600 }}>
+          {Math.round(cacheHit())}%
+        </span>
       </div>
     </GlassCard>
   );
@@ -705,8 +713,8 @@ export function DetailView() {
       <div style={{ display: "flex", "flex-direction": "column", gap: "var(--s-3)" }}>
         <ActiveStrip />
         <DailyCostCard />
-        <PeriodsStrip />
-        <LifetimeCard />
+        <WeekMonthCaption />
+        <TotalsCard />
       </div>
     </main>
   );
