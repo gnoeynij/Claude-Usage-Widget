@@ -37,7 +37,9 @@ export function CapsuleProgress(props: Props) {
   const pv = () => (props.projected == null ? null : clamp(props.projected));
   const over = () => (props.projected ?? 0) >= 100;
   const showProj = () => pv() != null && (pv() as number) > v() + 0.5;
-  const ghostC = () => (over() ? "var(--warning)" : "var(--label-tertiary)");
+  // Colored by the projected threshold (never gray) so the ghost fill stays
+  // distinct from the gray empty track — matches the donut.
+  const ghostC = () => thresholdColor(pv() ?? 0);
 
   return (
     <div style={{ position: "relative", width: "100%" }}>
@@ -62,7 +64,7 @@ export function CapsuleProgress(props: Props) {
               width: `${pv()}%`,
               "border-radius": "var(--r-pill)",
               background: ghostC(),
-              opacity: over() ? 0.4 : 0.28,
+              opacity: over() ? 0.45 : 0.36,
               transition: "width var(--dur-xslow) var(--ease-swift)",
             }}
           />

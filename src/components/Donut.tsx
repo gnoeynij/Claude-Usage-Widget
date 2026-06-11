@@ -35,7 +35,10 @@ export function Donut(props: Props) {
   const pv = () => (props.projected == null ? null : clamp(props.projected));
   const over = () => (props.projected ?? 0) >= 100;
   const showProj = () => pv() != null && (pv() as number) > v() + 0.5;
-  const ghostColor = () => (over() ? "var(--warning)" : "var(--label-tertiary)");
+  // Colored by the PROJECTED threshold (green/amber/red), never gray — so the
+  // ghost stays distinct from the gray empty track (which a neutral ghost would
+  // blend into) and conveys where the projection lands ("amber now, red soon").
+  const ghostColor = () => thresholdColor(pv() ?? 0);
   const ghostOffset = () => circ() * (1 - (pv() ?? 0) / 100);
   const dotAngle = () => ((pv() ?? 0) / 100) * 360;
 
@@ -91,7 +94,7 @@ export function Donut(props: Props) {
             stroke-linecap="round"
             stroke-dasharray={String(circ())}
             stroke-dashoffset={String(ghostOffset())}
-            stroke-opacity={over() ? 0.5 : 0.32}
+            stroke-opacity={over() ? 0.55 : 0.42}
             transform={`rotate(-90 ${size() / 2} ${size() / 2})`}
             style={{ transition: "stroke-dashoffset var(--dur-xslow) var(--ease-swift)" }}
           />
