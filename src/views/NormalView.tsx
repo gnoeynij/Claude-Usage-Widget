@@ -94,8 +94,11 @@ export function NormalView() {
   // "At this pace …" projections. Session re-evaluates per-second (tickSecond),
   // weekly per-minute (it's days away) — same cadence as their countdowns.
   const sessionProj = createMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    store.tickSecond;
+    // Per-minute (not tickSecond): the projection is an estimate, so a
+    // per-second recompute only adds flicker (64↔65%). It still updates
+    // immediately on sync via store.usage. The countdown below stays
+    // per-second. eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    store.tickMinute;
     return projectLimit(
       store.usage.five_hour,
       store.usage.session_resets_at,

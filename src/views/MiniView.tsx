@@ -51,8 +51,11 @@ export function MiniView() {
   // arc/dot on a tracked limit is the at-a-glance "heading past the limit"
   // warning. Same cadence as NormalView (session per-second, weekly per-minute).
   const sessionProj = createMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    store.tickSecond;
+    // Per-minute (not tickSecond): the projection is an estimate, so a
+    // per-second recompute only adds flicker (64↔65%). It still updates
+    // immediately on sync via store.usage. eslint-disable-next-line
+    // @typescript-eslint/no-unused-expressions
+    store.tickMinute;
     return projectLimit(
       store.usage.five_hour,
       store.usage.session_resets_at,
@@ -112,6 +115,10 @@ export function MiniView() {
         <span
           class="no-drag"
           title={riskTooltip()}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMode("normal");
+          }}
           style={{
             position: "absolute",
             // Inset past the 10px window corner radius (--r-window) so the
@@ -122,7 +129,10 @@ export function MiniView() {
             "line-height": 1,
             color: "var(--warning)",
             "z-index": 2,
-            cursor: "default",
+            // Click → expand to Normal for the full projection (a custom popover
+            // would be clipped by the tiny Mini window); native title is a bonus
+            // quick-peek where the OS renders it.
+            cursor: "pointer",
           }}
         >
           ⚠
