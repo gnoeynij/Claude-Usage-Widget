@@ -552,71 +552,52 @@ function DailyCostCard() {
   );
 }
 
-/** One-line calendar week + month totals (+ month-end projection). today /
- *  yesterday were dropped — the daily chart already shows them as bars. */
-function WeekMonthCaption() {
-  const p = () => store.detail?.periods;
-  const monthProjection = () => {
-    const m = p()?.month_cost ?? 0;
-    const now = new Date();
-    const day = now.getDate();
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    return day > 0 ? (m / day) * daysInMonth : m;
-  };
-  return (
-    <div class="t-caption label-tertiary" style={{ "text-align": "center" }}>
-      {t().thisWeek}{" "}
-      <span class="tabular-nums" style={{ color: "var(--label)", "font-weight": 600 }}>
-        {formatCost(p()?.week_cost ?? 0)}
-      </span>
-      {"  ·  "}
-      {t().thisMonth}{" "}
-      <span class="tabular-nums" style={{ color: "var(--label)", "font-weight": 600 }}>
-        {formatCost(p()?.month_cost ?? 0)}
-      </span>{" "}
-      <span style={{ opacity: 0.7 }} class="tabular-nums">
-        → {compactCost(monthProjection())}
-      </span>
-    </div>
-  );
-}
-
-/** All-time totals: lifetime headline (device / all devices) → per-family
- *  breakdown (cost-desc, with tokens) in a full-width 2-col grid → cache hit
- *  footer. The weak On disk / Messages KPIs were dropped. by_family is the
- *  same all-time data the old Models card used. */
+/** All-time totals. Top row split 50/50: left = calendar week/month spend,
+ *  right = lifetime (this device / all devices). Then a full-width per-family
+ *  breakdown (cost-desc, with tokens) → cache hit footer. today/yesterday and
+ *  the weak On disk / Messages KPIs were dropped (chart covers the former). */
 function TotalsCard() {
+  const p = () => store.detail?.periods;
   const fams = createMemo(() =>
     [...(store.detail?.by_family ?? [])]
       .filter((f) => f.cost > 0 || f.tokens > 0)
       .sort((a, b) => b.cost - a.cost),
   );
   const cacheHit = () => store.detail?.stats?.cache_hit_pct ?? 0;
+  const row = (label: () => string, value: string, labelAccent?: string) => (
+    <div
+      style={{ display: "flex", "align-items": "baseline", "justify-content": "space-between", gap: "var(--s-2)" }}
+    >
+      <span class="t-caption label-secondary" style={{ "min-width": 0 }}>
+        {label()}
+        {labelAccent ? <span class="label-tertiary"> {labelAccent}</span> : null}
+      </span>
+      <span class="t-body tabular-nums" style={{ "font-weight": 600 }}>{value}</span>
+    </div>
+  );
   return (
     <GlassCard>
-      <div
-        style={{
-          display: "flex",
-          "align-items": "baseline",
-          "justify-content": "space-between",
-        }}
-      >
-        <span class="t-body label-secondary">{t().lifetimeDevice}</span>
-        <span class="t-title3 tabular-nums">{formatCost(store.lifetimeCost)}</span>
-      </div>
-      <Show when={store.syncFolder !== "" && store.combinedDevices > 0}>
+      <div style={{ display: "grid", "grid-template-columns": "1fr 1fr", gap: "var(--s-1) var(--s-4)" }}>
+        <div style={{ display: "flex", "flex-direction": "column", gap: "6px", "min-width": 0 }}>
+          {row(() => t().thisWeek, formatCost(p()?.week_cost ?? 0))}
+          {row(() => t().thisMonth, formatCost(p()?.month_cost ?? 0))}
+        </div>
         <div
           style={{
             display: "flex",
-            "align-items": "baseline",
-            "justify-content": "space-between",
-            "padding-top": "var(--s-1)",
+            "flex-direction": "column",
+            gap: "6px",
+            "min-width": 0,
+            "border-left": "1px solid var(--separator)",
+            "padding-left": "var(--s-4)",
           }}
         >
-          <span class="t-body label-secondary">{t().lifetimeAll}</span>
-          <span class="t-title3 tabular-nums">{formatCost(store.combinedCost)}</span>
+          {row(() => t().lifetimeDevice, formatCost(store.lifetimeCost))}
+          <Show when={store.syncFolder !== "" && store.combinedDevices > 0}>
+            {row(() => t().lifetimeAll, formatCost(store.combinedCost))}
+          </Show>
         </div>
-      </Show>
+      </div>
 
       <div
         class="t-caption label-tertiary"
@@ -713,7 +694,6 @@ export function DetailView() {
       <div style={{ display: "flex", "flex-direction": "column", gap: "var(--s-3)" }}>
         <ActiveStrip />
         <DailyCostCard />
-        <WeekMonthCaption />
         <TotalsCard />
       </div>
     </main>
