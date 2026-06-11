@@ -1,34 +1,29 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, createEffect, onMount, onCleanup, For, Show } from "solid-js";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Donut } from "../components/Donut";
-import { CapsuleProgress } from "../components/CapsuleProgress";
+import { WidgetChrome } from "../App";
 import { setStore, applyDarkClass, type Mode } from "../state/store";
 
-// Standalone guide window. Loaded with `?guide&lang=&dark=` in a separate
-// webview (own store instance), so it sets lang/dark in memory only — no sync,
-// no persistence. The replica reuses the real Donut / CapsuleProgress so the
-// gauges are identical to the widget; the surrounding chrome is light markup.
+// Standalone guide window. Renders the REAL widget (WidgetChrome) with a seeded
+// + animated store so the replica is identical to the widget and cycles through
+// every usage state (color levels, safe/risk). Callouts are positioned by
+// measuring the live `data-guide` anchors at runtime, so lines always land on
+// the right element. Own webview = own store instance → lang/dark applied in
+// memory only, no sync, no persistence.
 
 type Txt = { en: string; ko: string };
-type Callout = {
-  // anchor point on the replica + label box top-left, in the 760×500 canvas
-  ax: number;
-  ay: number;
-  lx: number;
-  ly: number;
-  align: "left" | "right";
-  accent?: string;
-  title: Txt;
-  desc: Txt;
-};
+type Callout = { anchor: string; side: "left" | "right"; y: number; title: Txt; desc: Txt };
 
 let lang: "en" | "ko" = "en";
 const tx = (t: Txt) => t[lang];
 
 const HEAD: Txt = { en: "Widget guide", ko: "위젯 가이드" };
 const HINT: Txt = {
-  en: "Switch modes above to see each layout ▲",
-  ko: "상단 토글로 미니·기본·상세 기능을 한눈에 ▲",
+  en: "The widget below cycles through usage states. Switch modes above ▲",
+  ko: "아래 위젯은 사용량 상태를 순환해 보여줍니다. 상단에서 모드를 바꿔보세요 ▲",
+};
+const TRAY: Txt = {
+  en: "Tray icon — the widget keeps running in the system tray when hidden. Right-click for Show / Quit; the icon color reflects sync status.",
+  ko: "트레이 아이콘 — 위젯을 숨겨도 시스템 트레이에 남아 동작합니다. 우클릭으로 표시/종료, 아이콘 색으로 동기화 상태를 표시합니다.",
 };
 const MODES: { mode: Mode; label: Txt }[] = [
   { mode: "mini", label: { en: "Mini", ko: "미니" } },
@@ -36,236 +31,169 @@ const MODES: { mode: Mode; label: Txt }[] = [
   { mode: "detail", label: { en: "Detail", ko: "상세" } },
 ];
 
-const NORMAL_CALLOUTS: Callout[] = [
-  { ax: 380, ay: 150, lx: 40, ly: 120, align: "right", accent: "var(--warning)",
-    title: { en: "5-hour session limit", ko: "5시간 세션 한도" },
-    desc: { en: "Donut = current use %. Amber at 50%, red at 80%.", ko: "도넛 = 현재 사용%. 50%↑ amber, 80%↑ red." } },
-  { ax: 392, ay: 190, lx: 40, ly: 222, align: "right",
-    title: { en: "Projected use · dot", ko: "예상 소모 · 도트" },
-    desc: { en: "Ghost arc = where this pace lands; dot = the landing point.", ko: "고스트 호 = 이 속도면 도달 구간, 도트 = 착지점." } },
-  { ax: 380, ay: 300, lx: 40, ly: 322, align: "right",
-    title: { en: "Reset + projection", ko: "초기화 + 한도 예상" },
-    desc: { en: "Reset countdown + “proj N%” (safe) / “⚠ to limit” (risk), one line.", ko: "초기화 카운트다운 + 예상%(안전)/⚠ 한도까지(위험), 한 줄." } },
-  { ax: 452, ay: 92, lx: 540, ly: 96, align: "left",
-    title: { en: "Sync ↻ / Options ⚙", ko: "동기화 ↻ / 옵션 ⚙" },
-    desc: { en: "↻ manual refresh, ⚙ options panel (Guide button lives here).", ko: "↻ 수동 새로고침, ⚙ 옵션 패널(가이드 버튼 위치)." } },
-  { ax: 448, ay: 300, lx: 540, ly: 232, align: "left", accent: "#0a84ff",
-    title: { en: "Weekly limits", ko: "주간 한도 3종" },
-    desc: { en: "All models · Sonnet · (Opus when present). 7-day cycle.", ko: "전체 모델·Sonnet·(Opus 있을 때). 7일 주기." } },
-  { ax: 452, ay: 348, lx: 540, ly: 338, align: "left",
-    title: { en: "Weekly reset + projection", ko: "주간 초기화 + 예상" },
-    desc: { en: "Reset + projection for the all-models weekly.", ko: "전체 모델 기준 초기화·한도 예상." } },
-  { ax: 420, ay: 400, lx: 540, ly: 420, align: "left",
-    title: { en: "Mode switch", ko: "모드 전환" },
-    desc: { en: "Mini (glance) · Normal (limits) · Detail (cost trends).", ko: "미니(글glance)·기본(한도)·상세(비용 추세)." } },
-];
+const CALLOUTS: Record<Mode, Callout[]> = {
+  normal: [
+    { anchor: "donut", side: "left", y: 120,
+      title: { en: "Session usage (5h)", ko: "세션 사용량 (5시간)" },
+      desc: { en: "Current use in the rolling 5-hour window. The color shifts as you use more.", ko: "5시간마다 초기화되는 현재 사용량. 사용량이 늘면 색이 바뀝니다." } },
+    { anchor: "donut", side: "left", y: 210,
+      title: { en: "Projected use", ko: "예상 사용량" },
+      desc: { en: "If you keep this pace, the marker shows where you'll be at reset.", ko: "지금 속도로 계속 쓰면 초기화 시점에 어디까지 도달할지 표시합니다." } },
+    { anchor: "session-caption", side: "left", y: 300,
+      title: { en: "Reset & projection", ko: "초기화 시간 · 예상" },
+      desc: { en: "Time until reset, plus the projected value — or a warning if you're on pace to run out.", ko: "초기화까지 남은 시간과 예상치 — 한도에 도달할 추세면 경고를 표시합니다." } },
+    { anchor: "sync", side: "right", y: 96,
+      title: { en: "Refresh", ko: "새로고침" },
+      desc: { en: "Manually re-read your usage right now.", ko: "지금 사용량을 수동으로 다시 불러옵니다." } },
+    { anchor: "settings", side: "right", y: 150,
+      title: { en: "Options", ko: "옵션" },
+      desc: { en: "Language, theme, opacity, auto-sync interval, multi-device totals, updates, and this guide.", ko: "언어·테마·투명도·자동 동기화·기기 통합 누적·업데이트, 그리고 이 가이드." } },
+    { anchor: "weekly", side: "right", y: 250,
+      title: { en: "Weekly usage", ko: "주간 사용량" },
+      desc: { en: "Resets every 7 days. All models · Sonnet · (Opus if your plan has one).", ko: "7일마다 초기화. 전체 모델·Sonnet·(플랜에 따라 Opus)." } },
+    { anchor: "modes", side: "right", y: 360,
+      title: { en: "Mode switch", ko: "모드 전환" },
+      desc: { en: "Mini (compact) · Normal (limits) · Detail (cost trends).", ko: "미니(작게)·기본(한도)·상세(비용 추세)." } },
+  ],
+  mini: [
+    { anchor: "donut", side: "left", y: 150,
+      title: { en: "Session, at a glance", ko: "세션 사용량 (한눈에)" },
+      desc: { en: "The compact mode stays out of the way while you work — current use + projection.", ko: "작업 중 방해 없이 떠 있는 작은 모드 — 현재 사용량과 예상." } },
+    { anchor: "badge", side: "right", y: 130,
+      title: { en: "Warning mark", ko: "경고 표시" },
+      desc: { en: "Appears when you're on pace to hit a limit. Click it for the details.", ko: "한도에 도달할 추세일 때 나타납니다. 클릭하면 상세 정보를 보여줍니다." } },
+    { anchor: "weekly", side: "right", y: 240,
+      title: { en: "Weekly usage", ko: "주간 사용량" },
+      desc: { en: "All models · Sonnet, as compact bars.", ko: "전체 모델·Sonnet, 얇은 막대로." } },
+  ],
+  detail: [
+    { anchor: "active", side: "left", y: 120,
+      title: { en: "Active session", ko: "활성 세션" },
+      desc: { en: "Your current 5-hour block: spend, time left, and spend per hour.", ko: "현재 5시간 블록의 비용·남은 시간·시간당 비용." } },
+    { anchor: "chart", side: "left", y: 250,
+      title: { en: "Daily cost trend", ko: "일별 비용 추세" },
+      desc: { en: "Last 7/14/30 days, split by model. Tap a day for its breakdown.", ko: "최근 7/14/30일을 모델별로. 막대를 누르면 그날 내역을 봅니다." } },
+    { anchor: "totals", side: "right", y: 300,
+      title: { en: "Totals & lifetime", ko: "합계 · 누적" },
+      desc: { en: "This week / month, lifetime spend, combined across your devices.", ko: "이번 주·이번 달, 누적 비용, 여러 기기 합산." } },
+  ],
+};
 
-const MINI_CALLOUTS: Callout[] = [
-  { ax: 330, ay: 250, lx: 60, ly: 180, align: "right", accent: "var(--warning)",
-    title: { en: "Session, at a glance", ko: "세션 한도 (한눈에)" },
-    desc: { en: "Current % donut + projection marker, always on top.", ko: "현재 사용% 도넛 + 예상 마커. 항상 위." } },
-  { ax: 430, ay: 218, lx: 540, ly: 150, align: "left", accent: "var(--warning)",
-    title: { en: "⚠ Risk badge", ko: "⚠ 위험 배지" },
-    desc: { en: "Shows when projected to hit a limit. Click → info overlay.", ko: "한도 도달 예상 시 표시. 클릭 → 정보 오버레이." } },
-  { ax: 430, ay: 252, lx: 540, ly: 250, align: "left", accent: "#0a84ff",
-    title: { en: "Weekly limits", ko: "주간 한도" },
-    desc: { en: "All models · Sonnet, as thin bars.", ko: "전체 모델·Sonnet, 얇은 막대." } },
-  { ax: 380, ay: 300, lx: 240, ly: 360, align: "right",
-    title: { en: "Expand", ko: "확장" },
-    desc: { en: "Double-click or the handle → Normal mode.", ko: "더블클릭 또는 핸들 → 기본 모드." } },
-];
+const MODE_SIZE: Record<Mode, [number, number]> = {
+  mini: [240, 116],
+  normal: [320, 384],
+  detail: [600, 560],
+};
 
-const DETAIL_CALLOUTS: Callout[] = [
-  { ax: 380, ay: 120, lx: 40, ly: 110, align: "right", accent: "#30d158",
-    title: { en: "Active session", ko: "활성 세션" },
-    desc: { en: "Current 5h block: cost · time left · cost/hr.", ko: "현재 5h 블록: 비용·남은시간·시간당." } },
-  { ax: 380, ay: 210, lx: 40, ly: 250, align: "right", accent: "var(--accent)",
-    title: { en: "Daily cost trend", ko: "일별 비용 추세" },
-    desc: { en: "7/14/30 days, stacked by model, tap a bar for the breakdown.", ko: "7/14/30일, 모델별 스택, 막대 탭→상세." } },
-  { ax: 448, ay: 300, lx: 540, ly: 230, align: "left",
-    title: { en: "Models · recent", ko: "최근 모델별" },
-    desc: { en: "Per-model cost + tokens over the selected range.", ko: "선택 범위 내 모델별 비용·토큰." } },
-  { ax: 448, ay: 360, lx: 540, ly: 350, align: "left",
-    title: { en: "Week/month · lifetime", ko: "주간·월간 · 누적" },
-    desc: { en: "Period totals + lifetime, combined across devices.", ko: "기간 합계 + 누적, 기기 통합." } },
-];
-
-function CalloutEl(props: { c: Callout }) {
-  const c = props.c;
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: `${c.lx}px`,
-        top: `${c.ly}px`,
-        width: "210px",
-        "text-align": c.align === "right" ? "right" : "left",
-      }}
-    >
-      <div class="t-body" style={{ "font-weight": 600, color: c.accent ?? "var(--label)" }}>
-        {tx(c.title)}
-      </div>
-      <div class="t-caption label-secondary" style={{ "margin-top": "2px", "line-height": 1.35 }}>
-        {tx(c.desc)}
-      </div>
-    </div>
-  );
+function nowPlus(ms: number) {
+  return new Date(Date.now() + ms).toISOString();
 }
 
-function Leaders(props: { callouts: Callout[] }) {
-  return (
-    <svg style={{ position: "absolute", inset: 0, width: "760px", height: "500px", "pointer-events": "none" }} viewBox="0 0 760 500">
-      <For each={props.callouts}>
-        {(c) => {
-          // line starts at the inner edge of the label box, nearest the replica
-          const sx = c.align === "right" ? c.lx + 210 : c.lx;
-          return (
-            <>
-              <path d={`M ${sx} ${c.ly + 10} L ${c.ax} ${c.ay}`} stroke="var(--separator)" stroke-width="1" fill="none" />
-              <circle cx={c.ax} cy={c.ay} r="2.5" fill="var(--label-tertiary)" />
-            </>
-          );
-        }}
-      </For>
-    </svg>
-  );
+function seedStore() {
+  setStore("lang", lang);
+  setStore("usage", {
+    five_hour: 40,
+    seven_day: 55,
+    seven_day_sonnet: 18,
+    seven_day_opus: 35,
+    session_resets_at: nowPlus(1.5 * 3_600_000),
+    weekly_resets_at: nowPlus(95 * 3_600_000),
+    extra_usage_enabled: false,
+  } as never);
+  setStore("plan", { subscription_type: "max", rate_limit_tier: null } as never);
+  setStore("lifetimeCost", 4457.2);
+  // Minimal Detail payload + history so Detail mode renders.
+  const days: string[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86_400_000);
+    days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+  }
+  const costs = [120, 266, 90, 1300, 253, 410, 597];
+  const hist: Record<string, Record<string, { tokens: number; cost: number }>> = {};
+  days.forEach((d, i) => {
+    hist[d] = { Opus: { tokens: costs[i] * 4e5, cost: costs[i] * 0.92 }, Fable: { tokens: costs[i] * 1e5, cost: costs[i] * 0.08 } };
+  });
+  setStore("costHistory", hist as never);
+  setStore("detail", {
+    active: { cost_usd: 2.4, start: nowPlus(-30 * 60_000), total_min: 300 },
+    daily: [],
+    by_family: [
+      { family: "Opus", cost: 3544, tokens: 2.9e9 },
+      { family: "Fable", cost: 233, tokens: 1.02e8 },
+      { family: "Haiku", cost: 4.09, tokens: 1.6e7 },
+    ],
+    stats: { total_cost: 3781, total_messages: 17400, cache_hit_pct: 94 },
+    periods: { today_cost: 597, yesterday_cost: 410, week_cost: 2287, month_cost: 2975 },
+  } as never);
 }
 
-/** Light chrome shared by the replicas. */
-function ReplicaFrame(props: { width: number; children: any }) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: `${380 - props.width / 2}px`,
-        top: "70px",
-        width: `${props.width}px`,
-        background: "var(--fill-1)",
-        border: "0.5px solid var(--separator)",
-        "border-radius": "var(--r-lg)",
-        padding: "10px 12px",
-        "box-shadow": "0 8px 30px rgba(0,0,0,0.25)",
-      }}
-    >
-      {props.children}
-    </div>
-  );
-}
-
-function HeaderRow() {
-  return (
-    <div style={{ display: "flex", "align-items": "center", "justify-content": "space-between", "margin-bottom": "6px" }}>
-      <span class="t-caption"><span style={{ color: "#30d158" }}>●</span> Claude</span>
-      <span class="t-caption label-tertiary">↻ &nbsp; ⚙</span>
-    </div>
-  );
-}
-
-function ReplicaNormal() {
-  return (
-    <ReplicaFrame width={190}>
-      <HeaderRow />
-      <div style={{ display: "flex", "justify-content": "center", margin: "4px 0" }}>
-        <Donut value={70} projected={132} size={104} stroke={8} label="session" />
-      </div>
-      <div class="t-caption label-tertiary" style={{ "text-align": "center", "margin-bottom": "8px" }}>
-        1h 25m · <span style={{ color: "var(--warning)" }}>⚠ ~1h</span>
-      </div>
-      <div style={{ "margin-bottom": "7px" }}>
-        <div class="t-caption" style={{ display: "flex", "justify-content": "space-between", "margin-bottom": "3px" }}>
-          <span class="label-secondary">All models</span><span>83%</span>
-        </div>
-        <CapsuleProgress value={83} projected={150} size="sm" />
-      </div>
-      <div style={{ "margin-bottom": "7px" }}>
-        <div class="t-caption" style={{ display: "flex", "justify-content": "space-between", "margin-bottom": "3px" }}>
-          <span class="label-secondary">Sonnet</span><span>12%</span>
-        </div>
-        <CapsuleProgress value={12} size="sm" />
-      </div>
-      <div class="t-caption label-tertiary" style={{ "text-align": "center", "margin-bottom": "8px" }}>
-        95h · <span style={{ color: "var(--warning)" }}>⚠ ~14h</span>
-      </div>
-      <div style={{ display: "flex", "justify-content": "center", gap: "3px" }}>
-        <span class="t-caption label-tertiary" style={{ padding: "3px 9px" }}>Mini</span>
-        <span class="t-caption" style={{ padding: "3px 9px", background: "var(--fill-2)", "border-radius": "6px" }}>Normal</span>
-        <span class="t-caption label-tertiary" style={{ padding: "3px 9px" }}>Detail</span>
-      </div>
-    </ReplicaFrame>
-  );
-}
-
-function ReplicaMini() {
-  return (
-    <ReplicaFrame width={230}>
-      <div style={{ position: "relative", display: "flex", "align-items": "center", gap: "12px", padding: "2px" }}>
-        <span style={{ position: "absolute", top: "-2px", right: "2px", color: "var(--warning)", "font-size": "13px" }}>⚠</span>
-        <Donut value={58} projected={128} size={84} stroke={7} label="session" />
-        <div style={{ flex: 1, display: "flex", "flex-direction": "column", gap: "8px" }}>
-          <div>
-            <div class="t-caption" style={{ display: "flex", "justify-content": "space-between", "margin-bottom": "2px" }}>
-              <span class="label-secondary">All models</span><span>81%</span>
-            </div>
-            <CapsuleProgress value={81} projected={140} size="sm" />
-          </div>
-          <div>
-            <div class="t-caption" style={{ display: "flex", "justify-content": "space-between", "margin-bottom": "2px" }}>
-              <span class="label-secondary">Sonnet</span><span>12%</span>
-            </div>
-            <CapsuleProgress value={12} size="sm" />
-          </div>
-        </div>
-      </div>
-    </ReplicaFrame>
-  );
-}
-
-function ReplicaDetail() {
-  const bars = [20, 35, 12, 90, 28, 45, 60];
-  return (
-    <ReplicaFrame width={250}>
-      <HeaderRow />
-      <div style={{ display: "flex", "justify-content": "space-between", padding: "6px 10px", background: "var(--fill-2)", "border-radius": "8px", "margin-bottom": "8px" }}>
-        <span class="t-caption"><span style={{ color: "#30d158" }}>●</span> Active · $2.40</span>
-        <span class="t-caption label-tertiary">3h left · $0.46/hr</span>
-      </div>
-      <div style={{ background: "var(--fill-2)", "border-radius": "10px", padding: "8px 10px", "margin-bottom": "8px" }}>
-        <div class="t-caption label-tertiary" style={{ "text-transform": "uppercase", "font-size": "9px", "margin-bottom": "6px" }}>Daily cost</div>
-        <div style={{ display: "flex", "align-items": "flex-end", gap: "5px", height: "54px" }}>
-          <For each={bars}>
-            {(h) => <div style={{ flex: 1, height: `${h}%`, background: "var(--accent)", "border-radius": "3px 3px 0 0" }} />}
-          </For>
-        </div>
-        <div class="t-caption label-tertiary" style={{ "font-size": "9px", "margin-top": "6px" }}>
-          ● Opus &nbsp; ● Fable — <span style={{ color: "var(--label)" }}>모델별 스택</span>
-        </div>
-      </div>
-      <div style={{ background: "var(--fill-2)", "border-radius": "10px", padding: "8px 10px", display: "flex", "justify-content": "space-between" }}>
-        <div class="t-caption"><div class="label-secondary">This week</div><div style={{ "font-weight": 600 }}>$2,287</div></div>
-        <div class="t-caption" style={{ "text-align": "right" }}><div class="label-secondary">Lifetime</div><div style={{ "font-weight": 600 }}>$4,457</div></div>
-      </div>
-    </ReplicaFrame>
-  );
-}
+// Usage keyframes the replica steps through (smoothed by the components' CSS
+// transitions) so the guide shows green→amber→red and safe→risk over time.
+const FRAMES_5H = [22, 50, 78, 95, 70, 40];
+const FRAMES_7D = [40, 68, 88, 60, 30, 52];
 
 function GuideView() {
   const [mode, setMode] = createSignal<Mode>("normal");
-  const callouts = () =>
-    mode() === "mini" ? MINI_CALLOUTS : mode() === "detail" ? DETAIL_CALLOUTS : NORMAL_CALLOUTS;
+  const [anchors, setAnchors] = createSignal<Record<string, { x: number; y: number }>>({});
+  let canvasRef: HTMLDivElement | undefined;
+
+  const measure = () => {
+    if (!canvasRef) return;
+    const base = canvasRef.getBoundingClientRect();
+    const out: Record<string, { x: number; y: number }> = {};
+    canvasRef.querySelectorAll<HTMLElement>("[data-guide]").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      out[el.dataset.guide as string] = { x: r.left + r.width / 2 - base.left, y: r.top + r.height / 2 - base.top };
+    });
+    setAnchors(out);
+  };
+
+  // Re-measure after each mode's replica renders + on resize.
+  createEffect(() => {
+    mode();
+    requestAnimationFrame(() => requestAnimationFrame(measure));
+  });
+  onMount(() => {
+    setStore("mode", "normal");
+    let i = 0;
+    const anim = window.setInterval(() => {
+      i = (i + 1) % FRAMES_5H.length;
+      setStore("usage", "five_hour", FRAMES_5H[i]);
+      setStore("usage", "seven_day", FRAMES_7D[i]);
+      setStore("usage", "seven_day_sonnet", Math.round(FRAMES_7D[i] * 0.3));
+    }, 2200);
+    window.addEventListener("resize", measure);
+    onCleanup(() => {
+      window.clearInterval(anim);
+      window.removeEventListener("resize", measure);
+    });
+  });
+
+  const selectMode = (m: Mode) => {
+    setMode(m);
+    setStore("mode", m);
+  };
+  const list = () => CALLOUTS[mode()];
+  // frame centered horizontally in the 860-wide canvas, near top
+  const frameLeft = () => 430 - MODE_SIZE[mode()][0] / 2;
+  const frameTop = 70;
+
   return (
-    <div style={{ display: "flex", "flex-direction": "column", height: "100vh", background: "var(--bg-window, #161618)", color: "var(--label)" }}>
-      {/* header */}
-      <div style={{ display: "flex", "align-items": "center", "justify-content": "space-between", padding: "12px 18px", "border-bottom": "0.5px solid var(--separator)" }}>
+    <div class="guide-root" style={{ display: "flex", "flex-direction": "column", height: "100vh", color: "var(--label)" }}>
+      {/* header (drag region) */}
+      <div
+        class="drag"
+        data-tauri-drag-region
+        style={{ display: "flex", "align-items": "center", "justify-content": "space-between", padding: "12px 18px", "border-bottom": "0.5px solid var(--separator)" }}
+      >
         <span class="t-headline">{tx(HEAD)}</span>
-        <div style={{ display: "flex", gap: "2px", background: "var(--fill-2)", "border-radius": "9px", padding: "3px" }}>
+        <div class="no-drag" style={{ display: "flex", gap: "2px", background: "var(--fill-2)", "border-radius": "9px", padding: "3px" }}>
           <For each={MODES}>
             {(m) => (
               <button
-                onClick={() => setMode(m.mode)}
-                class="no-drag"
+                onClick={() => selectMode(m.mode)}
                 style={{
-                  padding: "4px 16px",
-                  "border-radius": "7px",
+                  padding: "4px 16px", "border-radius": "7px",
                   background: mode() === m.mode ? "var(--fill-1)" : "transparent",
                   color: mode() === m.mode ? "var(--label)" : "var(--label-tertiary)",
                   "font-weight": mode() === m.mode ? 600 : 400,
@@ -276,18 +204,58 @@ function GuideView() {
             )}
           </For>
         </div>
-        <button class="no-drag" onClick={() => void getCurrentWindow().close()} style={{ color: "var(--label-secondary)", "font-size": "16px", width: "28px", height: "28px" }}>✕</button>
+        <button class="no-drag ring-hover" onClick={() => void getCurrentWindow().close()} style={{ color: "var(--label-secondary)", "font-size": "15px", width: "28px", height: "28px", "border-radius": "8px" }}>✕</button>
       </div>
 
-      {/* diagram canvas (fixed 760×500 design space, centered) */}
-      <div style={{ flex: 1, display: "flex", "justify-content": "center", "align-items": "flex-start", overflow: "auto" }}>
-        <div style={{ position: "relative", width: "760px", height: "500px", "flex-shrink": 0 }}>
-          <Leaders callouts={callouts()} />
-          <Show when={mode() === "normal"}><ReplicaNormal /></Show>
-          <Show when={mode() === "mini"}><ReplicaMini /></Show>
-          <Show when={mode() === "detail"}><ReplicaDetail /></Show>
-          <For each={callouts()}>{(c) => <CalloutEl c={c} />}</For>
-          <div style={{ position: "absolute", left: 0, right: 0, bottom: "8px", "text-align": "center" }}>
+      {/* canvas */}
+      <div style={{ flex: 1, display: "flex", "justify-content": "center", overflow: "auto" }}>
+        <div ref={canvasRef} style={{ position: "relative", width: "860px", height: "560px", "flex-shrink": 0 }}>
+          {/* leader lines (measured) */}
+          <svg style={{ position: "absolute", inset: 0, width: "860px", height: "560px", "pointer-events": "none" }}>
+            <For each={list()}>
+              {(c) => {
+                const a = () => anchors()[c.anchor];
+                const sx = () => (c.side === "right" ? 600 : 260);
+                return (
+                  <Show when={a()}>
+                    <line x1={sx()} y1={c.y + 10} x2={a()!.x} y2={a()!.y} stroke="var(--separator)" stroke-width="1" />
+                    <circle cx={a()!.x} cy={a()!.y} r="2.5" fill="var(--label-tertiary)" />
+                  </Show>
+                );
+              }}
+            </For>
+          </svg>
+
+          {/* real widget replica (non-interactive) */}
+          <div
+            style={{
+              position: "absolute", left: `${frameLeft()}px`, top: `${frameTop}px`,
+              width: `${MODE_SIZE[mode()][0]}px`, height: `${MODE_SIZE[mode()][1]}px`,
+              "pointer-events": "none",
+              "border-radius": "var(--r-window)",
+              overflow: "hidden",
+              "box-shadow": "0 10px 40px rgba(0,0,0,0.28)",
+            }}
+          >
+            <WidgetChrome />
+          </div>
+
+          {/* callout labels */}
+          <For each={list()}>
+            {(c) => (
+              <div style={{ position: "absolute", top: `${c.y}px`, width: "240px", left: c.side === "right" ? "608px" : "12px", "text-align": c.side === "right" ? "left" : "right" }}>
+                <div class="t-body" style={{ "font-weight": 600 }}>{tx(c.title)}</div>
+                <div class="t-caption label-secondary" style={{ "margin-top": "2px", "line-height": 1.4 }}>{tx(c.desc)}</div>
+              </div>
+            )}
+          </For>
+
+          {/* tray note */}
+          <div style={{ position: "absolute", left: "12px", right: "12px", bottom: "34px", display: "flex", "align-items": "flex-start", gap: "8px", "justify-content": "center" }}>
+            <span style={{ "font-size": "13px", "margin-top": "1px" }}>▢</span>
+            <span class="t-caption label-secondary" style={{ "max-width": "560px", "text-align": "center", "line-height": 1.4 }}>{tx(TRAY)}</span>
+          </div>
+          <div style={{ position: "absolute", left: 0, right: 0, bottom: "10px", "text-align": "center" }}>
             <span class="t-caption label-tertiary">{tx(HINT)}</span>
           </div>
         </div>
@@ -296,15 +264,15 @@ function GuideView() {
   );
 }
 
-/** Entry for the guide window — applies the passed lang/dark in memory only
- *  (no sync, no persistence) and renders the guide. */
+/** Entry for the guide window — applies lang/dark in memory, seeds the demo
+ *  store, then renders the guide. */
 export function GuideApp() {
   const params = new URLSearchParams(window.location.search);
   lang = params.get("lang") === "ko" ? "ko" : "en";
   const dark = params.get("dark") === "1";
-  setStore("lang", lang);
   setStore("dark", dark);
   applyDarkClass(dark);
   document.documentElement.lang = lang;
+  seedStore();
   return <GuideView />;
 }

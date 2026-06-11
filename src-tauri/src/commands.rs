@@ -46,14 +46,26 @@ pub async fn open_guide_window(app: tauri::AppHandle, lang: String, dark: bool) 
         return Ok(());
     }
     let url = format!("index.html?guide&lang={lang}&dark={}", if dark { 1 } else { 0 });
-    tauri::WebviewWindowBuilder::new(&app, "guide", tauri::WebviewUrl::App(url.into()))
+    let window = tauri::WebviewWindowBuilder::new(&app, "guide", tauri::WebviewUrl::App(url.into()))
         .title("Claude Usage Widget — Guide")
-        .inner_size(780.0, 580.0)
-        .min_inner_size(680.0, 520.0)
+        .inner_size(880.0, 660.0)
+        .min_inner_size(820.0, 620.0)
+        .decorations(false)
+        .transparent(true)
         .resizable(true)
         .center()
         .build()
         .map_err(|e| e.to_string())?;
+    // Frameless glass to match the widget (Mica on Win11; rounds the corners).
+    #[cfg(target_os = "windows")]
+    {
+        let _ = crate::vibrancy_win::apply_mica(&window);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = crate::vibrancy_mac::apply_mica(&window);
+    }
+    let _ = &window;
     Ok(())
 }
 

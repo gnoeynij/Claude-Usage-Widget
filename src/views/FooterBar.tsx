@@ -28,7 +28,7 @@ export function FooterBar() {
           each button ~54px so the 6-letter labels (Normal/Detail) breathe
           inside their pill, while still leaving room for the full version
           string left of it. */}
-      <div style={{ width: "168px", "flex-shrink": 0 }}>
+      <div data-guide="modes" style={{ width: "168px", "flex-shrink": 0 }}>
         <SegmentedControl<Mode>
           value={store.mode}
           onChange={setMode}

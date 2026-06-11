@@ -153,17 +153,19 @@ export function NormalView() {
           gap: "var(--s-2)",
         }}
       >
-        <Donut
-          value={store.usage.five_hour}
-          size={144}
-          stroke={8}
-          label={t().session.toLowerCase()}
-          projected={sessionProj()?.projectedPct ?? null}
-          onClick={() => void syncNow()}
-        />
+        <div data-guide="donut">
+          <Donut
+            value={store.usage.five_hour}
+            size={144}
+            stroke={8}
+            label={t().session.toLowerCase()}
+            projected={sessionProj()?.projectedPct ?? null}
+            onClick={() => void syncNow()}
+          />
+        </div>
         <Show when={sessionCountdown()}>
           {(c) => (
-            <span class="t-caption label-tertiary" style={{ "text-align": "center" }}>
+            <span class="t-caption label-tertiary" data-guide="session-caption" style={{ "text-align": "center" }}>
               {t().resetsInLive(c().h, c().m, c().s)}
               {projInline(sessionProj(), store.usage.five_hour)}
             </span>
@@ -173,6 +175,7 @@ export function NormalView() {
 
       {/* Secondary metrics — weekly limits as thin rows */}
       <div
+        data-guide="weekly"
         style={{
           display: "flex",
           "flex-direction": "column",

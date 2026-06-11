@@ -10,11 +10,10 @@ import { SettingsPanel } from "./views/SettingsPanel";
 import { GlassToast } from "./components/GlassToast";
 import { store, initStore } from "./state/store";
 
-export function App() {
-  onMount(() => {
-    void initStore();
-  });
-
+/** The widget's full chrome (glass panel + header/view/footer/settings) driven
+ *  by store.mode. Extracted so the guide window can render the *real* widget
+ *  (identical look) with a seeded store, not an approximation. */
+export function WidgetChrome() {
   return (
     <LiquidGlass padding={store.mode === "mini" ? "0" : undefined}>
       {store.mode !== "mini" && <HeaderBar />}
@@ -29,4 +28,12 @@ export function App() {
       <GlassToast />
     </LiquidGlass>
   );
+}
+
+export function App() {
+  onMount(() => {
+    void initStore();
+  });
+
+  return <WidgetChrome />;
 }

@@ -116,6 +116,19 @@ a {
   color: var(--label-tertiary);
 }
 
+/* Guide window — frameless, glass-on-Mica panel matching the widget. A bit
+   more opaque than the widget panel so the dense guide text stays legible. */
+.guide-root {
+  background: rgba(245, 245, 247, 0.82);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border-radius: var(--r-window);
+  overflow: hidden;
+}
+.dark .guide-root {
+  background: rgba(22, 22, 24, 0.80);
+}
+
 /* Drag region for frameless window. */
 .drag {
   -webkit-app-region: drag;

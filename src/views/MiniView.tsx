@@ -118,6 +118,7 @@ export function MiniView() {
       <Show when={atRisk()}>
         <span
           class="no-drag"
+          data-guide="badge"
           role="button"
           tabindex={0}
           title={riskTooltip()}
@@ -245,14 +246,16 @@ export function MiniView() {
           }}
         />
       </button>
-      <Donut
-        value={store.usage.five_hour}
-        size={96}
-        stroke={7}
-        label={t().session.toLowerCase()}
-        projected={sessionProj()?.projectedPct ?? null}
-        onClick={() => void syncNow()}
-      />
+      <div data-guide="donut">
+        <Donut
+          value={store.usage.five_hour}
+          size={96}
+          stroke={7}
+          label={t().session.toLowerCase()}
+          projected={sessionProj()?.projectedPct ?? null}
+          onClick={() => void syncNow()}
+        />
+      </div>
       <div
         style={{
           flex: 1,

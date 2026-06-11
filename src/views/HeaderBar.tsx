@@ -84,6 +84,7 @@ export function HeaderBar() {
       </span>
       <button
         class="no-drag ring-hover"
+        data-guide="sync"
         onClick={() => void syncNow()}
         title={t().syncNow}
         style={{
@@ -100,6 +101,7 @@ export function HeaderBar() {
       </button>
       <button
         class="no-drag ring-hover"
+        data-guide="settings"
         onClick={toggleSettings}
         title={t().settings}
         style={{
