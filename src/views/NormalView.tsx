@@ -14,18 +14,31 @@ import {
 import { startWindowDrag } from "../utils/drag";
 
 /** Safe projection appends inline to the reset caption ("· 예상 65%"); a risk
- *  projection is loud enough to warrant its own amber line. */
-function projSafeSuffix(proj: LimitProjection | null) {
-  return proj && !proj.hitsBeforeReset ? ` · ${t().projSafe(Math.round(proj.projectedPct))}` : "";
+ *  projection is loud enough to warrant its own amber line. Gated on the same
+ *  `projected > value + 0.5` as the donut/bar marker so caption and marker
+ *  appear together (near reset, projected ≈ current → both suppressed). floor,
+ *  not round, so a 99.6% projection never displays "100%" in the calm style. */
+function projSafeSuffix(proj: LimitProjection | null, value: number) {
+  if (!proj || proj.hitsBeforeReset || proj.projectedPct <= value + 0.5) return "";
+  return ` · ${t().projSafe(Math.floor(proj.projectedPct))}`;
 }
 
 function RiskCaption(props: { proj: LimitProjection }) {
+  const ms = () => props.proj.msToLimit;
   return (
     <span class="t-caption" style={{ color: "var(--warning)", "text-align": "center" }}>
-      {t().projRisk(
-        Math.floor(props.proj.msToLimit / 3_600_000),
-        Math.floor((props.proj.msToLimit % 3_600_000) / 60_000),
-      )}
+      <Show
+        when={ms() >= 48 * 3_600_000}
+        fallback={t().projRisk(
+          Math.floor(ms() / 3_600_000),
+          Math.floor((ms() % 3_600_000) / 60_000),
+        )}
+      >
+        {t().projRiskDays(
+          Math.floor(ms() / 86_400_000),
+          Math.floor((ms() % 86_400_000) / 3_600_000),
+        )}
+      </Show>
     </span>
   );
 }
@@ -153,7 +166,7 @@ export function NormalView() {
           {(c) => (
             <span class="t-caption label-tertiary">
               {t().resetsInLive(c().h, c().m, c().s)}
-              {projSafeSuffix(sessionProj())}
+              {projSafeSuffix(sessionProj(), store.usage.five_hour)}
             </span>
           )}
         </Show>
@@ -190,7 +203,7 @@ export function NormalView() {
               }}
             >
               {s()}
-              {projSafeSuffix(weeklyProj())}
+              {projSafeSuffix(weeklyProj(), store.usage.seven_day)}
             </span>
           )}
         </Show>

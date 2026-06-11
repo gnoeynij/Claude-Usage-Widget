@@ -9,6 +9,13 @@
 // 85%/95% threshold notifications cover the "close right now" case, so the two
 // signals are complementary.
 
+// Window lengths are HARDCODED because the OAuth usage API gives `resets_at`
+// but not the window length or start. Valid as long as each window starts
+// empty `windowMs` before its reset: the 5h session is a fixed block (resets
+// to 0%, countdown ticks down → resets_at is fixed not sliding), and the
+// weekly limit resets on a fixed weekly cadence (0% at last reset, accrues
+// over 7 days). If Anthropic ever changes these durations, update here — the
+// projection would otherwise skew silently (regression-watch).
 export const SESSION_WINDOW_MS = 5 * 3_600_000;
 export const WEEKLY_WINDOW_MS = 7 * 24 * 3_600_000;
 

@@ -12,6 +12,7 @@ export const en = {
   projSafe: (p: number) => `proj. ${p}%`,
   projRisk: (h: number, m: number) =>
     h > 0 ? `⚠ At this pace, limit in ~${h}h ${m}m` : `⚠ At this pace, limit in ~${m}m`,
+  projRiskDays: (d: number, h: number) => `⚠ At this pace, limit in ~${d}d ${h}h`,
 
   syncNow: "Sync now",
   settings: "Settings",
