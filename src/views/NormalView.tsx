@@ -13,33 +13,27 @@ import {
 } from "../utils/project";
 import { startWindowDrag } from "../utils/drag";
 
-/** Safe projection appends inline to the reset caption ("· 예상 65%"); a risk
- *  projection is loud enough to warrant its own amber line. Gated on the same
- *  `projected > value + 0.5` as the donut/bar marker so caption and marker
- *  appear together (near reset, projected ≈ current → both suppressed). floor,
- *  not round, so a 99.6% projection never displays "100%" in the calm style. */
-function projSafeSuffix(proj: LimitProjection | null, value: number) {
-  if (!proj || proj.hitsBeforeReset || proj.projectedPct <= value + 0.5) return "";
-  return ` · ${t().projSafe(Math.floor(proj.projectedPct))}`;
-}
-
-function RiskCaption(props: { proj: LimitProjection }) {
-  const ms = () => props.proj.msToLimit;
+/** Projection appended INLINE to the reset caption — one line per limit (safe
+ *  = calm "· 예상 N%", risk = amber "· ⚠ 한도 …") instead of a separate stacked
+ *  line, so the limit messaging doesn't sprawl vertically. Gated on the same
+ *  `projected > value + 0.5` as the donut/bar marker (near reset, projected ≈
+ *  current → suppressed); floor so 99.6% never shows "100%". Called inside a JSX
+ *  expression so it stays reactive to the projection memo. */
+function projInline(proj: LimitProjection | null, value: number) {
+  if (!proj || proj.projectedPct <= value + 0.5) return null;
+  if (!proj.hitsBeforeReset) {
+    return ` · ${t().projSafe(Math.floor(proj.projectedPct))}`;
+  }
+  const ms = proj.msToLimit;
+  const txt =
+    ms >= 48 * 3_600_000
+      ? t().projRiskDays(Math.floor(ms / 86_400_000), Math.floor((ms % 86_400_000) / 3_600_000))
+      : t().projRisk(Math.floor(ms / 3_600_000), Math.floor((ms % 3_600_000) / 60_000));
   return (
-    <span class="t-caption" style={{ color: "var(--warning)", "text-align": "center" }}>
-      <Show
-        when={ms() >= 48 * 3_600_000}
-        fallback={t().projRisk(
-          Math.floor(ms() / 3_600_000),
-          Math.floor((ms() % 3_600_000) / 60_000),
-        )}
-      >
-        {t().projRiskDays(
-          Math.floor(ms() / 86_400_000),
-          Math.floor((ms() % 86_400_000) / 3_600_000),
-        )}
-      </Show>
-    </span>
+    <>
+      {" · "}
+      <span style={{ color: "var(--warning)", "font-weight": 600 }}>{txt}</span>
+    </>
   );
 }
 
@@ -169,14 +163,11 @@ export function NormalView() {
         />
         <Show when={sessionCountdown()}>
           {(c) => (
-            <span class="t-caption label-tertiary">
+            <span class="t-caption label-tertiary" style={{ "text-align": "center" }}>
               {t().resetsInLive(c().h, c().m, c().s)}
-              {projSafeSuffix(sessionProj(), store.usage.five_hour)}
+              {projInline(sessionProj(), store.usage.five_hour)}
             </span>
           )}
-        </Show>
-        <Show when={sessionProj()?.hitsBeforeReset}>
-          <RiskCaption proj={sessionProj()!} />
         </Show>
       </div>
 
@@ -208,12 +199,9 @@ export function NormalView() {
               }}
             >
               {s()}
-              {projSafeSuffix(weeklyProj(), store.usage.seven_day)}
+              {projInline(weeklyProj(), store.usage.seven_day)}
             </span>
           )}
-        </Show>
-        <Show when={weeklyProj()?.hitsBeforeReset}>
-          <RiskCaption proj={weeklyProj()!} />
         </Show>
         <Show when={store.usage.extra_usage_enabled}>
           <span
