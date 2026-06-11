@@ -58,6 +58,7 @@ export function MiniView() {
       store.usage.session_resets_at,
       SESSION_WINDOW_MS,
       Date.now(),
+      store.recentPaceSession,
     );
   });
   const weeklyProj = createMemo(() => {
@@ -68,6 +69,7 @@ export function MiniView() {
       store.usage.weekly_resets_at,
       WEEKLY_WINDOW_MS,
       Date.now(),
+      store.recentPaceWeekly,
     );
   });
   // Any tracked limit on pace to hit before reset → a small amber warning

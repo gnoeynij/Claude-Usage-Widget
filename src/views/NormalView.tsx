@@ -101,6 +101,7 @@ export function NormalView() {
       store.usage.session_resets_at,
       SESSION_WINDOW_MS,
       Date.now(),
+      store.recentPaceSession,
     );
   });
   const weeklyProj = createMemo(() => {
@@ -111,6 +112,7 @@ export function NormalView() {
       store.usage.weekly_resets_at,
       WEEKLY_WINDOW_MS,
       Date.now(),
+      store.recentPaceWeekly,
     );
   });
   return (

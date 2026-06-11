@@ -1,13 +1,14 @@
 // Limit projection — "at this pace, where does the usage limit land at reset?"
 //
-// Uses the *average* pace since the window started (current% / elapsed), which
-// needs no sample history: the OAuth response already gives the current % and
-// the reset time, and the window length is fixed (5h session / 7d weekly).
+// Base estimate is the *average* pace since the window started (current% /
+// elapsed) — no sample history needed (the OAuth response gives current % +
+// reset time, window length is fixed: 5h session / 7d weekly).
 //
-// This is a TREND estimate, not an imminent-hit detector. Average pace lags a
-// late burst (it can under-warn while you're spiking right now) — the existing
-// 85%/95% threshold notifications cover the "close right now" case, so the two
-// signals are complementary.
+// An optional `recentPace` (EMA-smoothed %/ms over recent syncs, maintained in
+// the store) is blended in as `max(average, recent)`: a current burst escalates
+// the projection sooner, while idle intervals fall back to the stable average
+// (the max keeps the average as a floor, so recent-pace never *under*-warns).
+// Without it, behavior is exactly the average-only trend estimate.
 
 // Window lengths are HARDCODED because the OAuth usage API gives `resets_at`
 // but not the window length or start. Valid as long as each window starts
@@ -38,14 +39,19 @@ export function projectLimit(
   resetsAtIso: string | null | undefined,
   windowMs: number,
   now: number,
+  recentPace?: number,
 ): LimitProjection | null {
   if (!resetsAtIso || pct < 2 || pct >= 100) return null;
   const msToReset = new Date(resetsAtIso).getTime() - now;
   if (msToReset <= 0) return null;
   const elapsed = windowMs - msToReset;
   if (elapsed < windowMs * 0.2) return null;
-  const pace = pct / elapsed; // % per ms
-  const projectedPct = pace * windowMs;
+  const avgPace = pct / elapsed; // % per ms since the window started
+  // Recent pace only escalates (max), never lowers below the average floor.
+  const pace = recentPace != null && recentPace > avgPace ? recentPace : avgPace;
+  // Forward from now: pct + pace × remaining. Equals avgPace × windowMs when
+  // pace == avgPace, so the average-only path is unchanged.
+  const projectedPct = pct + pace * msToReset;
   if (projectedPct >= 100) {
     return { projectedPct, hitsBeforeReset: true, msToLimit: (100 - pct) / pace };
   }

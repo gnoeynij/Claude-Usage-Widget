@@ -200,6 +200,11 @@ type StoreShape = {
   /** Fleet-wide daily history summed across devices in syncFolder. Recomputed
    *  on every device sync (not persisted — empty until the first sync). */
   combinedHistory: CostHistory;
+  /** EMA-smoothed recent usage-%-per-ms, updated each sync — feeds the
+   *  projection's max(average, recent) blend so a current burst escalates the
+   *  estimate sooner. Ephemeral (not persisted; 0 until two syncs accumulate). */
+  recentPaceSession: number;
+  recentPaceWeekly: number;
 };
 
 const [store, setStore] = createStore<StoreShape>({
@@ -239,6 +244,8 @@ const [store, setStore] = createStore<StoreShape>({
   toasts: [],
   costHistory: {},
   combinedHistory: {},
+  recentPaceSession: 0,
+  recentPaceWeekly: 0,
 });
 
 export { store, setStore };
@@ -462,6 +469,37 @@ async function maybeNotifyThreshold(usage: UsagePayload) {
   if (weeklyDue.length > 0) fire("weekly", weeklyDue, usage.seven_day, hidden);
 }
 
+// Recent-pace EMA (ephemeral, module-level). One sample per scope; the smoothed
+// %/ms feeds projectLimit's max(average, recent) blend. Lost on restart → 0
+// (projection falls back to average) until two syncs accumulate.
+const PACE_ALPHA = 0.4;
+let lastPaceSample: {
+  session: { pct: number; ts: number } | null;
+  weekly: { pct: number; ts: number } | null;
+} = { session: null, weekly: null };
+
+function updateRecentPace(usage: UsagePayload, now: number) {
+  const upd = (
+    scope: "session" | "weekly",
+    pct: number,
+    key: "recentPaceSession" | "recentPaceWeekly",
+  ) => {
+    const prev = lastPaceSample[scope];
+    lastPaceSample[scope] = { pct, ts: now };
+    if (!prev || now <= prev.ts) return;
+    // A drop = the window reset between syncs → no cross-window delta; restart
+    // from 0 (no burst yet in the fresh window).
+    if (pct < prev.pct) {
+      setStore(key, 0);
+      return;
+    }
+    const raw = (pct - prev.pct) / (now - prev.ts); // %/ms over the last interval
+    setStore(key, PACE_ALPHA * raw + (1 - PACE_ALPHA) * store[key]);
+  };
+  upd("session", usage.five_hour, "recentPaceSession");
+  upd("weekly", usage.seven_day, "recentPaceWeekly");
+}
+
 // Predictive alert thresholds (anti-noise). Fire only well past the display
 // gate, with a clear margin over 100%, and below the 85% line (above which the
 // threshold alert already covers "close now").
@@ -486,14 +524,14 @@ async function maybeNotifyProjection(usage: UsagePayload) {
   }> = [
     {
       weekly: false,
-      proj: projectLimit(usage.five_hour, usage.session_resets_at, SESSION_WINDOW_MS, now),
+      proj: projectLimit(usage.five_hour, usage.session_resets_at, SESSION_WINDOW_MS, now, store.recentPaceSession),
       pct: usage.five_hour,
       block: usage.session_resets_at,
       key: "notifiedProjBlock",
     },
     {
       weekly: true,
-      proj: projectLimit(usage.seven_day, usage.weekly_resets_at, WEEKLY_WINDOW_MS, now),
+      proj: projectLimit(usage.seven_day, usage.weekly_resets_at, WEEKLY_WINDOW_MS, now, store.recentPaceWeekly),
       pct: usage.seven_day,
       block: usage.weekly_resets_at,
       key: "notifiedProjWeek",
@@ -853,6 +891,7 @@ export async function syncNow() {
     // (jsonl_aggregator FILE_CACHE), so re-running it per sync only re-reads
     // changed files. store.detail is set even when not shown — harmless.
     await refreshDetail();
+    updateRecentPace(usage, Date.now());
     void maybeNotifyThreshold(usage);
     void maybeNotifyProjection(usage);
     void invoke("set_tray_state", { state: "ok" }).catch(() => {});
