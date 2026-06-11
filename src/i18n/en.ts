@@ -28,6 +28,8 @@ export const en = {
   notifyTitleWeekly: (pct: number) => `Claude weekly usage at ${pct}%`,
   notifyBodyWeekly85: "You've hit 85% of your 7-day weekly limit.",
   notifyBodyWeekly95: "You're at 95% — close to the 7-day weekly limit.",
+  notifyProjTitleSession: "Session limit projected",
+  notifyProjTitleWeekly: "Weekly limit projected",
 
   updateAvailable: "Update available",
   checkForUpdates: "Check for updates",

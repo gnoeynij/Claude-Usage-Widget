@@ -11,6 +11,12 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { checkForUpdate } from "./updater";
 import { toErrorMessage } from "../utils/error";
+import {
+  projectLimit,
+  SESSION_WINDOW_MS,
+  WEEKLY_WINDOW_MS,
+  type LimitProjection,
+} from "../utils/project";
 import { t } from "../i18n";
 
 export type Mode = "mini" | "normal" | "detail";
@@ -181,6 +187,12 @@ type StoreShape = {
    *  doesn't clear pending session notifications and vice versa. */
   notifiedWeek: string | null;
   notifiedWeekLevels: number[];
+  /** Per-window memory of the predictive ("on pace to hit the limit before
+   *  reset") alert, so it fires at most once per session / weekly window.
+   *  Holds the `resets_at` it last fired for; a new window's differing value
+   *  re-arms it. Separate from the 85/95 threshold flags above. */
+  notifiedProjBlock: string | null;
+  notifiedProjWeek: string | null;
   /** Active in-widget toasts (transient — not persisted). */
   toasts: Toast[];
   /** Durable daily×family cost history (persisted) — survives JSONL cleanup. */
@@ -222,6 +234,8 @@ const [store, setStore] = createStore<StoreShape>({
   notifiedLevels: [],
   notifiedWeek: null,
   notifiedWeekLevels: [],
+  notifiedProjBlock: null,
+  notifiedProjWeek: null,
   toasts: [],
   costHistory: {},
   combinedHistory: {},
@@ -448,6 +462,86 @@ async function maybeNotifyThreshold(usage: UsagePayload) {
   if (weeklyDue.length > 0) fire("weekly", weeklyDue, usage.seven_day, hidden);
 }
 
+// Predictive alert thresholds (anti-noise). Fire only well past the display
+// gate, with a clear margin over 100%, and below the 85% line (above which the
+// threshold alert already covers "close now").
+const PROJ_NOTIFY_MARGIN = 110;
+const PROJ_NOTIFY_MAX_PCT = 85;
+
+/** "At this pace you'll hit the limit before reset" — the predictive alert.
+ *  Fires ONLY when the widget is hidden (tray): when it's on screen the Normal/
+ *  Mini ghost+dot markers and ⚠ badge already convey this, so a toast would be
+ *  redundant noise. At most once per window (dedup on resets_at). */
+async function maybeNotifyProjection(usage: UsagePayload) {
+  const hidden = typeof document !== "undefined" && document.hidden;
+  if (!hidden || notificationPermissionDenied) return;
+
+  const now = Date.now();
+  const cands: Array<{
+    weekly: boolean;
+    proj: LimitProjection | null;
+    pct: number;
+    block: string | null | undefined;
+    key: "notifiedProjBlock" | "notifiedProjWeek";
+  }> = [
+    {
+      weekly: false,
+      proj: projectLimit(usage.five_hour, usage.session_resets_at, SESSION_WINDOW_MS, now),
+      pct: usage.five_hour,
+      block: usage.session_resets_at,
+      key: "notifiedProjBlock",
+    },
+    {
+      weekly: true,
+      proj: projectLimit(usage.seven_day, usage.weekly_resets_at, WEEKLY_WINDOW_MS, now),
+      pct: usage.seven_day,
+      block: usage.weekly_resets_at,
+      key: "notifiedProjWeek",
+    },
+  ];
+  const due = cands.filter(
+    (c) =>
+      c.proj?.hitsBeforeReset &&
+      c.proj.projectedPct >= PROJ_NOTIFY_MARGIN &&
+      c.pct < PROJ_NOTIFY_MAX_PCT &&
+      c.block != null &&
+      store[c.key] !== c.block,
+  );
+  if (due.length === 0) return;
+
+  let granted = false;
+  try {
+    granted = await isPermissionGranted();
+    if (!granted) granted = (await requestPermission()) === "granted";
+  } catch (e) {
+    void warn(`notification permission failed: ${toErrorMessage(e)}`);
+    return;
+  }
+  if (!granted) {
+    notificationPermissionDenied = true;
+    return;
+  }
+
+  for (const c of due) {
+    const ms = c.proj!.msToLimit;
+    const body =
+      ms >= 48 * 3_600_000
+        ? t().projRiskDays(Math.floor(ms / 86_400_000), Math.floor((ms % 86_400_000) / 3_600_000))
+        : t().projRisk(Math.floor(ms / 3_600_000), Math.floor((ms % 3_600_000) / 60_000));
+    const title = c.weekly ? t().notifyProjTitleWeekly : t().notifyProjTitleSession;
+    try {
+      sendNotification({ title, body });
+    } catch (e) {
+      void warn(`projection notification failed: ${toErrorMessage(e)}`);
+    }
+    setStore(c.key, c.block!);
+    void persistSetting(c.key, c.block!);
+    void info(
+      `projection alert fired ${c.weekly ? "weekly" : "session"} (proj ${Math.round(c.proj!.projectedPct)}%, pct ${c.pct.toFixed(1)}%)`,
+    );
+  }
+}
+
 async function loadModeSizes() {
   try {
     const ps = await getPersistStore();
@@ -621,6 +715,16 @@ export async function initStore() {
     (v) => setStore("notifiedWeekLevels", v),
     (v): v is number[] => Array.isArray(v) && v.every((n) => typeof n === "number"),
   );
+  await loadSetting<string | null>(
+    "notifiedProjBlock",
+    (v) => setStore("notifiedProjBlock", v),
+    (v): v is string | null => v === null || typeof v === "string",
+  );
+  await loadSetting<string | null>(
+    "notifiedProjWeek",
+    (v) => setStore("notifiedProjWeek", v),
+    (v): v is string | null => v === null || typeof v === "string",
+  );
   await loadSetting<CostHistory>(
     "costHistory",
     (v) => setStore("costHistory", v),
@@ -750,6 +854,7 @@ export async function syncNow() {
     // changed files. store.detail is set even when not shown — harmless.
     await refreshDetail();
     void maybeNotifyThreshold(usage);
+    void maybeNotifyProjection(usage);
     void invoke("set_tray_state", { state: "ok" }).catch(() => {});
     void info(`sync ok ${Date.now() - t0}ms`);
   } catch (e) {
