@@ -63,8 +63,11 @@ export function CapsuleProgress(props: Props) {
               left: 0,
               width: `${pv()}%`,
               "border-radius": "var(--r-pill)",
-              background: ghostC(),
-              opacity: over() ? 0.45 : 0.36,
+              // Striped (transparent gaps) so the gray empty track shows through
+              // — keeps "remaining limit" readable even when the projection
+              // reaches 100% and the ghost spans the whole remaining bar.
+              background: `repeating-linear-gradient(90deg, ${ghostC()} 0 3px, transparent 3px 8px)`,
+              opacity: over() ? 0.75 : 0.6,
               transition: "width var(--dur-xslow) var(--ease-swift)",
             }}
           />

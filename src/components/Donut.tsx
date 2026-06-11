@@ -39,8 +39,20 @@ export function Donut(props: Props) {
   // ghost stays distinct from the gray empty track (which a neutral ghost would
   // blend into) and conveys where the projection lands ("amber now, red soon").
   const ghostColor = () => thresholdColor(pv() ?? 0);
-  const ghostOffset = () => circ() * (1 - (pv() ?? 0) / 100);
   const dotAngle = () => ((pv() ?? 0) / 100) * 360;
+  // Ghost as a DASHED arc from current→projected (not a solid fill): the gaps
+  // let the gray empty track show through, so "remaining limit" stays readable
+  // even when the projection reaches 100% and would otherwise cover all of it.
+  const arcXY = (pct: number): [number, number] => {
+    const a = ((-90 + (pct / 100) * 360) * Math.PI) / 180;
+    return [size() / 2 + r() * Math.cos(a), size() / 2 + r() * Math.sin(a)];
+  };
+  const ghostPath = () => {
+    const [sx, sy] = arcXY(v());
+    const [ex, ey] = arcXY(pv() ?? 0);
+    const large = (pv() ?? 0) - v() > 50 ? 1 : 0;
+    return `M ${sx} ${sy} A ${r()} ${r()} 0 ${large} 1 ${ex} ${ey}`;
+  };
 
   const handleKey = (e: KeyboardEvent) => {
     if (!props.onClick) return;
@@ -84,19 +96,14 @@ export function Donut(props: Props) {
           stroke-width={stroke()}
         />
         <Show when={showProj()}>
-          <circle
-            cx={size() / 2}
-            cy={size() / 2}
-            r={r()}
+          <path
+            d={ghostPath()}
             fill="none"
             stroke={ghostColor()}
             stroke-width={stroke()}
-            stroke-linecap="round"
-            stroke-dasharray={String(circ())}
-            stroke-dashoffset={String(ghostOffset())}
-            stroke-opacity={over() ? 0.55 : 0.42}
-            transform={`rotate(-90 ${size() / 2} ${size() / 2})`}
-            style={{ transition: "stroke-dashoffset var(--dur-xslow) var(--ease-swift)" }}
+            stroke-linecap="butt"
+            stroke-dasharray="3 5"
+            stroke-opacity={over() ? 0.7 : 0.55}
           />
         </Show>
         <circle
