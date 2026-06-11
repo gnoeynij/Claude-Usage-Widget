@@ -210,6 +210,7 @@ export function MiniView() {
           opacity to make the affordance unambiguous. */}
       <button
         class="no-drag"
+        data-guide="expand"
         onClick={(e) => {
           e.stopPropagation();
           setMode("normal");

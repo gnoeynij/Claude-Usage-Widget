@@ -673,9 +673,9 @@ export function DetailView() {
         }}
       />
       <div style={{ display: "flex", "flex-direction": "column", gap: "var(--s-3)" }}>
-        <ActiveStrip />
-        <DailyCostCard />
-        <TotalsCard />
+        <div data-guide="active"><ActiveStrip /></div>
+        <div data-guide="chart"><DailyCostCard /></div>
+        <div data-guide="totals"><TotalsCard /></div>
       </div>
     </main>
   );

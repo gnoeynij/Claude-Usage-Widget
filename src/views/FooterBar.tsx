@@ -41,6 +41,7 @@ export function FooterBar() {
       </div>
       <button
         class="ring-hover"
+        data-guide="hide"
         onClick={() => {
           void invoke("hide_window").catch((e) => {
             void warn(`hide_window failed: ${String(e)}`);

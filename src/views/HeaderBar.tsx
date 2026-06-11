@@ -64,6 +64,7 @@ export function HeaderBar() {
     >
       <span
         title={statusTooltip()}
+        data-guide="status"
         style={{
           width: "8px",
           height: "8px",
