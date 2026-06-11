@@ -8,6 +8,11 @@ type Props = {
   stroke?: number;
   label?: string;
   showPercent?: boolean;
+  /** Projected utilization at reset (may exceed 100). Renders a faint "ghost"
+   *  arc from the current value out to the projection, capped by a dot — the
+   *  "at this pace you'll land here" marker. Neutral when safe, amber once it
+   *  projects past the limit. Null/absent = no projection drawn. */
+  projected?: number | null;
   /** Optional click handler — when provided, the donut becomes a button
    *  with a `cursor: pointer` and a subtle hover lift. Used in Normal view
    *  to make the hero donut also trigger a manual sync. */
@@ -24,6 +29,15 @@ export function Donut(props: Props) {
   // Hide the fill stroke entirely below 1% so the round line-cap doesn't
   // render as a stray dot at the 12 o'clock position.
   const fillVisible = () => v() >= 1;
+
+  // Projection ghost arc + dot. Drawn between track and fill so the solid
+  // fill covers 0→current and only current→projected shows as the ghost.
+  const pv = () => (props.projected == null ? null : clamp(props.projected));
+  const over = () => (props.projected ?? 0) >= 100;
+  const showProj = () => pv() != null && (pv() as number) > v() + 0.5;
+  const ghostColor = () => (over() ? "var(--warning)" : "var(--label-tertiary)");
+  const ghostOffset = () => circ() * (1 - (pv() ?? 0) / 100);
+  const dotAngle = () => ((pv() ?? 0) / 100) * 360;
 
   const handleKey = (e: KeyboardEvent) => {
     if (!props.onClick) return;
@@ -62,6 +76,22 @@ export function Donut(props: Props) {
           stroke="var(--fill-2)"
           stroke-width={stroke()}
         />
+        <Show when={showProj()}>
+          <circle
+            cx={size() / 2}
+            cy={size() / 2}
+            r={r()}
+            fill="none"
+            stroke={ghostColor()}
+            stroke-width={stroke()}
+            stroke-linecap="round"
+            stroke-dasharray={String(circ())}
+            stroke-dashoffset={String(ghostOffset())}
+            stroke-opacity={over() ? 0.5 : 0.32}
+            transform={`rotate(-90 ${size() / 2} ${size() / 2})`}
+            style={{ transition: "stroke-dashoffset var(--dur-xslow) var(--ease-swift)" }}
+          />
+        </Show>
         <circle
           cx={size() / 2}
           cy={size() / 2}
@@ -79,6 +109,18 @@ export function Donut(props: Props) {
               "stroke-dashoffset var(--dur-xslow) var(--ease-swift), stroke var(--dur-base) var(--ease-smooth), stroke-opacity var(--dur-fast) var(--ease-smooth)",
           }}
         />
+        <Show when={showProj()}>
+          <g transform={`rotate(${dotAngle()} ${size() / 2} ${size() / 2})`}>
+            <circle
+              cx={size() / 2}
+              cy={size() / 2 - r()}
+              r={stroke() * 0.55}
+              fill={ghostColor()}
+              stroke="var(--fill-1)"
+              stroke-width="1.5"
+            />
+          </g>
+        </Show>
       </svg>
       <div
         style={{

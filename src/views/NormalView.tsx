@@ -1,4 +1,4 @@
-import { Show } from "solid-js";
+import { Show, createMemo } from "solid-js";
 import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
 import { store, syncNow } from "../state/store";
@@ -13,24 +13,20 @@ import {
 } from "../utils/project";
 import { startWindowDrag } from "../utils/drag";
 
-/** Shared "at this pace …" caption — safe (calm tertiary) or risk (amber). */
-function ProjCaption(props: { proj: LimitProjection }) {
+/** Safe projection appends inline to the reset caption ("· 예상 65%"); a risk
+ *  projection is loud enough to warrant its own amber line. */
+function projSafeSuffix(proj: LimitProjection | null) {
+  return proj && !proj.hitsBeforeReset ? ` · ${t().projSafe(Math.round(proj.projectedPct))}` : "";
+}
+
+function RiskCaption(props: { proj: LimitProjection }) {
   return (
-    <Show
-      when={props.proj.hitsBeforeReset}
-      fallback={
-        <span class="t-caption label-tertiary">
-          {t().projSafe(Math.round(props.proj.projectedPct))}
-        </span>
-      }
-    >
-      <span class="t-caption" style={{ color: "var(--warning)" }}>
-        {t().projRisk(
-          Math.floor(props.proj.msToLimit / 3_600_000),
-          Math.floor((props.proj.msToLimit % 3_600_000) / 60_000),
-        )}
-      </span>
-    </Show>
+    <span class="t-caption" style={{ color: "var(--warning)", "text-align": "center" }}>
+      {t().projRisk(
+        Math.floor(props.proj.msToLimit / 3_600_000),
+        Math.floor((props.proj.msToLimit % 3_600_000) / 60_000),
+      )}
+    </span>
   );
 }
 
@@ -44,7 +40,7 @@ function formatResetsIn(iso?: string | null) {
   return t().resetsIn(h, m);
 }
 
-function MiniMetric(props: { label: string; value: number }) {
+function MiniMetric(props: { label: string; value: number; projected?: number | null }) {
   const v = () => Math.round(clamp(props.value));
   return (
     <div
@@ -57,7 +53,7 @@ function MiniMetric(props: { label: string; value: number }) {
       }}
     >
       <span class="t-caption label-secondary">{props.label}</span>
-      <CapsuleProgress value={props.value} size="sm" />
+      <CapsuleProgress value={props.value} size="sm" projected={props.projected} />
       <span
         class="t-caption tabular-nums"
         style={{ "text-align": "right" }}
@@ -84,7 +80,7 @@ export function NormalView() {
   };
   // "At this pace …" projections. Session re-evaluates per-second (tickSecond),
   // weekly per-minute (it's days away) — same cadence as their countdowns.
-  const sessionProj = () => {
+  const sessionProj = createMemo(() => {
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     store.tickSecond;
     return projectLimit(
@@ -93,8 +89,8 @@ export function NormalView() {
       SESSION_WINDOW_MS,
       Date.now(),
     );
-  };
-  const weeklyProj = () => {
+  });
+  const weeklyProj = createMemo(() => {
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     store.tickMinute;
     return projectLimit(
@@ -103,7 +99,7 @@ export function NormalView() {
       WEEKLY_WINDOW_MS,
       Date.now(),
     );
-  };
+  });
   return (
     <main
       class="view-in"
@@ -150,16 +146,20 @@ export function NormalView() {
           size={144}
           stroke={8}
           label={t().session.toLowerCase()}
+          projected={sessionProj()?.projectedPct ?? null}
           onClick={() => void syncNow()}
         />
         <Show when={sessionCountdown()}>
           {(c) => (
             <span class="t-caption label-tertiary">
               {t().resetsInLive(c().h, c().m, c().s)}
+              {projSafeSuffix(sessionProj())}
             </span>
           )}
         </Show>
-        <Show when={sessionProj()}>{(p) => <ProjCaption proj={p()} />}</Show>
+        <Show when={sessionProj()?.hitsBeforeReset}>
+          <RiskCaption proj={sessionProj()!} />
+        </Show>
       </div>
 
       {/* Secondary metrics — weekly limits as thin rows */}
@@ -171,7 +171,11 @@ export function NormalView() {
           padding: "0 var(--s-2)",
         }}
       >
-        <MiniMetric label={t().allModels} value={store.usage.seven_day} />
+        <MiniMetric
+          label={t().allModels}
+          value={store.usage.seven_day}
+          projected={weeklyProj()?.projectedPct ?? null}
+        />
         <MiniMetric label={t().sonnetOnly} value={store.usage.seven_day_sonnet} />
         <Show when={store.usage.seven_day_opus != null}>
           <MiniMetric label={t().opusOnly} value={store.usage.seven_day_opus ?? 0} />
@@ -186,15 +190,12 @@ export function NormalView() {
               }}
             >
               {s()}
+              {projSafeSuffix(weeklyProj())}
             </span>
           )}
         </Show>
-        <Show when={weeklyProj()}>
-          {(p) => (
-            <span style={{ "text-align": "center" }}>
-              <ProjCaption proj={p()} />
-            </span>
-          )}
+        <Show when={weeklyProj()?.hitsBeforeReset}>
+          <RiskCaption proj={weeklyProj()!} />
         </Show>
         <Show when={store.usage.extra_usage_enabled}>
           <span
