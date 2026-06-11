@@ -1,11 +1,12 @@
-import { createSignal } from "solid-js";
+import { createSignal, createMemo, Show } from "solid-js";
 import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
 import { store, setMode, syncNow } from "../state/store";
 import { t } from "../i18n";
+import { projectLimit, SESSION_WINDOW_MS, WEEKLY_WINDOW_MS } from "../utils/project";
 import { startWindowDrag } from "../utils/drag";
 
-function MiniRow(props: { label: string; value: number }) {
+function MiniRow(props: { label: string; value: number; projected?: number | null }) {
   return (
     <div>
       <div
@@ -22,7 +23,7 @@ function MiniRow(props: { label: string; value: number }) {
         </span>
       </div>
       <div style={{ "margin-top": "3px" }}>
-        <CapsuleProgress value={props.value} size="sm" />
+        <CapsuleProgress value={props.value} size="sm" projected={props.projected} />
       </div>
     </div>
   );
@@ -30,6 +31,33 @@ function MiniRow(props: { label: string; value: number }) {
 
 export function MiniView() {
   const [expandHover, setExpandHover] = createSignal(false);
+  // Projection markers only (no captions — Mini has no room). The amber ghost
+  // arc/dot on a tracked limit is the at-a-glance "heading past the limit"
+  // warning. Same cadence as NormalView (session per-second, weekly per-minute).
+  const sessionProj = createMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    store.tickSecond;
+    return projectLimit(
+      store.usage.five_hour,
+      store.usage.session_resets_at,
+      SESSION_WINDOW_MS,
+      Date.now(),
+    );
+  });
+  const weeklyProj = createMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    store.tickMinute;
+    return projectLimit(
+      store.usage.seven_day,
+      store.usage.weekly_resets_at,
+      WEEKLY_WINDOW_MS,
+      Date.now(),
+    );
+  });
+  // Any tracked limit on pace to hit before reset → a small amber warning
+  // badge. Icon (shape), not color, so it reads even amber-on-amber where the
+  // ghost marker blends with an already-amber arc.
+  const atRisk = () => Boolean(sessionProj()?.hitsBeforeReset || weeklyProj()?.hitsBeforeReset);
   return (
     <main
       class="drag view-in"
@@ -45,6 +73,24 @@ export function MiniView() {
       }}
       ondblclick={() => setMode("normal")}
     >
+      <Show when={atRisk()}>
+        <span
+          style={{
+            position: "absolute",
+            // Inset past the 10px window corner radius (--r-window) so the
+            // glyph lands on the painted panel, not the transparent corner.
+            top: "6px",
+            right: "10px",
+            "font-size": "13px",
+            "line-height": 1,
+            color: "var(--warning)",
+            "z-index": 2,
+            "pointer-events": "none",
+          }}
+        >
+          ⚠
+        </span>
+      </Show>
       {/* "Tap to expand" handle anchored at the bottom-center — mirrors the
           location of Normal/Detail's footer SegmentedControl so the mode
           toggle lives in the same spot across all three modes. Default
@@ -93,6 +139,7 @@ export function MiniView() {
         size={96}
         stroke={7}
         label={t().session.toLowerCase()}
+        projected={sessionProj()?.projectedPct ?? null}
         onClick={() => void syncNow()}
       />
       <div
@@ -108,7 +155,11 @@ export function MiniView() {
           "justify-content": "space-evenly",
         }}
       >
-        <MiniRow label={t().allModels} value={store.usage.seven_day} />
+        <MiniRow
+          label={t().allModels}
+          value={store.usage.seven_day}
+          projected={weeklyProj()?.projectedPct ?? null}
+        />
         <MiniRow
           label={t().sonnetOnly}
           value={store.usage.seven_day_sonnet}
