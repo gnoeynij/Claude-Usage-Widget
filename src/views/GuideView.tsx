@@ -1,8 +1,10 @@
 import { createSignal, createEffect, onMount, onCleanup, For, Show } from "solid-js";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WidgetChrome } from "../App";
-import { setStore, applyDarkClass, type Mode } from "../state/store";
+import { store, setStore, applyDarkClass, type Mode } from "../state/store";
 import { projectLimit, SESSION_WINDOW_MS } from "../utils/project";
+import trayOkPng from "../assets/tray-ok-32.png";
+import trayErrPng from "../assets/tray-err-32.png";
 
 // Standalone guide window. Renders the REAL widget (WidgetChrome) at its real
 // per-mode size with a seeded store; a slider drives the usage level so the
@@ -150,15 +152,11 @@ function seedStore() {
   } as never);
 }
 
-function TrayChip(props: { color: string; label: string }) {
+function TrayChip(props: { src: string; label: string }) {
   return (
-    <span style={{ display: "inline-flex", "align-items": "center", gap: "6px" }}>
-      <span style={{ position: "relative", display: "inline-flex", "align-items": "center", "justify-content": "center", width: "26px", height: "26px", "border-radius": "7px", background: "var(--fill-1)", "box-shadow": "inset 0 0 0 1px var(--separator)" }}>
-        <svg width="16" height="16" viewBox="0 0 16 16">
-          <circle cx="8" cy="8" r="5.5" fill="none" stroke="var(--fill-2)" stroke-width="2.5" />
-          <circle cx="8" cy="8" r="5.5" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="24 35" transform="rotate(-90 8 8)" />
-        </svg>
-        <span style={{ position: "absolute", right: "-2px", top: "-2px", width: "9px", height: "9px", "border-radius": "50%", background: props.color, "box-shadow": "0 0 0 2px var(--fill-1)" }} />
+    <span style={{ display: "inline-flex", "align-items": "center", gap: "7px" }}>
+      <span style={{ display: "inline-flex", "align-items": "center", "justify-content": "center", width: "30px", height: "30px", "border-radius": "7px", background: "var(--fill-2)", "box-shadow": "inset 0 0 0 1px var(--separator)" }}>
+        <img src={props.src} width="22" height="22" alt="" />
       </span>
       <span class="t-caption label-secondary">{props.label}</span>
     </span>
@@ -171,8 +169,16 @@ function GuideView() {
   const [anchors, setAnchors] = createSignal<Record<string, { x: number; y: number }>>({});
   let canvasRef: HTMLDivElement | undefined;
 
+  // Compute risk EXACTLY as the widget's NormalView does (same store values),
+  // so the conditional callouts flip at the same % the widget shows the warning.
   const risk = () => {
-    const p = projectLimit(level(), nowPlus(SESSION_RESET_MS), SESSION_WINDOW_MS, Date.now());
+    const p = projectLimit(
+      store.usage.five_hour,
+      store.usage.session_resets_at,
+      SESSION_WINDOW_MS,
+      Date.now(),
+      store.recentPaceSession,
+    );
     return Boolean(p?.hitsBeforeReset);
   };
 
@@ -223,6 +229,10 @@ function GuideView() {
   const visible = () =>
     CALLOUTS[mode()].filter((c) => !c.cond || c.cond === "always" || (c.cond === "risk") === risk());
   const frameLeft = () => FRAME_CX - MODE_SIZE[mode()][0] / 2;
+  // Tray block sits BELOW the replica (not pinned to the bottom) so it never
+  // overlaps the tall Detail widget; the canvas grows to fit each mode.
+  const trayTop = () => FRAME_TOP + MODE_SIZE[mode()][1] + 34;
+  const canvasH = () => trayTop() + 118;
 
   return (
     <div class="guide-root" style={{ display: "flex", "flex-direction": "column", height: "100vh", color: "var(--label)" }}>
@@ -241,14 +251,14 @@ function GuideView() {
       </div>
 
       <div style={{ flex: 1, display: "flex", "justify-content": "center", overflow: "auto" }}>
-        <div ref={canvasRef} style={{ position: "relative", width: `${CANVAS_W}px`, height: "740px", "flex-shrink": 0 }}>
+        <div ref={canvasRef} style={{ position: "relative", width: `${CANVAS_W}px`, height: `${canvasH()}px`, "flex-shrink": 0 }}>
           {/* usage slider above the replica */}
           <div class="no-drag" style={{ position: "absolute", top: "34px", left: `${FRAME_CX - 150}px`, width: "300px", display: "flex", "flex-direction": "column", "align-items": "center", gap: "4px" }}>
             <span class="t-caption label-tertiary">{tx(SLIDER)}</span>
             <input type="range" min="2" max="99" value={level()} onInput={(e) => onSlide(Number(e.currentTarget.value))} style={{ width: "100%" }} />
           </div>
 
-          <svg style={{ position: "absolute", inset: 0, width: `${CANVAS_W}px`, height: "740px", "pointer-events": "none" }}>
+          <svg style={{ position: "absolute", inset: 0, width: `${CANVAS_W}px`, height: `${canvasH()}px`, "pointer-events": "none" }}>
             <For each={visible()}>
               {(c) => {
                 const a = () => anchors()[c.anchor];
@@ -276,13 +286,13 @@ function GuideView() {
             )}
           </For>
 
-          {/* tray icon explanation with both states */}
-          <div style={{ position: "absolute", left: "18px", right: "18px", bottom: "16px", display: "flex", "flex-direction": "column", "align-items": "center", gap: "6px" }}>
+          {/* tray icon explanation with both states — below the replica */}
+          <div style={{ position: "absolute", left: "18px", right: "18px", top: `${trayTop()}px`, display: "flex", "flex-direction": "column", "align-items": "center", gap: "6px" }}>
             <div class="t-body" style={{ "font-weight": 600 }}>{tx(TRAY_TITLE)}</div>
             <div class="t-caption label-secondary" style={{ "max-width": "620px", "text-align": "center", "line-height": 1.4 }}>{tx(TRAY_DESC)}</div>
             <div style={{ display: "flex", gap: "20px", "margin-top": "2px" }}>
-              <TrayChip color="#30d158" label={tx(TRAY_OK)} />
-              <TrayChip color="var(--danger)" label={tx(TRAY_ERR)} />
+              <TrayChip src={trayOkPng} label={tx(TRAY_OK)} />
+              <TrayChip src={trayErrPng} label={tx(TRAY_ERR)} />
             </div>
           </div>
         </div>
