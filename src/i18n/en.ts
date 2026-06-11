@@ -11,8 +11,8 @@ export const en = {
   resetsOn: (s: string) => `Resets ${s}`,
   projSafe: (p: number) => `proj. ${p}%`,
   projRisk: (h: number, m: number) =>
-    h > 0 ? `⚠ At this pace, limit in ~${h}h ${m}m` : `⚠ At this pace, limit in ~${m}m`,
-  projRiskDays: (d: number, h: number) => `⚠ At this pace, limit in ~${d}d ${h}h`,
+    h > 0 ? `⚠ ~${h}h ${m}m to limit` : `⚠ ~${m}m to limit`,
+  projRiskDays: (d: number, h: number) => `⚠ ~${d}d ${h}h to limit`,
 
   syncNow: "Sync now",
   settings: "Settings",

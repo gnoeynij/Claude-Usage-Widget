@@ -13,8 +13,8 @@ export const ko: Strings = {
   resetsOn: (s) => `${s} 초기화`,
   projSafe: (p) => `예상 ${p}%`,
   projRisk: (h, m) =>
-    h > 0 ? `⚠ 이 속도면 ${h}시간 ${m}분 뒤 한도` : `⚠ 이 속도면 ${m}분 뒤 한도`,
-  projRiskDays: (d, h) => `⚠ 이 속도면 ${d}일 ${h}시간 뒤 한도`,
+    h > 0 ? `⚠ 한도까지 ~${h}시간 ${m}분` : `⚠ 한도까지 ~${m}분`,
+  projRiskDays: (d, h) => `⚠ 한도까지 ~${d}일 ${h}시간`,
 
   syncNow: "지금 동기화",
   settings: "설정",

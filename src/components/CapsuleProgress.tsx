@@ -100,11 +100,13 @@ export function CapsuleProgress(props: Props) {
             top: "50%",
             left: `${Math.min(pv() as number, 100)}%`,
             transform: "translate(-50%, -50%)",
-            width: h(),
-            height: h(),
+            width: `calc(${h()} + 2px)`,
+            height: `calc(${h()} + 2px)`,
             "border-radius": "50%",
-            background: ghostC(),
-            "box-shadow": "0 0 0 1.5px var(--fill-1)",
+            // High-contrast center + ghost-color ring — matches the donut dot
+            // so the projection marker reads on a same-color bar fill.
+            background: "var(--label)",
+            "box-shadow": `0 0 0 2px ${ghostC()}`,
             transition: "left var(--dur-xslow) var(--ease-swift)",
           }}
         />

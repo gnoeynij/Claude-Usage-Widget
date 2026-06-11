@@ -110,14 +110,17 @@ export function Donut(props: Props) {
           }}
         />
         <Show when={showProj()}>
+          {/* High-contrast fill (var(--label)) so the marker reads even when it
+              sits on a same-color arc (e.g. amber dot on the amber 50-80% arc);
+              the ghost arc carries the safe/risk color. Ringed for separation. */}
           <g transform={`rotate(${dotAngle()} ${size() / 2} ${size() / 2})`}>
             <circle
               cx={size() / 2}
               cy={size() / 2 - r()}
-              r={stroke() * 0.55}
-              fill={ghostColor()}
-              stroke="var(--fill-1)"
-              stroke-width="1.5"
+              r={stroke() * 0.72}
+              fill="var(--label)"
+              stroke={ghostColor()}
+              stroke-width="2"
             />
           </g>
         </Show>

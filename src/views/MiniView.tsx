@@ -1,4 +1,4 @@
-import { createSignal, createMemo, Show } from "solid-js";
+import { createSignal, createMemo, Show, For } from "solid-js";
 import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
 import { store, setMode, syncNow } from "../state/store";
@@ -79,23 +79,27 @@ export function MiniView() {
   // badge. Icon (shape), not color, so it reads even amber-on-amber where the
   // ghost marker blends with an already-amber arc.
   const atRisk = () => Boolean(sessionProj()?.hitsBeforeReset || weeklyProj()?.hitsBeforeReset);
-  // Native-title summary shown on badge hover: each tracked limit's current %
-  // plus its projection (omitted when there isn't enough signal to project).
-  const riskTooltip = () => {
-    const line = (label: string, pct: number, p: LimitProjection | null) => {
-      const pj = projText(p);
-      return `${label} ${Math.round(pct || 0)}%${pj ? ` · ${pj}` : ""}`;
-    };
-    const lines = [
-      line(t().session, store.usage.five_hour, sessionProj()),
-      line(t().allModels, store.usage.seven_day, weeklyProj()),
-      line(t().sonnetOnly, store.usage.seven_day_sonnet, null),
+  const [infoOpen, setInfoOpen] = createSignal(false);
+  // Each tracked limit's current % + projection — drives both the click-to-open
+  // in-Mini info overlay and the native-title hover summary.
+  const limitRows = (): Array<{ label: string; pct: number; proj: LimitProjection | null }> => {
+    const rows = [
+      { label: t().session, pct: store.usage.five_hour, proj: sessionProj() },
+      { label: t().allModels, pct: store.usage.seven_day, proj: weeklyProj() },
+      { label: t().sonnetOnly, pct: store.usage.seven_day_sonnet, proj: null },
     ];
     if (store.usage.seven_day_opus != null) {
-      lines.push(line(t().opusOnly, store.usage.seven_day_opus, null));
+      rows.push({ label: t().opusOnly, pct: store.usage.seven_day_opus, proj: null });
     }
-    return lines.join("\n");
+    return rows;
   };
+  const riskTooltip = () =>
+    limitRows()
+      .map((r) => {
+        const pj = projText(r.proj);
+        return `${r.label} ${Math.round(r.pct || 0)}%${pj ? ` · ${pj}` : ""}`;
+      })
+      .join("\n");
   return (
     <main
       class="drag view-in"
@@ -119,12 +123,12 @@ export function MiniView() {
           title={riskTooltip()}
           onClick={(e) => {
             e.stopPropagation();
-            setMode("normal");
+            setInfoOpen((v) => !v);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              setMode("normal");
+              setInfoOpen((v) => !v);
             }
           }}
           style={{
@@ -136,15 +140,67 @@ export function MiniView() {
             "font-size": "13px",
             "line-height": 1,
             color: "var(--warning)",
-            "z-index": 2,
-            // Click → expand to Normal for the full projection (a custom popover
-            // would be clipped by the tiny Mini window); native title is a bonus
+            "z-index": 4,
+            // Click → toggle an in-Mini info overlay (stays in-bounds, no nav);
+            // native title is a bonus
             // quick-peek where the OS renders it.
             cursor: "pointer",
           }}
         >
           ⚠
         </span>
+      </Show>
+      {/* Click-the-badge info overlay — a glass panel covering the Mini content
+          (stays within the 240px window, unlike an out-of-bounds popover).
+          Click anywhere on it to dismiss. */}
+      <Show when={infoOpen()}>
+        <div
+          class="no-drag fade-in"
+          onClick={(e) => {
+            e.stopPropagation();
+            setInfoOpen(false);
+          }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            "z-index": 3,
+            display: "flex",
+            "flex-direction": "column",
+            "justify-content": "center",
+            gap: "var(--s-1)",
+            padding: "0 var(--s-4)",
+            background: "var(--scrim-bg)",
+            "backdrop-filter": "blur(12px)",
+            "-webkit-backdrop-filter": "blur(12px)",
+            "border-radius": "var(--r-window)",
+            cursor: "default",
+          }}
+        >
+          <For each={limitRows()}>
+            {(r) => {
+              const pj = projText(r.proj);
+              return (
+                <div
+                  class="t-caption"
+                  style={{ "white-space": "nowrap", overflow: "hidden", "text-overflow": "ellipsis" }}
+                >
+                  <span class="label-secondary">{r.label}</span>{" "}
+                  <span class="tabular-nums" style={{ "font-weight": 600 }}>
+                    {Math.round(r.pct || 0)}%
+                  </span>
+                  <Show when={pj}>
+                    <span
+                      style={{ color: r.proj?.hitsBeforeReset ? "var(--warning)" : "var(--label-tertiary)" }}
+                    >
+                      {" · "}
+                      {pj}
+                    </span>
+                  </Show>
+                </div>
+              );
+            }}
+          </For>
+        </div>
       </Show>
       {/* "Tap to expand" handle anchored at the bottom-center — mirrors the
           location of Normal/Detail's footer SegmentedControl so the mode
