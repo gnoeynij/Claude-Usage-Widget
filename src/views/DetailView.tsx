@@ -175,16 +175,23 @@ function DailyCostCard() {
   const trendPct = () =>
     prevAvg() > 0.01 ? Math.round(((curAvg() - prevAvg()) / prevAvg()) * 100) : null;
 
-  const legendFams = createMemo(() => {
-    const acc = new Map<string, number>();
-    windowDays().forEach((d) =>
-      d.fams.forEach((f) => acc.set(f.family, (acc.get(f.family) ?? 0) + f.cost)),
-    );
+  // Per-family totals over the selected window — durable (from costHistory),
+  // so this is "models over the last N days", not the on-disk by_family. Pairs
+  // with the chart's range toggle and carries cost + tokens.
+  const rangeFams = createMemo(() => {
+    const acc = new Map<string, { cost: number; tokens: number }>();
+    for (const d of windowDays()) {
+      for (const [family, e] of Object.entries(hist()[d.date] ?? {})) {
+        const a = acc.get(family) ?? { cost: 0, tokens: 0 };
+        a.cost += e.cost;
+        a.tokens += e.tokens;
+        acc.set(family, a);
+      }
+    }
     return [...acc.entries()]
-      .filter(([, c]) => c > 0)
-      .sort((a, b) => b[1] - a[1])
-      .map(([f]) => f)
-      .slice(0, 4);
+      .filter(([, v]) => v.cost > 0 || v.tokens > 0)
+      .sort((a, b) => b[1].cost - a[1].cost)
+      .map(([family, v]) => ({ family, ...v }));
   });
 
   const fmtDate = (date: string, opts: Intl.DateTimeFormatOptions) =>
@@ -486,92 +493,112 @@ function DailyCostCard() {
           </div>
         </Show>
 
-        {/* Summary + legend. */}
+        {/* Summary row: avg / trend / peak for the window. */}
         <div
+          class="t-caption label-secondary"
           style={{
             display: "flex",
-            "align-items": "center",
-            "justify-content": "space-between",
             "flex-wrap": "wrap",
-            gap: "var(--s-1) var(--s-3)",
+            gap: "var(--s-1) 12px",
             "margin-top": "var(--s-3)",
             "padding-top": "var(--s-2)",
             "border-top": "1px solid var(--separator)",
           }}
         >
-          <div class="t-caption label-secondary" style={{ display: "flex", gap: "12px" }}>
-            <span>
-              <span class="label-tertiary">{t().avgShort}</span>{" "}
-              <span class="tabular-nums" style={{ color: "var(--label)", "font-weight": 600 }}>
-                {compactCost(curAvg())}
-              </span>
-              <span class="label-tertiary">{t().perDay}</span>
+          <span>
+            <span class="label-tertiary">{t().avgShort}</span>{" "}
+            <span class="tabular-nums" style={{ color: "var(--label)", "font-weight": 600 }}>
+              {compactCost(curAvg())}
             </span>
-            <Show when={trendPct() !== null}>
-              <span
-                class="tabular-nums"
-                style={{ color: (trendPct() ?? 0) > 0 ? "#ff453a" : "#30d158" }}
-              >
-                {(trendPct() ?? 0) > 0 ? "↗" : "↘"} {Math.abs(trendPct() ?? 0)}%{" "}
-                <span class="label-tertiary">{t().vsPrev}</span>
-              </span>
-            </Show>
-            <span class="label-tertiary">
-              {t().peakShort}{" "}
-              {fmtDate(windowDays()[peakIdx()]?.date ?? todayStr(), {
-                month: "short",
-                day: "numeric",
-              })}{" "}
-              <span class="tabular-nums">{compactCost(maxTotal())}</span>
+            <span class="label-tertiary">{t().perDay}</span>
+          </span>
+          <Show when={trendPct() !== null}>
+            <span
+              class="tabular-nums"
+              style={{ color: (trendPct() ?? 0) > 0 ? "#ff453a" : "#30d158" }}
+            >
+              {(trendPct() ?? 0) > 0 ? "↗" : "↘"} {Math.abs(trendPct() ?? 0)}%{" "}
+              <span class="label-tertiary">{t().vsPrev}</span>
             </span>
-          </div>
-          <Show when={range() < 30}>
-            <div class="t-caption label-tertiary" style={{ display: "flex", gap: "9px", "font-size": "10px" }}>
-              <For each={legendFams()}>
-                {(f) => (
-                  <span>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        width: "7px",
-                        height: "7px",
-                        "border-radius": "2px",
-                        background: modelColor(f),
-                        "margin-right": "4px",
-                      }}
-                    />
-                    {f}
-                  </span>
-                )}
-              </For>
-            </div>
           </Show>
+          <span class="label-tertiary">
+            {t().peakShort}{" "}
+            {fmtDate(windowDays()[peakIdx()]?.date ?? todayStr(), {
+              month: "short",
+              day: "numeric",
+            })}{" "}
+            <span class="tabular-nums">{compactCost(maxTotal())}</span>
+          </span>
         </div>
+
+        {/* Per-model breakdown for the selected window (durable costHistory,
+            not on-disk). Doubles as the chart legend. */}
+        <Show when={rangeFams().length > 0}>
+          <div
+            class="t-caption label-tertiary"
+            style={{
+              "text-transform": "uppercase",
+              "letter-spacing": "0.05em",
+              "font-size": "10px",
+              "margin-top": "var(--s-3)",
+              "margin-bottom": "var(--s-2)",
+            }}
+          >
+            {t().modelsRange(range())}
+          </div>
+          <div
+            style={{
+              display: "grid",
+              "grid-template-columns": "1fr 1fr",
+              gap: "8px var(--s-5)",
+            }}
+          >
+            <For each={rangeFams()}>
+              {(f) => (
+                <div style={{ display: "flex", "align-items": "center", gap: "8px", "min-width": 0 }}>
+                  <span
+                    style={{
+                      width: "8px",
+                      height: "8px",
+                      "border-radius": "2px",
+                      background: modelColor(f.family),
+                      "flex-shrink": 0,
+                    }}
+                  />
+                  <span class="t-body" style={{ flex: 1, "min-width": 0 }}>
+                    {f.family}
+                  </span>
+                  <span class="t-body tabular-nums" style={{ "font-weight": 600 }}>
+                    {formatCost(f.cost)}
+                  </span>
+                  <span
+                    class="t-caption label-tertiary tabular-nums"
+                    style={{ width: "44px", "text-align": "right" }}
+                  >
+                    {formatTokens(f.tokens)}
+                  </span>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
       </Show>
     </GlassCard>
   );
 }
 
-/** All-time totals. Top row split 50/50: left = calendar week/month spend,
- *  right = lifetime (this device / all devices). Then a full-width per-family
- *  breakdown (cost-desc, with tokens) → cache hit footer. today/yesterday and
- *  the weak On disk / Messages KPIs were dropped (chart covers the former). */
+/** Totals card. Top row split 50/50: left = calendar week/month spend, right =
+ *  lifetime (this device / all devices) — both durable aggregate $. Cache hit
+ *  footer. Per-model usage lives in the chart card (range-based, durable), so
+ *  this card carries no on-disk model breakdown. */
 function TotalsCard() {
   const p = () => store.detail?.periods;
-  const fams = createMemo(() =>
-    [...(store.detail?.by_family ?? [])]
-      .filter((f) => f.cost > 0 || f.tokens > 0)
-      .sort((a, b) => b.cost - a.cost),
-  );
   const cacheHit = () => store.detail?.stats?.cache_hit_pct ?? 0;
-  const row = (label: () => string, value: string, labelAccent?: string) => (
+  const row = (label: string, value: string) => (
     <div
       style={{ display: "flex", "align-items": "baseline", "justify-content": "space-between", gap: "var(--s-2)" }}
     >
-      <span class="t-caption label-secondary" style={{ "min-width": 0 }}>
-        {label()}
-        {labelAccent ? <span class="label-tertiary"> {labelAccent}</span> : null}
-      </span>
+      <span class="t-caption label-secondary" style={{ "min-width": 0 }}>{label}</span>
       <span class="t-body tabular-nums" style={{ "font-weight": 600 }}>{value}</span>
     </div>
   );
@@ -579,8 +606,8 @@ function TotalsCard() {
     <GlassCard>
       <div style={{ display: "grid", "grid-template-columns": "1fr 1fr", gap: "var(--s-1) var(--s-4)" }}>
         <div style={{ display: "flex", "flex-direction": "column", gap: "6px", "min-width": 0 }}>
-          {row(() => t().thisWeek, formatCost(p()?.week_cost ?? 0))}
-          {row(() => t().thisMonth, formatCost(p()?.month_cost ?? 0))}
+          {row(t().thisWeek, formatCost(p()?.week_cost ?? 0))}
+          {row(t().thisMonth, formatCost(p()?.month_cost ?? 0))}
         </div>
         <div
           style={{
@@ -592,9 +619,9 @@ function TotalsCard() {
             "padding-left": "var(--s-4)",
           }}
         >
-          {row(() => t().lifetimeDevice, formatCost(store.lifetimeCost))}
+          {row(t().lifetimeDevice, formatCost(store.lifetimeCost))}
           <Show when={store.syncFolder !== "" && store.combinedDevices > 0}>
-            {row(() => t().lifetimeAll, formatCost(store.combinedCost))}
+            {row(t().lifetimeAll, formatCost(store.combinedCost))}
           </Show>
         </div>
       </div>
@@ -602,57 +629,11 @@ function TotalsCard() {
       <div
         class="t-caption label-tertiary"
         style={{
-          "letter-spacing": "0.05em",
-          "text-transform": "uppercase",
-          "font-size": "10px",
-          margin: "var(--s-3) 0 var(--s-2)",
-          "padding-top": "var(--s-3)",
+          "text-align": "right",
+          "margin-top": "var(--s-3)",
+          "padding-top": "var(--s-2)",
           "border-top": "1px solid var(--separator)",
         }}
-      >
-        {t().modelsAllTime}
-      </div>
-      <Show when={fams().length > 0} fallback={<EmptyHint />}>
-        <div
-          style={{
-            display: "grid",
-            "grid-template-columns": "1fr 1fr",
-            gap: "8px var(--s-5)",
-          }}
-        >
-          <For each={fams()}>
-            {(f) => (
-              <div style={{ display: "flex", "align-items": "center", gap: "8px", "min-width": 0 }}>
-                <span
-                  style={{
-                    width: "8px",
-                    height: "8px",
-                    "border-radius": "2px",
-                    background: modelColor(f.family),
-                    "flex-shrink": 0,
-                  }}
-                />
-                <span class="t-body" style={{ flex: 1, "min-width": 0 }}>
-                  {f.family}
-                </span>
-                <span class="t-body tabular-nums" style={{ "font-weight": 600 }}>
-                  {formatCost(f.cost)}
-                </span>
-                <span
-                  class="t-caption label-tertiary tabular-nums"
-                  style={{ width: "44px", "text-align": "right" }}
-                >
-                  {formatTokens(f.tokens)}
-                </span>
-              </div>
-            )}
-          </For>
-        </div>
-      </Show>
-
-      <div
-        class="t-caption label-tertiary"
-        style={{ "text-align": "right", "margin-top": "var(--s-2)" }}
       >
         {t().cacheHit}{" "}
         <span class="tabular-nums" style={{ color: "var(--label-secondary)", "font-weight": 600 }}>

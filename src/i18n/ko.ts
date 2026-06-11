@@ -69,7 +69,7 @@ export const ko: Strings = {
   vsPrev: "이전 대비",
   peakShort: "최다",
   cacheHit: "캐시 적중",
-  modelsAllTime: "모델별 · 전체 기간",
+  modelsRange: (n) => `모델별 · 최근 ${n}일`,
   lifetimeDevice: "누적 · 이 기기",
   lifetimeAll: "누적 · 전체 기기",
   deviceSync: "기기 통합 누적",

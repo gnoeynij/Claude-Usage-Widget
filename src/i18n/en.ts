@@ -67,7 +67,7 @@ export const en = {
   vsPrev: "vs prev",
   peakShort: "peak",
   cacheHit: "Cache hit",
-  modelsAllTime: "Models · all-time",
+  modelsRange: (n: number) => `Models · last ${n}d`,
   lifetimeDevice: "Lifetime · this device",
   lifetimeAll: "Lifetime · all devices",
   deviceSync: "Combined across devices",
