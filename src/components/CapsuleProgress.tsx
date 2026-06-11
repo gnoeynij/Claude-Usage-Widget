@@ -103,9 +103,9 @@ export function CapsuleProgress(props: Props) {
             width: `calc(${h()} + 2px)`,
             height: `calc(${h()} + 2px)`,
             "border-radius": "50%",
-            // High-contrast center + ghost-color ring — matches the donut dot
-            // so the projection marker reads on a same-color bar fill.
-            background: "var(--label)",
+            // White center + ghost-color ring — matches the donut dot so the
+            // projection marker reads on a same-color bar fill in both themes.
+            background: "white",
             "box-shadow": `0 0 0 2px ${ghostC()}`,
             transition: "left var(--dur-xslow) var(--ease-swift)",
           }}
