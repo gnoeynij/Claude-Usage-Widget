@@ -254,7 +254,7 @@ function DailyCostCard() {
               </For>
             </div>
           </Show>
-          <div style={{ display: "flex", gap: "2px" }}>
+          <div data-guide="range" style={{ display: "flex", gap: "2px" }}>
             <For each={[7, 14, 30] as const}>
               {(n) => (
                 <button
@@ -416,24 +416,17 @@ function DailyCostCard() {
                         <div style={{ background: "var(--fill-2)", height: "2px" }} />
                       }
                     >
-                      <Show
-                        when={range() < 30}
-                        fallback={
-                          <div style={{ background: "var(--accent)", height: "100%" }} />
-                        }
-                      >
-                        <For each={d.fams}>
-                          {(f) => (
-                            <div
-                              style={{
-                                background: modelColor(f.family),
-                                height: `${(f.cost / d.total) * 100}%`,
-                                "min-height": f.cost > 0 ? "1px" : "0",
+                      <For each={d.fams}>
+                        {(f) => (
+                          <div
+                            style={{
+                              background: modelColor(f.family),
+                              height: `${(f.cost / d.total) * 100}%`,
+                              "min-height": f.cost > 0 ? "1px" : "0",
                               }}
                             />
                           )}
                         </For>
-                      </Show>
                     </Show>
                   </div>
                 </div>

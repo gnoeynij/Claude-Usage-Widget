@@ -21,9 +21,10 @@ import { checkForUpdate, installUpdate } from "../state/updater";
 import { formatCost } from "../utils/format";
 import { t } from "../i18n";
 
-function Section(props: { label: string; children: JSX.Element }) {
+function Section(props: { label: string; children: JSX.Element; guide?: string }) {
   return (
     <div
+      data-guide={props.guide}
       style={{
         display: "flex",
         "flex-direction": "column",
@@ -79,7 +80,7 @@ function UpdateSection() {
   }
 
   return (
-    <Section label={t().checkForUpdates}>
+    <Section guide="set-update" label={t().checkForUpdates}>
       <Show when={store.updateStatus === "idle"}>
         <button
           class="ring-hover"
@@ -231,7 +232,7 @@ function DeviceSyncSection() {
     if (v) setSyncFolder(v);
   };
   return (
-    <Section label={t().deviceSync}>
+    <Section guide="set-device-sync" label={t().deviceSync}>
       <span class="t-caption label-tertiary">{t().deviceSyncHint}</span>
       <Show
         when={store.syncFolder}
@@ -357,6 +358,7 @@ export function SettingsPanel() {
               {(label) => (
                 <span
                   class="pill-accent"
+                  data-guide="set-plan"
                   title={t().plan}
                   style={{
                     height: "var(--text-headline-lh)",
@@ -392,6 +394,7 @@ export function SettingsPanel() {
 
         <button
           class="ring-hover"
+          data-guide="set-guide"
           onClick={() =>
             void invoke("open_guide_window", { lang: store.lang, dark: store.dark })
           }
@@ -412,7 +415,7 @@ export function SettingsPanel() {
           <span class="t-body">{t().guide}</span>
         </button>
 
-        <Section label={t().language}>
+        <Section guide="set-lang" label={t().language}>
           <SegmentedControl<Lang>
             value={store.lang}
             onChange={setLang}
@@ -422,7 +425,7 @@ export function SettingsPanel() {
             ]}
           />
         </Section>
-        <Section label={t().autoSync}>
+        <Section guide="set-sync" label={t().autoSync}>
           <SegmentedControl
             value={String(store.syncIntervalMin)}
             onChange={(v) => setSyncIntervalMin(Number(v))}
@@ -435,17 +438,19 @@ export function SettingsPanel() {
             ]}
           />
         </Section>
-        <SwitchRow
-          label={t().alwaysOnTop}
-          checked={store.alwaysOnTop}
-          onChange={(v) => void setAlwaysOnTop(v)}
-        />
-        <SwitchRow
-          label={t().darkMode}
-          checked={store.dark}
-          onChange={setDark}
-        />
-        <Section label={t().opacity}>
+        <div data-guide="set-appearance" style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>
+          <SwitchRow
+            label={t().alwaysOnTop}
+            checked={store.alwaysOnTop}
+            onChange={(v) => void setAlwaysOnTop(v)}
+          />
+          <SwitchRow
+            label={t().darkMode}
+            checked={store.dark}
+            onChange={setDark}
+          />
+        </div>
+        <Section guide="set-opacity" label={t().opacity}>
           <input
             type="range"
             min="0"

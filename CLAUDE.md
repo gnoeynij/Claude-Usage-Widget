@@ -309,6 +309,19 @@ gh release create vX.Y.Z --target main --title "..." --notes "..." \
 3. 모드 전환·모달·다크/라이트·투명도 조절은 각각 1회씩 직접 확인.
 4. 푸시는 사용자 신호 받을 때까지 보류.
 
+### 가이드 동기화 의무 ([`src/views/GuideView.tsx`](src/views/GuideView.tsx))
+
+다음 변경이 발생하면 **반드시** GuideView의 `CALLOUTS` 를 함께 업데이트한다:
+
+| 변경 종류 | 가이드 반영 항목 |
+|---|---|
+| UI 요소 추가/제거 | 해당 뷰에 `data-guide` 앵커 추가/제거 + `CALLOUTS`에 callout 추가/제거 |
+| 요소 이름·기능 변경 | 해당 callout의 `title`/`desc` (en·ko 둘 다) 업데이트 |
+| 설정 항목 추가/제거 | `CALLOUTS.settings`에 callout 추가/제거 + `SettingsPanel`에 `data-guide` 앵커 추가/제거 |
+| 모드 추가 | `GUIDE_MODES`, `MODE_SIZE`, `CALLOUTS`에 신규 모드 항목 추가 |
+
+**CSS pointer-events 목록도 함께 확인**: GuideView 인라인 `<style>` 안의 `.glass-panel [data-guide="…"]` 선택자 — 가이드에서 클릭을 막아야 하는 새 앵커가 생기면 여기에도 추가.
+
 ### 시각 회귀 방어층
 
 자동화된 테스트가 없으니 *수동 + 캡처*가 유일한 방어. 다음 영역은 코드 변경만으로 회귀 위험이 큼:

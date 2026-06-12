@@ -258,6 +258,7 @@ export function MiniView() {
         />
       </div>
       <div
+        data-guide="weekly"
         style={{
           flex: 1,
           "align-self": "stretch",
