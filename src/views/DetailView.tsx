@@ -11,6 +11,8 @@ import { startWindowDrag } from "../utils/drag";
 // were consciously dropped in the v2.4 redesign (see BACKLOG "모델별 전체-기간
 // 합계 복원" for the restore path).
 
+const FAMILIES = ["Opus", "Fable", "Sonnet", "Haiku"] as const;
+
 function modelColor(family: string) {
   const lower = family.toLowerCase();
   if (lower.includes("fable")) return "#bf5af2";
@@ -179,7 +181,9 @@ function DailyCostCard() {
   // so this is "models over the last N days", not the on-disk by_family. Pairs
   // with the chart's range toggle and carries cost + tokens.
   const rangeFams = createMemo(() => {
-    const acc = new Map<string, { cost: number; tokens: number }>();
+    const acc = new Map<string, { cost: number; tokens: number }>(
+      FAMILIES.map((f) => [f, { cost: 0, tokens: 0 }]),
+    );
     for (const d of windowDays()) {
       for (const [family, e] of Object.entries(hist()[d.date] ?? {})) {
         const a = acc.get(family) ?? { cost: 0, tokens: 0 };
@@ -189,7 +193,6 @@ function DailyCostCard() {
       }
     }
     return [...acc.entries()]
-      .filter(([, v]) => v.cost > 0 || v.tokens > 0)
       .sort((a, b) => b[1].cost - a[1].cost)
       .map(([family, v]) => ({ family, ...v }));
   });
@@ -526,7 +529,7 @@ function DailyCostCard() {
 
         {/* Per-model breakdown for the selected window (durable costHistory,
             not on-disk). Doubles as the chart legend. */}
-        <Show when={rangeFams().length > 0}>
+        <Show when={hasAnyData()}>
           <div
             class="t-caption label-tertiary"
             style={{
