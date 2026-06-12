@@ -195,6 +195,7 @@ export function NormalView() {
         <Show when={weeklyReset()}>
           {(s) => (
             <span
+              data-guide="weekly-caption"
               class="t-caption label-tertiary"
               style={{
                 "padding-top": "var(--s-1)",

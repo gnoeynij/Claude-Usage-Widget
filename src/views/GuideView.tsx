@@ -53,6 +53,12 @@ const CALLOUTS: Record<GuideMode, Callout[]> = {
     { anchor: "session-caption", side: "left", y: 300, cond: "risk",
       title: { en: "Limit warning", ko: "한도 도달 경고" },
       desc: { en: "On pace to hit the limit — shows how long until you reach it.", ko: "이 속도면 한도에 도달합니다. 남은 시간을 표시합니다." } },
+    { anchor: "weekly-caption", side: "left", y: 348, cond: "safe",
+      title: { en: "Weekly reset & projection", ko: "주간 초기화 · 예상" },
+      desc: { en: "Time until weekly reset, plus projected usage at that point if this pace holds.", ko: "주간 초기화까지 남은 시간과 현재 속도 기준 예상 사용량을 표시합니다." } },
+    { anchor: "weekly-caption", side: "left", y: 348, cond: "risk",
+      title: { en: "Weekly limit warning", ko: "주간 한도 경고" },
+      desc: { en: "On pace to hit the weekly limit — shows how long until you reach it.", ko: "이 속도면 주간 한도에 도달합니다. 남은 시간을 표시합니다." } },
     { anchor: "sync", side: "right", y: 96,
       title: { en: "Refresh", ko: "새로고침" },
       desc: { en: "Manually fetch the latest usage data.", ko: "사용량을 수동으로 즉시 새로고침합니다." } },
@@ -317,7 +323,7 @@ function GuideView() {
     <>
     {/* Guide-only: disable internal scroll on view mains and settings card so
         the overflow:hidden widget frame is the only clip boundary. */}
-    <style>{`.glass-panel main{overflow:hidden!important}.glass-panel [data-guide="hide"],.glass-panel [data-guide="sync"],.glass-panel [data-guide="donut"],.glass-panel [data-guide="expand"],.glass-panel [data-guide="modes"],.glass-panel [data-guide="settings"],.glass-panel [data-guide="status"],.glass-panel [data-guide="weekly"],.glass-panel [data-guide="badge"],.glass-panel [data-guide="session-caption"],.glass-panel .drag{pointer-events:none!important}`}</style>
+    <style>{`.glass-panel main{overflow:hidden!important}.glass-panel [data-guide="hide"],.glass-panel [data-guide="sync"],.glass-panel [data-guide="donut"],.glass-panel [data-guide="expand"],.glass-panel [data-guide="modes"],.glass-panel [data-guide="settings"],.glass-panel [data-guide="status"],.glass-panel [data-guide="weekly"],.glass-panel [data-guide="badge"],.glass-panel [data-guide="session-caption"],.glass-panel [data-guide="weekly-caption"],.glass-panel .drag{pointer-events:none!important}`}</style>
     <div class="guide-root" style={{ display: "flex", "flex-direction": "column", height: "100vh", color: "var(--label)" }}>
       <div class="drag" data-tauri-drag-region style={{ display: "flex", "align-items": "center", "justify-content": "space-between", padding: "12px 18px", "border-bottom": "0.5px solid var(--separator)" }}>
         <span class="t-headline">{tx(HEAD)}</span>
