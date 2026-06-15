@@ -10,7 +10,6 @@ export const ko: Strings = {
   resetsIn: (h, m) => `${h}시간 ${m}분 뒤 초기화`,
   resetsInLive: (h, m, s) =>
     h > 0 ? `${h}시간 ${m}분 ${s}초 뒤 초기화` : `${m}분 ${s}초 뒤 초기화`,
-  resetsOn: (s) => `${s} 초기화`,
   projSafe: (p) => `예상 ${p}%`,
   projRisk: (h, m) =>
     h > 0 ? `⚠ 한도까지 ~${h}시간 ${m}분` : `⚠ 한도까지 ~${m}분`,
@@ -58,8 +57,6 @@ export const ko: Strings = {
   m30: "30분",
   h1: "1시간",
 
-  activeSession: "현재 세션",
-  fiveHourBlock: "5시간 블록",
   activeNow: "진행 중",
   leftShort: (h, m) => (h > 0 ? `${h}시간 ${m}분 남음` : `${m}분 남음`),
   ratePerHr: (c) => `${c}/시간`,
@@ -85,7 +82,6 @@ export const ko: Strings = {
   deviceCount: (n) => `${n}대`,
   folderManual: "또는 폴더 경로 입력…",
   disableSync: "끄기",
-  peak: "최고",
 
   lastSync: "마지막 동기화",
   never: "없음",

@@ -2,18 +2,9 @@ import { Show } from "solid-js";
 import { clamp } from "../utils/math";
 import { thresholdColor } from "../utils/color";
 
-export type CapsuleTone = "threshold" | "accent" | "neutral";
-
 type Props = {
   value: number;
   size?: "sm" | "md";
-  /** "threshold" (default) = green/amber/red by value; "accent" = solid brand;
-   *  "neutral" = subtle gray. Used to separate limit-style gauges from
-   *  comparison-style bars (e.g. periods, models). */
-  tone?: CapsuleTone;
-  /** Explicit color override — takes precedence over tone. Used by the
-   *  Models card to color bars by model family. */
-  color?: string;
   /** Projected value at reset (may exceed 100). Renders a faint ghost fill
    *  out to the projection capped by a dot — neutral when safe, amber once it
    *  projects past the limit. The dot lives outside the clipped track so it
@@ -21,18 +12,10 @@ type Props = {
   projected?: number | null;
 };
 
-function colorFor(v: number, tone: CapsuleTone, override?: string) {
-  if (override) return override;
-  if (tone === "accent") return "var(--accent)";
-  if (tone === "neutral") return "var(--label-tertiary)";
-  return thresholdColor(v);
-}
-
 export function CapsuleProgress(props: Props) {
   const v = () => clamp(props.value);
-  const tone = () => props.tone ?? "threshold";
   const h = () => (props.size === "sm" ? "var(--capsule-h-sm)" : "var(--capsule-h)");
-  const c = () => colorFor(v(), tone(), props.color);
+  const c = () => thresholdColor(v());
 
   const pv = () => (props.projected == null ? null : clamp(props.projected));
   const over = () => (props.projected ?? 0) >= 100;

@@ -8,7 +8,6 @@ export const en = {
   resetsIn: (h: number, m: number) => `Resets in ${h}h ${m}m`,
   resetsInLive: (h: number, m: number, s: number) =>
     h > 0 ? `Resets in ${h}h ${m}m ${s}s` : `Resets in ${m}m ${s}s`,
-  resetsOn: (s: string) => `Resets ${s}`,
   projSafe: (p: number) => `proj. ${p}%`,
   projRisk: (h: number, m: number) =>
     h > 0 ? `⚠ ~${h}h ${m}m to limit` : `⚠ ~${m}m to limit`,
@@ -56,8 +55,6 @@ export const en = {
   m30: "30m",
   h1: "1h",
 
-  activeSession: "Active session",
-  fiveHourBlock: "5h block",
   activeNow: "Active",
   leftShort: (h: number, m: number) => (h > 0 ? `${h}h ${m}m left` : `${m}m left`),
   ratePerHr: (c: string) => `${c}/hr`,
@@ -83,7 +80,6 @@ export const en = {
   deviceCount: (n: number) => `${n} device${n === 1 ? "" : "s"}`,
   folderManual: "Or type a folder path…",
   disableSync: "Turn off",
-  peak: "peak",
 
   lastSync: "last sync",
   never: "never",

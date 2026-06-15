@@ -154,7 +154,7 @@ pub fn aggregate(counted_until_ms: f64) -> Result<AggregateOut> {
 
     let blocks = group_blocks(&records);
     let now = Utc::now();
-    let active = active_view(&blocks, now, &records);
+    let active = active_view(&blocks, now);
     log::info!(
         "aggregate: root={} records={} blocks={} active={}",
         root.display(),
@@ -364,11 +364,7 @@ fn group_blocks(records: &[Record]) -> Vec<Block> {
     blocks
 }
 
-fn active_view(
-    blocks: &[Block],
-    now: DateTime<Utc>,
-    _records: &[Record],
-) -> Option<ActiveOut> {
+fn active_view(blocks: &[Block], now: DateTime<Utc>) -> Option<ActiveOut> {
     let last = blocks.last()?;
     let elapsed = now - last.start;
     if elapsed.num_hours() >= SESSION_BLOCK_HOURS {
@@ -585,7 +581,7 @@ mod tests {
     #[test]
     fn active_view_active_within_5h() {
         let blocks = vec![Block { start: base(), cost: 1.0 }];
-        let v = active_view(&blocks, base() + Duration::hours(2), &[]).unwrap();
+        let v = active_view(&blocks, base() + Duration::hours(2)).unwrap();
         assert_eq!(v.elapsed_min, 120);
         assert_eq!(v.remaining_min, 180);
         assert_eq!(v.total_min, 300);
@@ -594,7 +590,7 @@ mod tests {
     #[test]
     fn active_view_none_when_stale() {
         let blocks = vec![Block { start: base(), cost: 1.0 }];
-        assert!(active_view(&blocks, base() + Duration::hours(6), &[]).is_none());
+        assert!(active_view(&blocks, base() + Duration::hours(6)).is_none());
     }
 
     #[test]
