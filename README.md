@@ -2,7 +2,7 @@
 
 # Claude Usage Widget
 
-A desktop widget for **Claude Code** that shows your **Anthropic API usage** — current session, weekly limits, recent blocks, and per-model cost — at a glance, without opening a browser or terminal. Rebuilt from scratch with **Tauri 2 + SolidJS + Rust** for **Windows** and **macOS**.
+A desktop widget for **Claude Code** that shows your **Anthropic API usage** — current session, weekly limits, daily cost trends, and per-model cost — at a glance, without opening a browser or terminal. Rebuilt from scratch with **Tauri 2 + SolidJS + Rust** for **Windows** and **macOS**.
 
 ![Tauri 2](https://img.shields.io/badge/Tauri-2-blue.svg)
 ![SolidJS](https://img.shields.io/badge/SolidJS-1.9-2C4F7C.svg)
@@ -21,7 +21,7 @@ A lightweight desktop tool that sits in a corner of your screen and tracks your 
 ### Three-mode widget
 - **Mini** (240×112) — Donut + 2-row capsule. Minimum footprint
 - **Normal** (320×360) — Donut hero + weekly capsules. Default
-- **Detail** (592×619, minSize 520×520) — dashboard: Active session (current 5h block — spend · time left · spend/hour), a daily cost trend chart (colored by model, 7 / 14 / 30-day ranges, click a bar to pick a date, per-device toggle), and a totals card (this week / month · lifetime · combined across devices)
+- **Detail** (592×619, minSize 520×520) — dashboard: Active session (current 5h block — spend · time left · spend/hour), a daily cost trend chart (colored by model, 7 / 14 / 30-day ranges, click a bar to pick a date, per-device toggle), a per-model cost breakdown (Opus · Fable · Sonnet · Haiku with token counts), and a totals card (this week / month · per-device & combined lifetime · cache-hit rate)
 
 Switch via footer SegmentedControl or tray menu. Each mode has its own default size + minSize, and any size you drag-adjust is remembered per mode.
 
@@ -56,6 +56,10 @@ The session reset and the active 5-hour block tick down live, second by second, 
 ### Interactive widget guide
 **Settings → Guide** opens a separate window that renders the real widget at each mode's true size, with a usage slider you can drag to scrub from safe to risk states and watch the UI respond. Measured callouts annotate every element across the Mini / Normal / Detail / Settings tabs, including an inline explanation of how projected usage is estimated.
 
+<p align="center">
+  <img src="docs/screenshots/guide.png" alt="Interactive widget guide" width="640" />
+</p>
+
 ### Bilingual (English / Korean)
 Every string switches instantly, including time labels and AM/PM.
 
@@ -84,6 +88,7 @@ Every string switches instantly, including time labels and AM/PM.
 - **Hide** — `×` in the footer sends the widget to the tray; left-click the tray icon to bring it back
 - **Quit** — Right-click the tray icon → `Quit`
 - **Settings** — `⚙` button in the header
+- **Appearance** — Settings → theme (dark / light) and an *always on top* pin to keep the widget above other windows
 - **Auto-sync** — Settings → Auto sync (`Off / 5m / 10m / 30m / 1h`, default `5m`).
 
 <p align="center">
