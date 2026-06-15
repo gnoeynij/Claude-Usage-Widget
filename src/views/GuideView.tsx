@@ -296,7 +296,10 @@ function GuideView() {
     guideMode();
     level();
     requestAnimationFrame(() => requestAnimationFrame(measure));
-    window.setTimeout(measure, 220);
+    // Clear the prior pending timer so a continuous slider drag coalesces to a
+    // single trailing measure instead of stacking forced-reflow passes.
+    const t = window.setTimeout(measure, 220);
+    onCleanup(() => window.clearTimeout(t));
   });
 
   onMount(() => {
