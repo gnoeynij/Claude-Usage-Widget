@@ -146,6 +146,7 @@ pub async fn set_window_size(
     height: u32,
     min_width: u32,
     min_height: u32,
+    always_on_top: bool,
 ) -> Result<(), String> {
     use tauri::LogicalSize;
     window
@@ -154,5 +155,14 @@ pub async fn set_window_size(
     window
         .set_size(LogicalSize::new(width, height))
         .map_err(|e| e.to_string())?;
+    // Windows drops WS_EX_TOPMOST when a window is resized via SetWindowPos, so
+    // re-assert always-on-top right here — same command, so there's no IPC race
+    // with a separate set_always_on_top call. This keeps AOT through every
+    // resize path (boot, mode switch, macOS compositor nudge) without a
+    // standalone re-assert.
+    if always_on_top {
+        window.set_always_on_top(true).map_err(|e| e.to_string())?;
+        window.set_skip_taskbar(true).map_err(|e| e.to_string())?;
+    }
     Ok(())
 }

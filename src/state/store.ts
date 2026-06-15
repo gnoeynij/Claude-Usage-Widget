@@ -614,6 +614,7 @@ function applyModeSize(mode: Mode) {
     height: h,
     minWidth: mw,
     minHeight: mh,
+    alwaysOnTop: store.alwaysOnTop,
   }).catch((e) => console.error("set_window_size failed", e));
 }
 
@@ -771,18 +772,10 @@ export async function initStore() {
   // 전환해야 정상"). onResized listener 등록 *전*이라 이 호출은 자기 자신을
   // user-resize 로 잘못 기록하지 않음.
   applyModeSize(store.mode);
-
-  // Re-assert always-on-top *after* the boot resize. The early apply during
-  // the suppressPersist block (loadSetting "alwaysOnTop") runs before the
-  // window has settled — on Windows the freshly-created window doesn't reliably
-  // keep WS_EX_TOPMOST from that early call, so a restart with AOT persisted
-  // came up not-on-top until the user re-toggled it. Re-invoking here (over the
-  // same IPC channel, so it lands after set_window_size) makes it stick.
-  if (store.alwaysOnTop) {
-    void invoke("set_always_on_top", { value: true }).catch((e) =>
-      console.error("re-assert always_on_top failed", e),
-    );
-  }
+  // AOT(WS_EX_TOPMOST) is re-asserted *inside* set_window_size after every
+  // resize (commands.rs) — Windows drops it on SetWindowPos. The boot resize
+  // above already carries store.alwaysOnTop, so topmost is restored without a
+  // separate (and IPC-racy) re-assert call here.
 
   // Watch user-driven resizes. Debounce so a drag doesn't write 100 times,
   // and ignore any change within ~1s of a programmatic setMode invoke.
@@ -1080,9 +1073,9 @@ function scheduleCompositorRepaint() {
       const h = Math.round(sz.height / scale);
       const [, , mw, mh] = MODE_DEFAULTS[store.mode];
       resizeSuppressUntil = Date.now() + 1000;
-      await invoke("set_window_size", { width: w, height: h + 1, minWidth: mw, minHeight: mh });
+      await invoke("set_window_size", { width: w, height: h + 1, minWidth: mw, minHeight: mh, alwaysOnTop: store.alwaysOnTop });
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
-      await invoke("set_window_size", { width: w, height: h, minWidth: mw, minHeight: mh });
+      await invoke("set_window_size", { width: w, height: h, minWidth: mw, minHeight: mh, alwaysOnTop: store.alwaysOnTop });
     } catch (e) {
       console.error("compositor repaint nudge failed", e);
     }
