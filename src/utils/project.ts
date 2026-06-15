@@ -32,20 +32,24 @@ export type LimitProjection = {
 /** Returns null when there isn't enough signal to project yet — the caller
  *  shows nothing rather than a wild early-window extrapolation. Guard: right
  *  after a reset `elapsed` is tiny, so one burst would project to absurd
- *  numbers; wait until 20% of the window has passed and the user is past a 2%
- *  floor. `now` is injected so this stays pure/reasonable without a clock. */
+ *  numbers; wait until `minElapsedRatio` of the window has passed and the user
+ *  is past a 2% floor. Default 0.2 fits the short 5h session; the weekly window
+ *  passes 0.1 — its 7d span banks enough absolute data (~17h) far sooner, so a
+ *  flat 0.2 (~1.4d) would over-suppress early-week warnings. `now` is injected
+ *  so this stays pure/reasonable without a clock. */
 export function projectLimit(
   pct: number,
   resetsAtIso: string | null | undefined,
   windowMs: number,
   now: number,
   recentPace?: number,
+  minElapsedRatio = 0.2,
 ): LimitProjection | null {
   if (!resetsAtIso || pct < 2 || pct >= 100) return null;
   const msToReset = new Date(resetsAtIso).getTime() - now;
   if (msToReset <= 0) return null;
   const elapsed = windowMs - msToReset;
-  if (elapsed < windowMs * 0.2) return null;
+  if (elapsed < windowMs * minElapsedRatio) return null;
   const avgPace = pct / elapsed; // % per ms since the window started
   // Recent pace only escalates (max), never lowers below the average floor.
   const pace = recentPace != null && recentPace > avgPace ? recentPace : avgPace;

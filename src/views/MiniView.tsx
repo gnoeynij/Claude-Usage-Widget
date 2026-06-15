@@ -73,6 +73,7 @@ export function MiniView() {
       WEEKLY_WINDOW_MS,
       Date.now(),
       store.recentPaceWeekly,
+      0.1, // weekly's 7d window banks enough data sooner — see projectLimit
     );
   });
   // Any tracked limit on pace to hit before reset → a small amber warning

@@ -111,6 +111,7 @@ export function NormalView() {
       WEEKLY_WINDOW_MS,
       Date.now(),
       store.recentPaceWeekly,
+      0.1, // weekly's 7d window banks enough data sooner — see projectLimit
     );
   });
   return (

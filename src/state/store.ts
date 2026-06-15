@@ -531,7 +531,7 @@ async function maybeNotifyProjection(usage: UsagePayload) {
     },
     {
       weekly: true,
-      proj: projectLimit(usage.seven_day, usage.weekly_resets_at, WEEKLY_WINDOW_MS, now, store.recentPaceWeekly),
+      proj: projectLimit(usage.seven_day, usage.weekly_resets_at, WEEKLY_WINDOW_MS, now, store.recentPaceWeekly, 0.1),
       pct: usage.seven_day,
       block: usage.weekly_resets_at,
       key: "notifiedProjWeek",
