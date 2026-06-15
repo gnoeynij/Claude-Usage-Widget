@@ -321,9 +321,18 @@ function GuideView() {
 
   return (
     <>
-    {/* Guide-only: disable internal scroll on view mains and settings card so
-        the overflow:hidden widget frame is the only clip boundary. */}
-    <style>{`.glass-panel main{overflow:hidden!important}.glass-panel [data-guide="hide"],.glass-panel [data-guide="sync"],.glass-panel [data-guide="donut"],.glass-panel [data-guide="expand"],.glass-panel [data-guide="modes"],.glass-panel [data-guide="settings"],.glass-panel [data-guide="status"],.glass-panel [data-guide="weekly"],.glass-panel [data-guide="badge"],.glass-panel [data-guide="session-caption"],.glass-panel [data-guide="weekly-caption"],.glass-panel .drag{pointer-events:none!important}`}</style>
+    {/* Guide-only: disable internal scroll on detail/mini view mains so the
+        overflow:hidden widget frame is the only clip boundary. Normal is
+        EXCLUDED — its content runs ~14px past main's flex box (donut + both
+        reset/projection captions), and clipping there hides the weekly reset
+        caption. The real widget leaves main overflow visible, so flex grows
+        main and reflows header/footer to fit the 360px panel; the guide must
+        match to render that caption.
+        The mini warning badge is the one interactive element kept live (like
+        detail's range/chart): its callout says "click for details", so it must
+        toggle the in-Mini info overlay. It needs pointer-events:auto to re-arm
+        because it sits inside mini's main.drag (set to none above). */}
+    <style>{`${widgetMode() === "normal" ? "" : ".glass-panel main{overflow:hidden!important}"}.glass-panel [data-guide="hide"],.glass-panel [data-guide="sync"],.glass-panel [data-guide="donut"],.glass-panel [data-guide="expand"],.glass-panel [data-guide="modes"],.glass-panel [data-guide="settings"],.glass-panel [data-guide="status"],.glass-panel [data-guide="weekly"],.glass-panel [data-guide="session-caption"],.glass-panel [data-guide="weekly-caption"],.glass-panel .drag{pointer-events:none!important}.glass-panel [data-guide="badge"]{pointer-events:auto!important}`}</style>
     <div class="guide-root" style={{ display: "flex", "flex-direction": "column", height: "100vh", color: "var(--label)" }}>
       <div class="drag" data-tauri-drag-region style={{ display: "flex", "align-items": "center", "justify-content": "space-between", padding: "12px 18px", "border-bottom": "0.5px solid var(--separator)" }}>
         <span class="t-headline">{tx(HEAD)}</span>
