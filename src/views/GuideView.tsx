@@ -22,6 +22,23 @@ const tx = (t: Txt) => t[lang];
 
 const HEAD: Txt = { en: "Widget guide", ko: "위젯 가이드" };
 const SLIDER: Txt = { en: "Drag to change the usage level", ko: "사용량을 조절해 보세요" };
+const PROJ_TITLE: Txt = { en: "How projected usage is estimated", ko: "예상 사용량은 어떻게 계산되나요?" };
+const PROJ_DESC: Txt = {
+  en: "The faint ghost arc/bar, the caption's projection, and the ⚠ badge all assume your current pace holds until reset:",
+  ko: "도넛·막대의 옅은 고스트, 캡션의 예상치, ⚠ 배지는 모두 현재 사용 속도가 리셋까지 이어진다고 가정합니다:",
+};
+const PROJ_FORMULA: Txt = {
+  en: "projected % = current % × (window ÷ elapsed)",
+  ko: "예상 % = 현재 % × (전체 기간 ÷ 경과 시간)",
+};
+const PROJ_NOTE1: Txt = {
+  en: "If your recent pace runs faster than that average, the faster pace is used instead — so warnings surface sooner.",
+  ko: "최근 속도가 이 평균보다 빠르면 더 빠른 쪽을 적용해, 경고가 더 일찍 나타납니다.",
+};
+const PROJ_NOTE2: Txt = {
+  en: "Skipped for a short while after each reset (~1h for the session, ~17h for the week) until there's enough data to extrapolate.",
+  ko: "초기화 직후 잠깐(세션 약 1시간, 주간 약 17시간)은 데이터가 적어 예상치를 표시하지 않습니다.",
+};
 const TRAY_TITLE: Txt = { en: "System tray icon", ko: "시스템 트레이 아이콘" };
 const TRAY_DESC: Txt = {
   en: "The widget keeps running in the tray when hidden. Right-click for Show / Quit. The icon color reflects sync status:",
@@ -401,6 +418,18 @@ function GuideView() {
 
         </div>
       </div>
+
+      {/* Projection explainer — only in normal/mini, where the ghost markers
+          and projection captions actually appear (detail/settings have none). */}
+      <Show when={guideMode() === "normal" || guideMode() === "mini"}>
+        <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "5px", padding: "12px 18px 0", "border-top": "0.5px solid var(--separator)", "flex-shrink": 0 }}>
+          <div class="t-body" style={{ "font-weight": 600 }}>{tx(PROJ_TITLE)}</div>
+          <div class="t-caption label-secondary" style={{ "max-width": "660px", "text-align": "center", "line-height": 1.4 }}>{tx(PROJ_DESC)}</div>
+          <div class="t-caption" style={{ padding: "4px 12px", margin: "1px 0", background: "var(--fill-2)", "border-radius": "var(--r-sm)", color: "var(--label)" }}>{tx(PROJ_FORMULA)}</div>
+          <div class="t-caption label-tertiary" style={{ "max-width": "660px", "text-align": "center", "line-height": 1.4 }}>{tx(PROJ_NOTE1)}</div>
+          <div class="t-caption label-tertiary" style={{ "max-width": "660px", "text-align": "center", "line-height": 1.4 }}>{tx(PROJ_NOTE2)}</div>
+        </div>
+      </Show>
 
       {/* tray icon explanation — pinned at the bottom of the guide, always visible */}
       <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "6px", padding: "10px 18px 14px", "border-top": "0.5px solid var(--separator)", "flex-shrink": 0 }}>
