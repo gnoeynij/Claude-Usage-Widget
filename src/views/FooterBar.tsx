@@ -9,7 +9,8 @@ export function FooterBar() {
   return (
     <footer
       style={{
-        display: "flex",
+        display: "grid",
+        "grid-template-columns": "1fr auto 1fr",
         "align-items": "center",
         gap: "var(--s-2)",
         padding: "var(--s-2) var(--s-3)",
@@ -18,11 +19,10 @@ export function FooterBar() {
     >
       <span
         class="t-caption label-tertiary"
-        style={{ "white-space": "nowrap", "flex-shrink": 0 }}
+        style={{ "white-space": "nowrap", "justify-self": "start" }}
       >
         v{store.version}
       </span>
-      <div style={{ flex: 1 }} />
       {/* Explicit width — without it, SegmentedControl's flex children fall
           back to intrinsic content widths and lose equal sizing. 168px gives
           each button ~54px so the 6-letter labels (Normal/Detail) breathe
@@ -49,6 +49,7 @@ export function FooterBar() {
         }}
         title={t().show}
         style={{
+          "justify-self": "end",
           width: "26px",
           height: "26px",
           "border-radius": "8px",

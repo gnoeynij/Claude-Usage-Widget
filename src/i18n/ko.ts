@@ -49,7 +49,7 @@ export const ko: Strings = {
   mini: "미니",
   normal: "기본",
   detail: "상세",
-  miniExpand: "클릭하여 확장 (또는 어디든 더블클릭)",
+  miniExpand: "클릭하여 확장",
 
   off: "끔",
   m5: "5분",

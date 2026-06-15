@@ -105,7 +105,6 @@ export function MiniView() {
   return (
     <main
       class="drag view-in"
-      data-tauri-drag-region
       onMouseDown={startWindowDrag}
       style={{
         position: "relative",

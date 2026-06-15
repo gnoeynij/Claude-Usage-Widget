@@ -47,7 +47,7 @@ export const en = {
   mini: "Mini",
   normal: "Normal",
   detail: "Detail",
-  miniExpand: "Click to expand (or double-click anywhere)",
+  miniExpand: "Click to expand",
 
   off: "Off",
   m5: "5m",

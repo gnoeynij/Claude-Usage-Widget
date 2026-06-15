@@ -24,8 +24,8 @@ const HEAD: Txt = { en: "Widget guide", ko: "위젯 가이드" };
 const SLIDER: Txt = { en: "Drag to change the usage level", ko: "사용량을 조절해 보세요" };
 const PROJ_TITLE: Txt = { en: "How projected usage is estimated", ko: "예상 사용량은 어떻게 계산되나요?" };
 const PROJ_DESC: Txt = {
-  en: "The faint ghost arc/bar, the caption's projection, and the ⚠ badge all assume your current pace holds until reset:",
-  ko: "도넛·막대의 옅은 고스트, 캡션의 예상치, ⚠ 배지는 모두 현재 사용 속도가 리셋까지 이어진다고 가정합니다:",
+  en: "The faint ghost arcs/bars and projection readouts all assume your current pace holds until reset:",
+  ko: "도넛·막대의 옅은 고스트와 예상치 표시는 모두 현재 사용 속도가 리셋까지 이어진다고 가정합니다:",
 };
 const PROJ_FORMULA: Txt = {
   en: "projected % = current % × (window / elapsed)",
@@ -101,7 +101,7 @@ const CALLOUTS: Record<GuideMode, Callout[]> = {
       desc: { en: "Projected arc: expected usage at reset. Inner arc: current use.", ko: "예측 아크: 초기화 시 예상 사용량. 안쪽 아크: 현재 사용량." } },
     { anchor: "expand", side: "left", y: 270,
       title: { en: "Expand", ko: "기본 모드로" },
-      desc: { en: "Click the handle or double-click to expand to Normal mode.", ko: "아래 핸들 클릭 또는 더블클릭으로 기본 모드로 전환합니다." } },
+      desc: { en: "Click the handle to expand to Normal mode.", ko: "아래 핸들을 클릭하면 기본 모드로 전환합니다." } },
     { anchor: "badge", side: "right", y: 120, cond: "risk",
       title: { en: "Warning badge", ko: "경고 배지" },
       desc: { en: "Appears only when on pace to hit a limit. Click for details.", ko: "한도 도달이 예상될 때만 표시됩니다. 클릭하면 상세 정보를 볼 수 있습니다." } },
@@ -331,7 +331,10 @@ function GuideView() {
   const frameSize = (): [number, number] =>
     guideMode() === "settings" ? SETTINGS_SIZE : MODE_SIZE[widgetMode()];
   const frameLeft = () => frameCX() - frameSize()[0] / 2;
-  const canvasH = () => FRAME_TOP + frameSize()[1] + 60;
+  // Detail's frame is tall (619px); with the fixed 920px window its callouts
+  // sit beside/within the widget, so it needs almost no bottom margin. The
+  // other modes keep 60px for callouts that extend below the widget.
+  const canvasH = () => FRAME_TOP + frameSize()[1] + (guideMode() === "detail" ? 16 : 60);
   const sxFor = (c: Callout) => c.side === "right"
     ? Math.max(canvasW() - 290, frameLeft() + frameSize()[0] + 8)
     : Math.min(290, frameLeft() - 8);
@@ -354,7 +357,7 @@ function GuideView() {
         because it sits inside mini's main.drag (set to none above). */}
     <style>{`${widgetMode() === "normal" ? "" : ".glass-panel main{overflow:hidden!important}"}.glass-panel [data-guide="hide"],.glass-panel [data-guide="sync"],.glass-panel [data-guide="donut"],.glass-panel [data-guide="expand"],.glass-panel [data-guide="modes"],.glass-panel [data-guide="settings"],.glass-panel [data-guide="status"],.glass-panel [data-guide="weekly"],.glass-panel [data-guide="session-caption"],.glass-panel [data-guide="weekly-caption"],.glass-panel .drag{pointer-events:none!important}.glass-panel [data-guide="badge"]{pointer-events:auto!important}`}</style>
     <div class="guide-root" style={{ display: "flex", "flex-direction": "column", height: "100vh", color: "var(--label)" }}>
-      <div class="drag" data-tauri-drag-region style={{ display: "flex", "align-items": "center", "justify-content": "space-between", padding: "12px 18px", "border-bottom": "0.5px solid var(--separator)" }}>
+      <div class="drag" data-tauri-drag-region style={{ display: "grid", "grid-template-columns": "1fr auto 1fr", "align-items": "center", padding: "12px 18px", "border-bottom": "0.5px solid var(--separator)" }}>
         <span class="t-headline">{tx(HEAD)}</span>
         <div class="no-drag" style={{ display: "flex", gap: "2px", background: "var(--fill-2)", "border-radius": "9px", padding: "3px" }}>
           <For each={GUIDE_MODES}>
@@ -365,7 +368,7 @@ function GuideView() {
             )}
           </For>
         </div>
-        <button class="no-drag ring-hover" onClick={() => void getCurrentWindow().close()} style={{ color: "var(--label-secondary)", "font-size": "15px", width: "28px", height: "28px", "border-radius": "8px" }}>✕</button>
+        <button class="no-drag ring-hover" onClick={() => void getCurrentWindow().close()} style={{ "justify-self": "end", color: "var(--label-secondary)", "font-size": "15px", width: "28px", height: "28px", "border-radius": "8px" }}>✕</button>
       </div>
 
       <div style={{ flex: 1, "min-height": 0, display: "flex", "flex-direction": "column", "align-items": "stretch", "justify-content": "center", overflow: "auto" }}>
@@ -420,19 +423,21 @@ function GuideView() {
           </For>
 
         </div>
-      </div>
 
-      {/* Projection explainer — only in normal/mini, where the ghost markers
-          and projection captions actually appear (detail/settings have none). */}
-      <Show when={guideMode() === "normal" || guideMode() === "mini"}>
-        <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "5px", padding: "12px 18px 0", "border-top": "0.5px solid var(--separator)", "flex-shrink": 0 }}>
-          <div class="t-body" style={{ "font-weight": 600 }}>{tx(PROJ_TITLE)}</div>
-          <div class="t-caption label-secondary" style={{ "max-width": "660px", "text-align": "center", "line-height": 1.4 }}>{tx(PROJ_DESC)}</div>
-          <div class="t-caption" style={{ padding: "4px 12px", margin: "1px 0", background: "var(--fill-2)", "border-radius": "var(--r-sm)", color: "var(--label)" }}>{tx(PROJ_FORMULA)}</div>
-          <div class="t-caption label-tertiary" style={{ "max-width": "660px", "text-align": "center", "line-height": 1.4 }}>{tx(PROJ_NOTE1)}</div>
-          <div class="t-caption label-tertiary" style={{ "max-width": "660px", "text-align": "center", "line-height": 1.4 }}>{tx(PROJ_NOTE2)}</div>
-        </div>
-      </Show>
+        {/* Projection explainer — inside the canvas column, just below the
+            widget, so the bottom keeps a single footer (the tray) instead of
+            two stacked ones. Only in normal/mini, where the ghost markers and
+            projection captions actually appear (detail/settings have none). */}
+        <Show when={guideMode() === "normal" || guideMode() === "mini"}>
+          <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "5px", padding: "8px 18px 0", "flex-shrink": 0 }}>
+            <div class="t-body" style={{ "font-weight": 600 }}>{tx(PROJ_TITLE)}</div>
+            <div class="t-caption label-secondary" style={{ "max-width": "660px", "text-align": "center", "line-height": 1.4 }}>{tx(PROJ_DESC)}</div>
+            <div class="t-caption" style={{ padding: "4px 12px", margin: "1px 0", background: "var(--fill-2)", "border-radius": "var(--r-sm)", color: "var(--label)" }}>{tx(PROJ_FORMULA)}</div>
+            <div class="t-caption label-tertiary" style={{ "max-width": "660px", "text-align": "center", "line-height": 1.4 }}>{tx(PROJ_NOTE1)}</div>
+            <div class="t-caption label-tertiary" style={{ "max-width": "660px", "text-align": "center", "line-height": 1.4 }}>{tx(PROJ_NOTE2)}</div>
+          </div>
+        </Show>
+      </div>
 
       {/* tray icon explanation — pinned at the bottom of the guide, always visible */}
       <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "6px", padding: "10px 18px 14px", "border-top": "0.5px solid var(--separator)", "flex-shrink": 0 }}>

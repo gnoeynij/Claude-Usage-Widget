@@ -215,7 +215,7 @@ const [store, setStore] = createStore<StoreShape>({
   syncIntervalMin: 5,
   opacity: 0,
   settingsOpen: false,
-  usage: { five_hour: 0, seven_day: 0, seven_day_sonnet: 0 },
+  usage: { five_hour: 0, seven_day: 0, seven_day_sonnet: 0, session_resets_at: null, weekly_resets_at: null },
   plan: null,
   detail: null,
   lastSyncAt: null,
