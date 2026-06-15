@@ -17,10 +17,11 @@ import { startWindowDrag } from "../utils/drag";
  *  = calm "· 예상 N%", risk = amber "· ⚠ 한도 …") instead of a separate stacked
  *  line, so the limit messaging doesn't sprawl vertically. Gated on the same
  *  `projected > value + 0.5` as the donut/bar marker (near reset, projected ≈
- *  current → suppressed); floor so 99.6% never shows "100%". Called inside a JSX
- *  expression so it stays reactive to the projection memo. */
+ *  current → suppressed) — EXCEPT an over-limit projection (hitsBeforeReset)
+ *  always shows, so the ⚠ warning isn't swallowed at 99.x%. floor so 99.6%
+ *  never shows "100%". Called inside a JSX expression so it stays reactive. */
 function projInline(proj: LimitProjection | null, value: number) {
-  if (!proj || proj.projectedPct <= value + 0.5) return null;
+  if (!proj || (proj.projectedPct <= value + 0.5 && !proj.hitsBeforeReset)) return null;
   if (!proj.hitsBeforeReset) {
     return ` · ${t().projSafe(Math.floor(proj.projectedPct))}`;
   }

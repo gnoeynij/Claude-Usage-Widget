@@ -36,7 +36,8 @@ export function CapsuleProgress(props: Props) {
 
   const pv = () => (props.projected == null ? null : clamp(props.projected));
   const over = () => (props.projected ?? 0) >= 100;
-  const showProj = () => pv() != null && (pv() as number) > v() + 0.5;
+  // `|| over()` — over-limit projection shows even at the 99.x% edge (matches Donut).
+  const showProj = () => pv() != null && ((pv() as number) > v() + 0.5 || over());
   // Colored by the projected threshold (never gray) so the ghost fill stays
   // distinct from the gray empty track — matches the donut.
   const ghostC = () => thresholdColor(pv() ?? 0);

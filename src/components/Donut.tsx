@@ -34,7 +34,9 @@ export function Donut(props: Props) {
   // fill covers 0→current and only current→projected shows as the ghost.
   const pv = () => (props.projected == null ? null : clamp(props.projected));
   const over = () => (props.projected ?? 0) >= 100;
-  const showProj = () => pv() != null && (pv() as number) > v() + 0.5;
+  // `|| over()`: an over-limit projection shows even within 0.5 of current
+  // (the 99.x% edge), so the limit marker isn't suppressed right at the top.
+  const showProj = () => pv() != null && ((pv() as number) > v() + 0.5 || over());
   // Colored by the PROJECTED threshold (green/amber/red), never gray — so the
   // ghost stays distinct from the gray empty track (which a neutral ghost would
   // blend into) and conveys where the projection lands ("amber now, red soon").
