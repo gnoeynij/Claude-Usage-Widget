@@ -28,8 +28,8 @@ const PROJ_DESC: Txt = {
   ko: "도넛·막대의 옅은 고스트, 캡션의 예상치, ⚠ 배지는 모두 현재 사용 속도가 리셋까지 이어진다고 가정합니다:",
 };
 const PROJ_FORMULA: Txt = {
-  en: "projected % = current % × (window ÷ elapsed)",
-  ko: "예상 % = 현재 % × (전체 기간 ÷ 경과 시간)",
+  en: "projected % = current % × (window / elapsed)",
+  ko: "예상 % = 현재 % × (전체 기간 / 경과 시간)",
 };
 const PROJ_NOTE1: Txt = {
   en: "If your recent pace runs faster than that average, the faster pace is used instead — so warnings surface sooner.",
