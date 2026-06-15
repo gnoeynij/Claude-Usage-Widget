@@ -114,15 +114,27 @@ pub fn setup(app: &mut App, lang: &str) -> tauri::Result<()> {
         })
         .on_tray_icon_event(|tray, event| {
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
-            // Left click (mouse-up) toggles. DoubleClick 도 같이 fire 되지만
-            // 한 번의 single click 으로 toggle 충분. 사용자 신고: "X 로
-            // hide 한 후 다시 못 부름" — 트레이 좌클릭 미구현이 원인.
+            // Left click (mouse-up) toggles. 사용자 신고: "X 로 hide 한 후 다시
+            // 못 부름" — 트레이 좌클릭 토글로 해결. 단 더블클릭 시 OS 가
+            // Click(Up) 을 *두 번* fire 해 toggle 이 2회 → 표시 상태에선 깜빡임,
+            // 숨김 상태에선 다시 못 부름. 300ms 내 두 번째 Click(Up) 은 디바운스.
+            static LAST_TOGGLE_MS: std::sync::atomic::AtomicU64 =
+                std::sync::atomic::AtomicU64::new(0);
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
                 ..
             } = event
             {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0);
+                let last = LAST_TOGGLE_MS.load(std::sync::atomic::Ordering::Relaxed);
+                if now.saturating_sub(last) < 300 {
+                    return;
+                }
+                LAST_TOGGLE_MS.store(now, std::sync::atomic::Ordering::Relaxed);
                 toggle_window(tray.app_handle());
             }
         })

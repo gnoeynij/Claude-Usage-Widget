@@ -890,7 +890,12 @@ export async function syncNow() {
     // between Detail-mode visits is lost for good. The full walk is mtime-cached
     // (jsonl_aggregator FILE_CACHE), so re-running it per sync only re-reads
     // changed files. store.detail is set even when not shown — harmless.
-    await refreshDetail();
+    // Detail aggregation is supplementary to the usage fetch above. fetch_usage
+    // already succeeded, so the sync IS ok — treat a detail failure as
+    // best-effort (log only) rather than flipping the whole sync to error.
+    await refreshDetail().catch((e) =>
+      void warn(`detail refresh failed (usage sync ok): ${toErrorMessage(e)}`),
+    );
     updateRecentPace(usage, Date.now());
     void maybeNotifyThreshold(usage);
     void maybeNotifyProjection(usage);
@@ -913,7 +918,7 @@ export function setMode(mode: Mode) {
   if (!suppressPersist) void persistSetting("mode", mode);
   applyModeSize(mode);
   if (mode === "detail") {
-    void refreshDetail();
+    void refreshDetail().catch((e) => void warn(`detail refresh failed: ${toErrorMessage(e)}`));
   }
 }
 
@@ -948,29 +953,29 @@ function foldCostHistory(daily: DetailDay[] | undefined) {
   }
 }
 
+// Throws on failure — the caller decides how to surface it. (Previously this
+// wrote syncError directly, which contradicted syncNow's 'tray ok' success
+// path when fetch_usage succeeded but aggregate_detail failed. refreshDetail
+// also runs standalone from setMode, so ownership belongs to the caller.)
 export async function refreshDetail() {
-  try {
-    const detail = await invoke<DetailPayload>("aggregate_detail", {
-      countedUntilMs: store.lifetimeCountedUntilMs,
-    });
-    setStore("detail", detail);
-    foldCostHistory(detail.daily);
-    // Fold newly-seen cost into the non-decreasing lifetime total. The
-    // counted-until guard makes this idempotent across repeated refreshes.
-    if (
-      detail.new_cost_since > 0 ||
-      detail.max_ts_ms > store.lifetimeCountedUntilMs
-    ) {
-      const next = store.lifetimeCost + detail.new_cost_since;
-      setStore("lifetimeCost", next);
-      setStore("lifetimeCountedUntilMs", detail.max_ts_ms);
-      void persistSetting("lifetimeCost", next);
-      void persistSetting("lifetimeCountedUntilMs", detail.max_ts_ms);
-    }
-    if (store.syncFolder) void syncDevices();
-  } catch (e) {
-    setStore("syncError", toErrorMessage(e));
+  const detail = await invoke<DetailPayload>("aggregate_detail", {
+    countedUntilMs: store.lifetimeCountedUntilMs,
+  });
+  setStore("detail", detail);
+  foldCostHistory(detail.daily);
+  // Fold newly-seen cost into the non-decreasing lifetime total. The
+  // counted-until guard makes this idempotent across repeated refreshes.
+  if (
+    detail.new_cost_since > 0 ||
+    detail.max_ts_ms > store.lifetimeCountedUntilMs
+  ) {
+    const next = store.lifetimeCost + detail.new_cost_since;
+    setStore("lifetimeCost", next);
+    setStore("lifetimeCountedUntilMs", detail.max_ts_ms);
+    void persistSetting("lifetimeCost", next);
+    void persistSetting("lifetimeCountedUntilMs", detail.max_ts_ms);
   }
+  if (store.syncFolder) void syncDevices();
 }
 
 /** Combined lifetime cost + daily history across devices via a shared cloud

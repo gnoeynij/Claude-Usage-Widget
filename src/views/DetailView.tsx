@@ -489,7 +489,10 @@ function DailyCostCard() {
           </div>
         </Show>
 
-        {/* Summary row: avg / trend / peak for the window. */}
+        {/* Summary row: avg / trend / peak — only when the window has real
+            data, so an all-zero window (durable history exists but this range
+            is empty) doesn't show an arbitrary "peak [first day] $0.0". */}
+        <Show when={windowDays().some((d) => d.total > 0)}>
         <div
           class="t-caption label-secondary"
           style={{
@@ -511,9 +514,9 @@ function DailyCostCard() {
           <Show when={trendPct() !== null}>
             <span
               class="tabular-nums"
-              style={{ color: (trendPct() ?? 0) > 0 ? "#ff453a" : "#30d158" }}
+              style={{ color: (trendPct() ?? 0) > 0 ? "#ff453a" : trendPct() === 0 ? "var(--label-tertiary)" : "#30d158" }}
             >
-              {(trendPct() ?? 0) > 0 ? "↗" : "↘"} {Math.abs(trendPct() ?? 0)}%{" "}
+              {(trendPct() ?? 0) > 0 ? "↗" : trendPct() === 0 ? "→" : "↘"} {Math.abs(trendPct() ?? 0)}%{" "}
               <span class="label-tertiary">{t().vsPrev}</span>
             </span>
           </Show>
@@ -526,6 +529,7 @@ function DailyCostCard() {
             <span class="tabular-nums">{compactCost(maxTotal())}</span>
           </span>
         </div>
+        </Show>
 
         {/* Per-model breakdown for the selected window (durable costHistory,
             not on-disk). Doubles as the chart legend. */}
