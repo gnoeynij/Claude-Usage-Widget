@@ -10,6 +10,7 @@ import {
   type LimitProjection,
 } from "../utils/project";
 import { startWindowDrag } from "../utils/drag";
+import { clamp } from "../utils/math";
 
 /** Plain-text projection summary for the badge tooltip (no markup — it's a
  *  native title attribute). Mirrors RiskCaption's day/hour split. */
@@ -34,7 +35,7 @@ function MiniRow(props: { label: string; value: number; projected?: number | nul
       >
         <span class="t-caption label-secondary">{props.label}</span>
         <span class="t-caption tabular-nums">
-          {Math.round(props.value || 0)}
+          {Math.round(clamp(props.value))}
           <span style={{ opacity: 0.55 }}>%</span>
         </span>
       </div>

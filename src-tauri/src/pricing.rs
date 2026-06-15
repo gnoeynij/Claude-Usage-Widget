@@ -100,7 +100,7 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
 static RESOLVE_CACHE: Lazy<Mutex<HashMap<String, Option<Pricing>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
-pub fn resolve(model: &str) -> Option<Pricing> {
+fn resolve(model: &str) -> Option<Pricing> {
     if let Some(hit) = RESOLVE_CACHE.lock().unwrap().get(model) {
         return *hit;
     }

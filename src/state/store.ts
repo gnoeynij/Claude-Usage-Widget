@@ -581,19 +581,16 @@ async function maybeNotifyProjection(usage: UsagePayload) {
 }
 
 async function loadModeSizes() {
-  try {
-    const ps = await getPersistStore();
-    const v = await ps.get<ModeSizes>("modeSizes");
-    if (v && typeof v === "object") {
+  await loadSetting<ModeSizes>(
+    "modeSizes",
+    (v) =>
       setStore("modeSizes", {
         mini: v.mini ?? null,
         normal: v.normal ?? null,
         detail: v.detail ?? null,
-      });
-    }
-  } catch (e) {
-    console.error("load modeSizes failed", e);
-  }
+      }),
+    (v): v is ModeSizes => typeof v === "object" && v !== null,
+  );
 }
 
 // Boot 시점 setter 호출이 다시 persist 를 트리거하면 read-after-write 가 의미
