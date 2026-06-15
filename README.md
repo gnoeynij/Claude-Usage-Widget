@@ -21,9 +21,12 @@ A lightweight desktop tool that sits in a corner of your screen and tracks your 
 ### Three-mode widget
 - **Mini** (240×112) — Donut + 2-row capsule. Minimum footprint
 - **Normal** (320×360) — Donut hero + weekly capsules. Default
-- **Detail** (592×619, minSize 520×520) — dashboard: Active session (live countdown), Periods (+ month-end cost projection), Recent 5h blocks, Models (+ mix %), Stats (lifetime cost · messages · cache hit)
+- **Detail** (592×619, minSize 520×520) — dashboard: Active session (current 5h block — spend · time left · spend/hour), a daily cost trend chart (colored by model, 7 / 14 / 30-day ranges, click a bar to pick a date, per-device toggle), and a totals card (this week / month · lifetime · combined across devices)
 
 Switch via footer SegmentedControl or tray menu. Each mode has its own default size + minSize, and any size you drag-adjust is remembered per mode.
+
+### Limit projection
+A translucent **ghost arc/dot** overlays the donut and weekly bars to show where usage is expected to land at reset if your current pace holds, and the reset captions add the projected figure. When you're on pace to hit a limit, Mini shows a **⚠ risk badge** (click it for a per-limit breakdown) and a **tray alert** fires in the background. A recent burst is blended into the estimate so warnings surface sooner; projection pauses for a short while after each reset until there's enough data to extrapolate.
 
 ### Liquid Glass + OS-native vibrancy
 System backdrop composited with OS-level vibrancy — **Win11 Mica/Acrylic** on Windows, **NSVisualEffectView (HudWindow material)** on macOS. The background-opacity slider fades only the background — text, donuts, and gauges stay fully opaque.
@@ -49,6 +52,9 @@ Reads Claude Code's OAuth token from the platform-native store — `~/.claude/.c
 
 ### Real-time countdowns
 The session reset and the active 5-hour block tick down live, second by second, between syncs. (All cost figures are local estimates: `~/.claude/projects` JSONL × the official pricing table.)
+
+### Interactive widget guide
+**Settings → Guide** opens a separate window that renders the real widget at each mode's true size, with a usage slider you can drag to scrub from safe to risk states and watch the UI respond. Measured callouts annotate every element across the Mini / Normal / Detail / Settings tabs, including an inline explanation of how projected usage is estimated.
 
 ### Bilingual (English / Korean)
 Every string switches instantly, including time labels and AM/PM.
@@ -132,6 +138,7 @@ npm run tauri build
 
 ### v2.0.x (Tauri 2 + SolidJS line)
 
+- [**v2.4.1**](docs/release-notes/v2.4.1.md) — Maintenance: Mini double-click no longer maximizes the window (expand via the bottom handle; tooltip and guide clarified), the "on pace to exceed" warning is no longer hidden when the projection rounds to 99.x%, always-on-top no longer drops on every resize, plus guide-layout fixes (fixed-size guide window, centered grid header/footer, weekly-caption clipping, Mini badge click).
 - [**v2.4.0**](docs/release-notes/v2.4.0.md) — Limit projection (ghost arc/dot shows expected usage at reset; ⚠ badge + tray alert when on pace to hit the limit) + Detail mode redesign (daily cost bar chart as hero, device-toggle history, totals card, unused models shown as $0) + interactive widget guide (real widget render + usage slider, 4-tab callout annotations).
 - [**v2.3.1**](docs/release-notes/v2.3.1.md) — Daily cost history that survives JSONL cleanup (per-day model-mix breakdown in Detail) + lifetime cost now accrues in every mode, not just Detail + fast-mode (`speed: fast`) pricing and Claude Mythos 5. Fixes: notification toasts no longer push widget content down (Portal overlay), no more duplicate 85%/95% toast on a 100% sync, and "always on top" now sticks across restarts.
 - [**v2.3.0**](docs/release-notes/v2.3.0.md) — Single-instance lock (re-launching focuses the existing window instead of spawning a duplicate) + Claude Fable 5 pricing ($10/$50, released 2026-06-09) + a notification fix (a 100%-on-sync crossing no longer fires both the 85% and 95% toast at once — only the highest level alerts).
