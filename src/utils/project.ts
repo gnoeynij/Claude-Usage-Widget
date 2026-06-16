@@ -61,3 +61,41 @@ export function projectLimit(
   }
   return { projectedPct, hitsBeforeReset: false, msToLimit: 0 };
 }
+
+// ── Recent-pace estimate (pure core; the store owns the side effects) ────────
+// `recentPace` feeds projectLimit's max(average, recent) blend so a current
+// burst escalates the projection sooner. It is grown by `blendPace` on each
+// sync and relaxed by `decayPace` on a wall-clock tick — so the projection
+// eases off on its own between syncs (no extra API calls). Because projectLimit
+// floors the pace at the average, decaying recent toward 0 can never *under*-warn.
+
+export type PaceSample = { pct: number; ts: number };
+export type BlendOpts = { alpha: number; minIntervalMs: number };
+
+/** EMA update for the recent %/ms pace. Returns the new pace + the sample to
+ *  store. `prevPace` is read from (and written back to) the store so a tick
+ *  decay between syncs carries through to the next blend. Guards:
+ *   - no prior sample → seed it, pace unchanged (no rate from one point)
+ *   - usage dropped (`pct < sample.pct`) → window reset between syncs → pace 0
+ *   - interval shorter than `minIntervalMs` → keep the old sample (anti-spike:
+ *     a tiny Δt would blow up `raw = Δpct/Δt`; wait for a meaningful interval) */
+export function blendPace(
+  prevPace: number,
+  sample: PaceSample | null,
+  pct: number,
+  now: number,
+  { alpha, minIntervalMs }: BlendOpts,
+): { pace: number; sample: PaceSample } {
+  if (!sample) return { pace: prevPace, sample: { pct, ts: now } };
+  if (pct < sample.pct) return { pace: 0, sample: { pct, ts: now } };
+  if (now - sample.ts < minIntervalMs) return { pace: prevPace, sample };
+  const raw = (pct - sample.pct) / (now - sample.ts);
+  return { pace: alpha * raw + (1 - alpha) * prevPace, sample: { pct, ts: now } };
+}
+
+/** Wall-clock relaxation: halve the pace every `halfLifeMs`. No-op for a
+ *  non-positive pace or interval. */
+export function decayPace(pace: number, dtMs: number, halfLifeMs: number): number {
+  if (pace <= 0 || dtMs <= 0) return pace;
+  return pace * Math.pow(0.5, dtMs / halfLifeMs);
+}

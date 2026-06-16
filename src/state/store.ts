@@ -13,9 +13,12 @@ import { checkForUpdate } from "./updater";
 import { toErrorMessage } from "../utils/error";
 import {
   projectLimit,
+  blendPace,
+  decayPace,
   SESSION_WINDOW_MS,
   WEEKLY_WINDOW_MS,
   type LimitProjection,
+  type PaceSample,
 } from "../utils/project";
 import { t } from "../i18n";
 
@@ -469,14 +472,21 @@ async function maybeNotifyThreshold(usage: UsagePayload) {
   if (weeklyDue.length > 0) fire("weekly", weeklyDue, usage.seven_day, hidden);
 }
 
-// Recent-pace EMA (ephemeral, module-level). One sample per scope; the smoothed
-// %/ms feeds projectLimit's max(average, recent) blend. Lost on restart → 0
-// (projection falls back to average) until two syncs accumulate.
+// Recent-pace estimate (ephemeral). The pace value lives in the store
+// (recentPace{Session,Weekly}) so the minute-tick decay below carries through to
+// the next blend and the projection memos see it; the sample (last pct+ts) is
+// module-local. Lost on restart → 0 (projection falls back to average) until
+// two syncs accumulate. Pure math is in utils/project (blendPace/decayPace).
 const PACE_ALPHA = 0.4;
-let lastPaceSample: {
-  session: { pct: number; ts: number } | null;
-  weekly: { pct: number; ts: number } | null;
-} = { session: null, weekly: null };
+// Ignore sub-30s intervals so a rapid manual-sync burst can't spike `raw`.
+const PACE_MIN_INTERVAL_MS = 30_000;
+// Recent pace passively halves every ~12 min so projections relax on their own
+// between syncs (no API needed). Average pace stays projectLimit's floor.
+const PACE_HALF_LIFE_MS = 12 * 60_000;
+let paceSample: { session: PaceSample | null; weekly: PaceSample | null } = {
+  session: null,
+  weekly: null,
+};
 
 function updateRecentPace(usage: UsagePayload, now: number) {
   const upd = (
@@ -484,17 +494,12 @@ function updateRecentPace(usage: UsagePayload, now: number) {
     pct: number,
     key: "recentPaceSession" | "recentPaceWeekly",
   ) => {
-    const prev = lastPaceSample[scope];
-    lastPaceSample[scope] = { pct, ts: now };
-    if (!prev || now <= prev.ts) return;
-    // A drop = the window reset between syncs → no cross-window delta; restart
-    // from 0 (no burst yet in the fresh window).
-    if (pct < prev.pct) {
-      setStore(key, 0);
-      return;
-    }
-    const raw = (pct - prev.pct) / (now - prev.ts); // %/ms over the last interval
-    setStore(key, PACE_ALPHA * raw + (1 - PACE_ALPHA) * store[key]);
+    const r = blendPace(store[key], paceSample[scope], pct, now, {
+      alpha: PACE_ALPHA,
+      minIntervalMs: PACE_MIN_INTERVAL_MS,
+    });
+    paceSample[scope] = r.sample;
+    setStore(key, r.pace);
   };
   upd("session", usage.five_hour, "recentPaceSession");
   upd("weekly", usage.seven_day, "recentPaceWeekly");
@@ -808,8 +813,14 @@ export async function initStore() {
   });
 
   // Minute heartbeat for time-based UI (header dot freshness, "X min ago"
-  // labels). Independent of sync — never causes network traffic.
-  window.setInterval(() => setStore("tickMinute", (v) => v + 1), 60_000);
+  // labels). Independent of sync — never causes network traffic. Also relaxes
+  // the recent-pace estimate each minute so projections ease off on their own
+  // between syncs (a burst's aggressive ETA decays without re-syncing).
+  window.setInterval(() => {
+    setStore("tickMinute", (v) => v + 1);
+    setStore("recentPaceSession", (v) => decayPace(v, 60_000, PACE_HALF_LIFE_MS));
+    setStore("recentPaceWeekly", (v) => decayPace(v, 60_000, PACE_HALF_LIFE_MS));
+  }, 60_000);
 
   // Second heartbeat for live countdowns (session reset, active block). Cheap —
   // WebView auto-throttles timers to ~1/min when the window is hidden to tray.

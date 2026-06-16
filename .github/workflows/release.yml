@@ -46,6 +46,11 @@ jobs:
       - name: Build frontend (so cargo test can compile)
         run: npm run build
 
+      # 프런트 순수 함수 (투영/pace 수학, src/utils/project.ts) Vitest 게이트.
+      # always-spot-check 영역이라 회귀 시 릴리즈 차단. UI/시각은 여전히 수동.
+      - name: Run frontend unit tests
+        run: npm run test
+
       # 순수 함수 단위 테스트 (pricing 13 + jsonl_aggregator 8 + usage_api 2) 게이트.
       # tauri-action 앞에 둬서 실패 시 빌드·release 발행이 차단된다. 양 OS
       # matrix 에서 각각 실행 — 이전엔 Windows 로컬만 돌던 macOS 검증 공백을 메움.
