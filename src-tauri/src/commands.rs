@@ -159,7 +159,14 @@ pub async fn set_window_size(
     // with a separate set_always_on_top call. This keeps AOT through every
     // resize path (boot, mode switch, macOS compositor nudge) without a
     // standalone re-assert.
+    //
+    // tao diffs window flags (apply_diff), so re-asserting `true` when the flag
+    // is *already* true is a no-op — it would NOT re-issue SetWindowPos and the
+    // topmost dropped by set_size above stays dropped (this is why boot left the
+    // widget un-pinned even though AOT was on). Toggle false→true to force tao
+    // to re-apply it, exactly like a manual OFF→ON in settings does.
     if always_on_top {
+        window.set_always_on_top(false).map_err(|e| e.to_string())?;
         window.set_always_on_top(true).map_err(|e| e.to_string())?;
         window.set_skip_taskbar(true).map_err(|e| e.to_string())?;
     }
