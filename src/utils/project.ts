@@ -20,6 +20,14 @@
 export const SESSION_WINDOW_MS = 5 * 3_600_000;
 export const WEEKLY_WINDOW_MS = 7 * 24 * 3_600_000;
 
+/** Weekly recentPace cap: a burst can project at most this multiple of the
+ *  week-to-date average pace, so a short spike can't extrapolate to an absurd
+ *  ETA over the ~7-day window (e.g. a few-minute burst reading as "limit in 7h"
+ *  at 38% usage). The cap rides on the average — a genuinely sustained ramp-up
+ *  still escalates as the average itself climbs. Session is left uncapped: its
+ *  short window self-limits and bursts there are more likely real. */
+export const WEEKLY_RECENT_PACE_CAP = 2;
+
 export type LimitProjection = {
   /** Projected utilization % at reset if the average pace holds. */
   projectedPct: number;
@@ -44,6 +52,7 @@ export function projectLimit(
   now: number,
   recentPace?: number,
   minElapsedRatio = 0.2,
+  maxRecentMult = Infinity,
 ): LimitProjection | null {
   if (!resetsAtIso || pct < 2 || pct >= 100) return null;
   const msToReset = new Date(resetsAtIso).getTime() - now;
@@ -51,8 +60,14 @@ export function projectLimit(
   const elapsed = windowMs - msToReset;
   if (elapsed < windowMs * minElapsedRatio) return null;
   const avgPace = pct / elapsed; // % per ms since the window started
-  // Recent pace only escalates (max), never lowers below the average floor.
-  const pace = recentPace != null && recentPace > avgPace ? recentPace : avgPace;
+  // Recent pace only escalates (max), never below the average floor — and is
+  // capped at maxRecentMult× the average so a short burst can't extrapolate
+  // absurdly over a long window. The cap rides on the average, so a genuine
+  // sustained ramp-up still escalates as the average climbs. Default = uncapped.
+  const pace =
+    recentPace != null && recentPace > avgPace
+      ? Math.min(recentPace, maxRecentMult * avgPace)
+      : avgPace;
   // Forward from now: pct + pace × remaining. Equals avgPace × windowMs when
   // pace == avgPace, so the average-only path is unchanged.
   const projectedPct = pct + pace * msToReset;

@@ -17,6 +17,7 @@ import {
   decayPace,
   SESSION_WINDOW_MS,
   WEEKLY_WINDOW_MS,
+  WEEKLY_RECENT_PACE_CAP,
   type LimitProjection,
   type PaceSample,
 } from "../utils/project";
@@ -536,7 +537,7 @@ async function maybeNotifyProjection(usage: UsagePayload) {
     },
     {
       weekly: true,
-      proj: projectLimit(usage.seven_day, usage.weekly_resets_at, WEEKLY_WINDOW_MS, now, store.recentPaceWeekly, 0.1),
+      proj: projectLimit(usage.seven_day, usage.weekly_resets_at, WEEKLY_WINDOW_MS, now, store.recentPaceWeekly, 0.1, WEEKLY_RECENT_PACE_CAP),
       pct: usage.seven_day,
       block: usage.weekly_resets_at,
       key: "notifiedProjWeek",
@@ -568,7 +569,7 @@ async function maybeNotifyProjection(usage: UsagePayload) {
   for (const c of due) {
     const ms = c.proj!.msToLimit;
     const body =
-      ms >= 48 * 3_600_000
+      ms >= 24 * 3_600_000
         ? t().projRiskDays(Math.floor(ms / 86_400_000), Math.floor((ms % 86_400_000) / 3_600_000))
         : t().projRisk(Math.floor(ms / 3_600_000), Math.floor((ms % 3_600_000) / 60_000));
     const title = c.weekly ? t().notifyProjTitleWeekly : t().notifyProjTitleSession;
@@ -814,12 +815,18 @@ export async function initStore() {
 
   // Minute heartbeat for time-based UI (header dot freshness, "X min ago"
   // labels). Independent of sync — never causes network traffic. Also relaxes
-  // the recent-pace estimate each minute so projections ease off on their own
-  // between syncs (a burst's aggressive ETA decays without re-syncing).
+  // the recent-pace estimate by the *actual* elapsed wall-clock each tick (not a
+  // fixed 60s) so a long gap — laptop sleep, throttled/coalesced timers — decays
+  // the burst by the real duration instead of a single step (would otherwise
+  // leave a stale-high projection on wake).
+  let lastPaceDecayAt = Date.now();
   window.setInterval(() => {
     setStore("tickMinute", (v) => v + 1);
-    setStore("recentPaceSession", (v) => decayPace(v, 60_000, PACE_HALF_LIFE_MS));
-    setStore("recentPaceWeekly", (v) => decayPace(v, 60_000, PACE_HALF_LIFE_MS));
+    const nowMs = Date.now();
+    const dt = nowMs - lastPaceDecayAt;
+    lastPaceDecayAt = nowMs;
+    setStore("recentPaceSession", (v) => decayPace(v, dt, PACE_HALF_LIFE_MS));
+    setStore("recentPaceWeekly", (v) => decayPace(v, dt, PACE_HALF_LIFE_MS));
   }, 60_000);
 
   // Second heartbeat for live countdowns (session reset, active block). Cheap —

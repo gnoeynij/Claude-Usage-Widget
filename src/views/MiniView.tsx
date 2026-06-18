@@ -7,6 +7,7 @@ import {
   projectLimit,
   SESSION_WINDOW_MS,
   WEEKLY_WINDOW_MS,
+  WEEKLY_RECENT_PACE_CAP,
   type LimitProjection,
 } from "../utils/project";
 import { startWindowDrag } from "../utils/drag";
@@ -18,7 +19,7 @@ function projText(p: LimitProjection | null): string {
   if (!p) return "";
   if (!p.hitsBeforeReset) return t().projSafe(Math.floor(p.projectedPct));
   const ms = p.msToLimit;
-  return ms >= 48 * 3_600_000
+  return ms >= 24 * 3_600_000
     ? t().projRiskDays(Math.floor(ms / 86_400_000), Math.floor((ms % 86_400_000) / 3_600_000))
     : t().projRisk(Math.floor(ms / 3_600_000), Math.floor((ms % 3_600_000) / 60_000));
 }
@@ -75,6 +76,7 @@ export function MiniView() {
       Date.now(),
       store.recentPaceWeekly,
       0.1, // weekly's 7d window banks enough data sooner — see projectLimit
+      WEEKLY_RECENT_PACE_CAP, // cap a burst at 2× the weekly average
     );
   });
   // Any tracked limit on pace to hit before reset → a small amber warning

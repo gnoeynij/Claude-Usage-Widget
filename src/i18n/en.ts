@@ -6,6 +6,7 @@ export const en = {
   opusOnly: "Opus only",
   extraCredits: (pct: number) => `Extra credits ${pct}%`,
   resetsIn: (h: number, m: number) => `Resets in ${h}h ${m}m`,
+  resetsInDays: (d: number, h: number) => `Resets in ${d}d ${h}h`,
   resetsInLive: (h: number, m: number, s: number) =>
     h > 0 ? `Resets in ${h}h ${m}m ${s}s` : `Resets in ${m}m ${s}s`,
   projSafe: (p: number) => `proj. ${p}%`,

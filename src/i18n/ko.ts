@@ -8,6 +8,7 @@ export const ko: Strings = {
   opusOnly: "Opus 전용",
   extraCredits: (pct) => `추가 크레딧 ${pct}%`,
   resetsIn: (h, m) => `${h}시간 ${m}분 뒤 초기화`,
+  resetsInDays: (d, h) => `${d}일 ${h}시간 뒤 초기화`,
   resetsInLive: (h, m, s) =>
     h > 0 ? `${h}시간 ${m}분 ${s}초 뒤 초기화` : `${m}분 ${s}초 뒤 초기화`,
   projSafe: (p) => `예상 ${p}%`,

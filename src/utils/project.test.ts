@@ -67,6 +67,49 @@ describe("projectLimit — projection", () => {
       projectLimit(5, iso(msToReset), WEEKLY_WINDOW_MS, NOW, undefined, 0.1),
     ).not.toBeNull();
   });
+
+  it("caps recentPace at maxRecentMult × the average", () => {
+    const avgPace = 50 / (W / 2);
+    const p = projectLimit(50, iso(W / 2), W, NOW, avgPace * 5, 0.2, 2)!;
+    expect(p.projectedPct).toBeCloseTo(150, 6); // 50 + 2×avg×msToReset, not 5×
+    expect(p.msToLimit).toBeCloseTo(W / 4, 3); // = avg ETA / 2
+  });
+
+  it("leaves recentPace untouched when it is below the cap", () => {
+    const avgPace = 50 / (W / 2);
+    const p = projectLimit(50, iso(W / 2), W, NOW, avgPace * 1.5, 0.2, 2)!;
+    expect(p.projectedPct).toBeCloseTo(125, 6); // 50 + 1.5×avg×msToReset
+  });
+
+  it("weekly cap (N=2) keeps a low-usage burst from warning", () => {
+    // 10% used at 30% elapsed; average alone projects ~33% (safe). A 10× burst
+    // capped at 2× the average stays under 100 → no limit warning.
+    const elapsed = WEEKLY_WINDOW_MS * 0.3;
+    const msToReset = WEEKLY_WINDOW_MS - elapsed;
+    const avgPace = 10 / elapsed;
+    const p = projectLimit(10, iso(msToReset), WEEKLY_WINDOW_MS, NOW, avgPace * 10, 0.1, 2)!;
+    expect(p.projectedPct).toBeLessThan(100);
+    expect(p.hitsBeforeReset).toBe(false);
+    // Without the cap the same burst projects way past 100 (the old behavior).
+    const uncapped = projectLimit(10, iso(msToReset), WEEKLY_WINDOW_MS, NOW, avgPace * 10, 0.1)!;
+    expect(uncapped.hitsBeforeReset).toBe(true);
+  });
+
+  it("msToLimit never exceeds msToReset when hitsBeforeReset (invariant)", () => {
+    // hitsBeforeReset ⟺ projected ≥ 100 ⟺ msToReset ≥ (100−pct)/pace = msToLimit,
+    // so even a pace barely over break-even lands the ETA at (not past) reset.
+    const msToReset = W / 2;
+    const breakEven = (100 - 30) / msToReset; // pace that lands exactly 100 at reset
+    const p = projectLimit(30, iso(msToReset), W, NOW, breakEven * 1.0001)!;
+    expect(p.hitsBeforeReset).toBe(true);
+    expect(p.msToLimit).toBeLessThanOrEqual(msToReset);
+  });
+
+  it("treats recentPace exactly equal to the average as the average path", () => {
+    const avgPace = 50 / (W / 2);
+    const p = projectLimit(50, iso(W / 2), W, NOW, avgPace)!; // == avg (strict > is false)
+    expect(p.projectedPct).toBeCloseTo(100, 6); // not escalated above the average
+  });
 });
 
 describe("blendPace", () => {
@@ -100,6 +143,13 @@ describe("blendPace", () => {
   it("keeps (1-alpha) of the prior pace when usage is flat", () => {
     const r = blendPace(0.002, { pct: 10, ts: NOW - 60_000 }, 10, NOW, opts);
     expect(r.pace).toBeCloseTo(0.6 * 0.002, 10);
+  });
+
+  it("ignores a backward clock (now < sample.ts) instead of a negative raw", () => {
+    const sample = { pct: 10, ts: NOW + 10_000 }; // sample stamped in the future
+    const r = blendPace(0.002, sample, 15, NOW, opts);
+    expect(r.pace).toBe(0.002); // unchanged — no negative/huge spike
+    expect(r.sample).toBe(sample);
   });
 });
 

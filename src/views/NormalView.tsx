@@ -9,6 +9,7 @@ import {
   projectLimit,
   SESSION_WINDOW_MS,
   WEEKLY_WINDOW_MS,
+  WEEKLY_RECENT_PACE_CAP,
   type LimitProjection,
 } from "../utils/project";
 import { startWindowDrag } from "../utils/drag";
@@ -27,7 +28,7 @@ function projInline(proj: LimitProjection | null, value: number) {
   }
   const ms = proj.msToLimit;
   const txt =
-    ms >= 48 * 3_600_000
+    ms >= 24 * 3_600_000
       ? t().projRiskDays(Math.floor(ms / 86_400_000), Math.floor((ms % 86_400_000) / 3_600_000))
       : t().projRisk(Math.floor(ms / 3_600_000), Math.floor((ms % 3_600_000) / 60_000));
   return (
@@ -43,6 +44,13 @@ function formatResetsIn(iso?: string | null) {
   const d = new Date(iso);
   const ms = d.getTime() - Date.now();
   if (ms <= 0) return null;
+  // ≥ 24h (weekly is days away) → show days + hours so it doesn't read as a
+  // huge "121시간" number; matches the projection caption's day format.
+  if (ms >= 86_400_000) {
+    const days = Math.floor(ms / 86_400_000);
+    const hrs = Math.floor((ms % 86_400_000) / 3_600_000);
+    return t().resetsInDays(days, hrs);
+  }
   const h = Math.floor(ms / 3_600_000);
   const m = Math.floor((ms % 3_600_000) / 60_000);
   return t().resetsIn(h, m);
@@ -112,6 +120,7 @@ export function NormalView() {
       Date.now(),
       store.recentPaceWeekly,
       0.1, // weekly's 7d window banks enough data sooner — see projectLimit
+      WEEKLY_RECENT_PACE_CAP, // cap a burst at 2× the weekly average
     );
   });
   return (
