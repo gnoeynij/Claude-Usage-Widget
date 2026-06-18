@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use walkdir::WalkDir;
 
@@ -33,8 +33,13 @@ fn projects_root() -> Option<PathBuf> {
 #[derive(Clone)]
 struct Record {
     ts: DateTime<Utc>,
-    model: String,
+    model: Arc<str>,
     tokens: UsageTokens,
+    /// USD cost, computed once at parse time (pricing is static) and cached with
+    /// the record. The ~6 aggregation passes reuse it instead of each
+    /// re-resolving the model + re-summing tokens per record. `Arc<str>` keeps
+    /// the per-aggregate `records.clone()` cheap for heavy users (100k+ rows).
+    cost: f64,
 }
 
 struct Block {
@@ -145,7 +150,7 @@ pub fn aggregate(counted_until_ms: f64) -> Result<AggregateOut> {
     for r in &records {
         let ms = r.ts.timestamp_millis() as f64;
         if ms > counted_until_ms {
-            new_cost_since += cost_usd(&r.model, &r.tokens);
+            new_cost_since += r.cost;
         }
         if ms > max_ts_ms {
             max_ts_ms = ms;
@@ -265,22 +270,25 @@ fn parse_jsonl(path: &Path) -> Vec<Record> {
             .and_then(|v| v.as_str())
             .map(|s| s.eq_ignore_ascii_case("fast"))
             .unwrap_or(false);
+        let tokens = UsageTokens {
+            input: usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+            output: usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+            cache_creation_5m: cache_5m,
+            cache_creation_1h: cache_1h,
+            cache_read: usage
+                .get("cache_read_input_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0),
+            web_search_requests,
+            inference_geo_us,
+            speed_fast,
+        };
+        let cost = cost_usd(&model, &tokens);
         out.push(Record {
             ts: ts.with_timezone(&Utc),
-            model,
-            tokens: UsageTokens {
-                input: usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
-                output: usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
-                cache_creation_5m: cache_5m,
-                cache_creation_1h: cache_1h,
-                cache_read: usage
-                    .get("cache_read_input_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0),
-                web_search_requests,
-                inference_geo_us,
-                speed_fast,
-            },
+            model: model.into(),
+            tokens,
+            cost,
         });
     }
     out
@@ -352,7 +360,7 @@ fn collect_records(root: &Path) -> Vec<Record> {
 fn group_blocks(records: &[Record]) -> Vec<Block> {
     let mut blocks: Vec<Block> = Vec::new();
     for r in records {
-        let cost = cost_usd(&r.model, &r.tokens);
+        let cost = r.cost;
         if let Some(last) = blocks.last_mut() {
             if (r.ts - last.start).num_hours() < SESSION_BLOCK_HOURS {
                 last.cost += cost;
@@ -393,7 +401,7 @@ fn period_totals(records: &[Record]) -> PeriodsOut {
     for r in records {
         let local_dt = r.ts.with_timezone(&chrono::Local);
         let date = local_dt.date_naive();
-        let cost = cost_usd(&r.model, &r.tokens);
+        let cost = r.cost;
         if date == local_today {
             out.today_cost += cost;
         }
@@ -423,7 +431,7 @@ fn daily_totals(records: &[Record]) -> Vec<DayOut> {
             .date_naive()
             .format("%Y-%m-%d")
             .to_string();
-        let cost = cost_usd(&r.model, &r.tokens);
+        let cost = r.cost;
         let toks = r.tokens.input
             + r.tokens.output
             + r.tokens.cache_creation_5m
@@ -472,7 +480,7 @@ fn recent_blocks(blocks: &[Block]) -> Vec<BlockOut> {
 fn family_totals(records: &[Record]) -> Vec<FamilyOut> {
     let mut acc: HashMap<&'static str, (f64, u64)> = HashMap::new();
     for r in records {
-        let cost = cost_usd(&r.model, &r.tokens);
+        let cost = r.cost;
         let toks = r.tokens.input
             + r.tokens.output
             + r.tokens.cache_creation_5m
@@ -496,7 +504,7 @@ fn family_totals(records: &[Record]) -> Vec<FamilyOut> {
 
 fn overall_stats(records: &[Record], blocks: &[Block]) -> StatsOut {
     let total_messages = records.len() as u64;
-    let total_cost: f64 = records.iter().map(|r| cost_usd(&r.model, &r.tokens)).sum();
+    let total_cost: f64 = records.iter().map(|r| r.cost).sum();
     let avg_block_cost = if blocks.is_empty() {
         0.0
     } else {
@@ -532,17 +540,19 @@ mod tests {
     }
 
     fn rec(hours: i64, model: &str, input: u64) -> Record {
+        let tokens = UsageTokens {
+            input,
+            output: 0,
+            cache_creation_5m: 0,
+            cache_creation_1h: 0,
+            cache_read: 0,
+            ..Default::default()
+        };
         Record {
             ts: base() + Duration::hours(hours),
-            model: model.to_string(),
-            tokens: UsageTokens {
-                input,
-                output: 0,
-                cache_creation_5m: 0,
-                cache_creation_1h: 0,
-                cache_read: 0,
-                ..Default::default()
-            },
+            cost: cost_usd(model, &tokens),
+            model: model.into(),
+            tokens,
         }
     }
 
