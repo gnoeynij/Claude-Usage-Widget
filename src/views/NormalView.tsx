@@ -131,7 +131,7 @@ export function NormalView() {
         flex: 1,
         display: "flex",
         "flex-direction": "column",
-        gap: "var(--s-4)",
+        gap: "var(--s-2)",
         padding: "0 var(--s-2)",
       }}
     >
@@ -160,7 +160,7 @@ export function NormalView() {
           display: "flex",
           "flex-direction": "column",
           "align-items": "center",
-          "padding-top": "var(--s-3)",
+          "padding-top": "var(--s-2)",
           gap: "var(--s-2)",
         }}
       >
@@ -190,7 +190,7 @@ export function NormalView() {
         style={{
           display: "flex",
           "flex-direction": "column",
-          gap: "var(--s-1)",
+          gap: "0",
           padding: "0 var(--s-2)",
         }}
       >
@@ -209,7 +209,6 @@ export function NormalView() {
               data-guide="weekly-caption"
               class="t-caption label-tertiary"
               style={{
-                "padding-top": "var(--s-1)",
                 "text-align": "center",
               }}
             >

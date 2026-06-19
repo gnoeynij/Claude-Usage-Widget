@@ -134,7 +134,7 @@ export type Toast = { id: number; title: string; body: string; tone: "warn" | "d
  *  container-query breakpoint that switches the detail grid to 2 columns. */
 const MODE_DEFAULTS: Record<Mode, [number, number, number, number]> = {
   mini: [240, 112, 240, 112],
-  normal: [320, 360, 320, 360],
+  normal: [320, 342, 320, 342],
   detail: [592, 619, 520, 520],
 };
 
@@ -612,8 +612,11 @@ let userTouchedDark = false;
 function applyModeSize(mode: Mode) {
   const saved = store.modeSizes[mode];
   const [dw, dh, mw, mh] = MODE_DEFAULTS[mode];
-  const w = saved?.w ?? dw;
-  const h = saved?.h ?? dh;
+  // Normal is a fixed-design compact widget — always use the default so a stale
+  // auto-persisted size can't pin it and design size changes apply. Detail and
+  // mini honor the user's resized size.
+  const w = mode === "normal" ? dw : (saved?.w ?? dw);
+  const h = mode === "normal" ? dh : (saved?.h ?? dh);
   resizeSuppressUntil = Date.now() + 1000;
   void invoke("set_window_size", {
     width: w,
