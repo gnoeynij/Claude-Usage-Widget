@@ -1,7 +1,7 @@
 import { createSignal, createEffect, onMount, onCleanup, For, Show } from "solid-js";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WidgetChrome } from "../App";
-import { store, setStore, applyDarkClass, type Mode } from "../state/store";
+import { store, setStore, applyDarkClass, MODE_DEFAULTS, type Mode } from "../state/store";
 import { projectLimit, SESSION_WINDOW_MS } from "../utils/project";
 import trayOkPng from "../assets/tray-ok-32.png";
 import trayErrPng from "../assets/tray-err-32.png";
@@ -151,10 +151,12 @@ const CALLOUTS: Record<GuideMode, Callout[]> = {
   ],
 };
 
+// Mirror the real per-mode window size from store's MODE_DEFAULTS (single
+// source: [w, h, minW, minH]) so the guide frame can't drift from the widget.
 const MODE_SIZE: Record<Mode, [number, number]> = {
-  mini: [240, 112],
-  normal: [320, 360],
-  detail: [592, 619],
+  mini: [MODE_DEFAULTS.mini[0], MODE_DEFAULTS.mini[1]],
+  normal: [MODE_DEFAULTS.normal[0], MODE_DEFAULTS.normal[1]],
+  detail: [MODE_DEFAULTS.detail[0], MODE_DEFAULTS.detail[1]],
 };
 // Settings guide tab uses a taller/wider pseudo-frame so all settings
 // sections (device sync, updates) fit without internal scroll.

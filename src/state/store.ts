@@ -132,7 +132,7 @@ export type Toast = { id: number; title: string; body: string; tone: "warn" | "d
 /** Per-mode default (w, h, minW, minH). Mini covers donut + 2 capsule rows.
  *  Normal keeps the historical 360×420. Detail's width clears the 560px
  *  container-query breakpoint that switches the detail grid to 2 columns. */
-const MODE_DEFAULTS: Record<Mode, [number, number, number, number]> = {
+export const MODE_DEFAULTS: Record<Mode, [number, number, number, number]> = {
   mini: [240, 112, 240, 112],
   normal: [320, 334, 320, 334],
   detail: [592, 619, 520, 520],
