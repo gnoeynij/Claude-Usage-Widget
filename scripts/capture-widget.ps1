@@ -15,6 +15,7 @@ using System;
 using System.Runtime.InteropServices;
 public class CaptureApi {
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
+    [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
     [DllImport("user32.dll", SetLastError=true)] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndAfter, int x, int y, int cx, int cy, uint flags);
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 }
@@ -27,6 +28,11 @@ $hwnd = $proc.MainWindowHandle
 $r = New-Object CaptureApi+RECT
 [CaptureApi]::GetWindowRect($hwnd, [ref]$r) | Out-Null
 $w = $r.Right - $r.Left; $h = $r.Bottom - $r.Top
+
+# Remember the window's current always-on-top state. The cleanup below must
+# restore *this* state — blindly forcing NOTOPMOST would silently clobber the
+# user's AOT setting on every capture (GWL_EXSTYLE=-20, WS_EX_TOPMOST=0x8).
+$wasTopmost = ([CaptureApi]::GetWindowLong($hwnd, -20) -band 0x8) -ne 0
 
 # Hoist to topmost briefly so nothing covers it during capture.
 $TOPMOST = [IntPtr]::new(-1); $NOTOPMOST = [IntPtr]::new(-2)
@@ -42,5 +48,7 @@ if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path
 $bmp.Save($OutPath, [System.Drawing.Imaging.ImageFormat]::Png)
 $g.Dispose(); $bmp.Dispose()
 
-[CaptureApi]::SetWindowPos($hwnd, $NOTOPMOST, 0,0,0,0, $SWP) | Out-Null
+# Restore the original z-order — keep AOT pinned if it was on, else drop back.
+$restore = if ($wasTopmost) { $TOPMOST } else { $NOTOPMOST }
+[CaptureApi]::SetWindowPos($hwnd, $restore, 0,0,0,0, $SWP) | Out-Null
 Write-Output "saved $OutPath  ($w x $h)"
