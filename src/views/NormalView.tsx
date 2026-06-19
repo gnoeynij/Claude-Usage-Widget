@@ -131,7 +131,7 @@ export function NormalView() {
         flex: 1,
         display: "flex",
         "flex-direction": "column",
-        gap: "var(--s-2)",
+        gap: "0",
         padding: "0 var(--s-2)",
       }}
     >
