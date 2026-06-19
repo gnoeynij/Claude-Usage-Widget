@@ -17,10 +17,23 @@ export function WidgetChrome() {
   return (
     <LiquidGlass padding={store.mode === "mini" ? "0" : undefined}>
       {store.mode !== "mini" && <HeaderBar />}
-      {store.mode !== "mini" && <ErrorBanner />}
-      {store.mode === "mini" && <MiniView />}
-      {store.mode === "normal" && <NormalView />}
-      {store.mode === "detail" && <DetailView />}
+      {/* Relative wrapper so ErrorBanner can overlay the *top of the content*
+          (floating over it, like the toast) instead of taking a flex slot that
+          pushes the donut/content down. Header stays visible above it. */}
+      <div
+        style={{
+          position: "relative",
+          display: "flex",
+          "flex-direction": "column",
+          flex: 1,
+          "min-height": 0,
+        }}
+      >
+        {store.mode === "mini" && <MiniView />}
+        {store.mode === "normal" && <NormalView />}
+        {store.mode === "detail" && <DetailView />}
+        {store.mode !== "mini" && <ErrorBanner />}
+      </div>
       {store.mode !== "mini" && <FooterBar />}
       <Show when={store.settingsOpen && store.mode !== "mini"}>
         <SettingsPanel />

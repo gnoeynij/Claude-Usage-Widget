@@ -36,13 +36,11 @@ function bannerFor(code: ErrorCode): BannerInfo | null {
 function toneStyles(tone: Tone) {
   if (tone === "danger") {
     return {
-      background: "var(--danger-tint, rgba(255, 59, 48, 0.12))",
       border: "1px solid var(--danger, rgba(255, 59, 48, 0.5))",
       iconColor: "var(--danger, #ff3b30)",
     };
   }
   return {
-    background: "var(--accent-tint)",
     border: "1px solid var(--accent-tint-strong)",
     iconColor: "var(--accent)",
   };
@@ -61,15 +59,28 @@ export function ErrorBanner() {
             role="status"
             class="t-caption"
             style={{
+              // Overlay the top of the content (floating, like the toast)
+              // instead of taking a flex slot that pushes content down —
+              // anchored to the relative content wrapper in WidgetChrome.
+              // Frosted card (not the light tone tint) so it stays readable
+              // over the donut; tone is carried by the border + icon color.
+              position: "absolute",
+              top: "var(--s-1)",
+              left: "var(--s-2)",
+              right: "var(--s-2)",
+              "z-index": 10,
+              "pointer-events": "none",
               display: "flex",
               "align-items": "flex-start",
               gap: "var(--s-2)",
-              margin: "0 var(--s-2)",
               padding: "var(--s-2) var(--s-3)",
               "border-radius": "var(--r-md)",
-              background: styles().background,
+              background: "rgba(var(--glass-card-rgb), 0.94)",
+              "backdrop-filter": "blur(18px) saturate(180%)",
+              "-webkit-backdrop-filter": "blur(18px) saturate(180%)",
               color: "var(--label)",
               border: styles().border,
+              "box-shadow": "var(--shadow-card)",
             }}
           >
             <Icon
