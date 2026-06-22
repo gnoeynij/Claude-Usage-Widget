@@ -90,7 +90,7 @@ export const ko: Strings = {
   syncFailed: "동기화 실패",
 
   tokenExpired: "인증 토큰 만료",
-  tokenExpiredHint: "터미널에서 `claude` 한 번 실행하면 위젯이 자동 복구돼요.",
+  tokenExpiredHint: "터미널에서 `claude` 실행 (안 되면 `/login` 으로 재로그인) — 위젯이 자동 복구돼요.",
   noCredentials: "인증 정보 없음",
   noCredentialsHint: "터미널에서 `claude` 로 로그인하면 동기화가 시작돼요.",
   rateLimited: "요청 제한",

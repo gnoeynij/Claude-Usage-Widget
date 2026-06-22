@@ -88,7 +88,7 @@ export const en = {
   syncFailed: "Sync failed",
 
   tokenExpired: "Auth token expired",
-  tokenExpiredHint: "Run `claude` once — the widget will recover automatically.",
+  tokenExpiredHint: "Run `claude` (or `/login` if it doesn't reconnect) — the widget recovers automatically.",
   noCredentials: "No credentials found",
   noCredentialsHint: "Sign in with Claude Code (`claude` in a terminal) to start syncing.",
   rateLimited: "Rate limited",
