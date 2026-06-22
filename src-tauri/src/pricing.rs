@@ -13,7 +13,7 @@ pub struct Pricing {
 
 /// USD per million tokens.
 /// Official Anthropic pricing: https://platform.claude.com/docs/en/about-claude/pricing
-/// (last verified 2026-06-10). When Anthropic ships a new model generation,
+/// (last verified 2026-06-22). When Anthropic ships a new model generation,
 /// add an entry below and re-verify the existing ones.
 pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
     let fable = Pricing {
