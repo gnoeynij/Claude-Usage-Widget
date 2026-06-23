@@ -1,4 +1,4 @@
-import { createSignal, createMemo, Show, For } from "solid-js";
+import { createSignal, createMemo, createEffect, Show, For } from "solid-js";
 import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
 import { store, setMode, syncNow } from "../state/store";
@@ -84,6 +84,12 @@ export function MiniView() {
   // ghost marker blends with an already-amber arc.
   const atRisk = () => Boolean(sessionProj()?.hitsBeforeReset || weeklyProj()?.hitsBeforeReset);
   const [infoOpen, setInfoOpen] = createSignal(false);
+  // When the projection stabilizes, the at-risk badge disappears — close the
+  // info overlay too so it can't get stranded open with no badge left to toggle
+  // it off (overlay-click still dismisses it while a warning is active).
+  createEffect(() => {
+    if (!atRisk()) setInfoOpen(false);
+  });
   // Each tracked limit's current % + projection — drives both the click-to-open
   // in-Mini info overlay and the native-title hover summary.
   const limitRows = (): Array<{ label: string; pct: number; proj: LimitProjection | null }> => {
