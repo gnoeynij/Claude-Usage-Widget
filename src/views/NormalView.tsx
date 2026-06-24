@@ -9,7 +9,6 @@ import {
   projectLimit,
   SESSION_WINDOW_MS,
   WEEKLY_WINDOW_MS,
-  WEEKLY_RECENT_PACE_CAP,
   type LimitProjection,
 } from "../utils/project";
 import { startWindowDrag } from "../utils/drag";
@@ -118,9 +117,11 @@ export function NormalView() {
       store.usage.weekly_resets_at,
       WEEKLY_WINDOW_MS,
       Date.now(),
-      store.recentPaceWeekly,
+      // Weekly uses the week-to-date average only. A burst during work hours
+      // shouldn't extrapolate to "rest of the week at this rate" — over a 7d
+      // window the wall-clock average already absorbs the user's duty cycle.
+      undefined,
       0.1, // weekly's 7d window banks enough data sooner — see projectLimit
-      WEEKLY_RECENT_PACE_CAP, // cap a burst at 2× the weekly average
     );
   });
   return (

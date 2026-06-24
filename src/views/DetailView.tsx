@@ -49,7 +49,9 @@ function ActiveStrip() {
         const liveElapsedMin = () => {
           // eslint-disable-next-line @typescript-eslint/no-unused-expressions
           store.tickSecond;
-          const e = (Date.now() - new Date(act().start).getTime()) / 60_000;
+          const startMs = new Date(act().start).getTime();
+          if (Number.isNaN(startMs)) return 0; // guard a non-ISO start → no NaN
+          const e = (Date.now() - startMs) / 60_000;
           return Math.max(0, Math.min(e, act().total_min));
         };
         const remaining = () =>

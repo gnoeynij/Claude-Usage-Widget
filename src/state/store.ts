@@ -17,7 +17,6 @@ import {
   decayPace,
   SESSION_WINDOW_MS,
   WEEKLY_WINDOW_MS,
-  WEEKLY_RECENT_PACE_CAP,
   type LimitProjection,
   type PaceSample,
 } from "../utils/project";
@@ -208,7 +207,6 @@ type StoreShape = {
    *  projection's max(average, recent) blend so a current burst escalates the
    *  estimate sooner. Ephemeral (not persisted; 0 until two syncs accumulate). */
   recentPaceSession: number;
-  recentPaceWeekly: number;
 };
 
 const [store, setStore] = createStore<StoreShape>({
@@ -249,7 +247,6 @@ const [store, setStore] = createStore<StoreShape>({
   costHistory: {},
   combinedHistory: {},
   recentPaceSession: 0,
-  recentPaceWeekly: 0,
 });
 
 export { store, setStore };
@@ -484,26 +481,19 @@ const PACE_MIN_INTERVAL_MS = 30_000;
 // Recent pace passively halves every ~12 min so projections relax on their own
 // between syncs (no API needed). Average pace stays projectLimit's floor.
 const PACE_HALF_LIFE_MS = 12 * 60_000;
-let paceSample: { session: PaceSample | null; weekly: PaceSample | null } = {
+let paceSample: { session: PaceSample | null } = {
   session: null,
-  weekly: null,
 };
 
 function updateRecentPace(usage: UsagePayload, now: number) {
-  const upd = (
-    scope: "session" | "weekly",
-    pct: number,
-    key: "recentPaceSession" | "recentPaceWeekly",
-  ) => {
-    const r = blendPace(store[key], paceSample[scope], pct, now, {
-      alpha: PACE_ALPHA,
-      minIntervalMs: PACE_MIN_INTERVAL_MS,
-    });
-    paceSample[scope] = r.sample;
-    setStore(key, r.pace);
-  };
-  upd("session", usage.five_hour, "recentPaceSession");
-  upd("weekly", usage.seven_day, "recentPaceWeekly");
+  // Session only — the weekly projection now uses its week-to-date average
+  // alone (no burst escalation), so there's no weekly recent-pace to maintain.
+  const r = blendPace(store.recentPaceSession, paceSample.session, usage.five_hour, now, {
+    alpha: PACE_ALPHA,
+    minIntervalMs: PACE_MIN_INTERVAL_MS,
+  });
+  paceSample.session = r.sample;
+  setStore("recentPaceSession", r.pace);
 }
 
 // Predictive alert thresholds (anti-noise). Fire only well past the display
@@ -537,7 +527,7 @@ async function maybeNotifyProjection(usage: UsagePayload) {
     },
     {
       weekly: true,
-      proj: projectLimit(usage.seven_day, usage.weekly_resets_at, WEEKLY_WINDOW_MS, now, store.recentPaceWeekly, 0.1, WEEKLY_RECENT_PACE_CAP),
+      proj: projectLimit(usage.seven_day, usage.weekly_resets_at, WEEKLY_WINDOW_MS, now, undefined, 0.1),
       pct: usage.seven_day,
       block: usage.weekly_resets_at,
       key: "notifiedProjWeek",
@@ -829,7 +819,6 @@ export async function initStore() {
     const dt = nowMs - lastPaceDecayAt;
     lastPaceDecayAt = nowMs;
     setStore("recentPaceSession", (v) => decayPace(v, dt, PACE_HALF_LIFE_MS));
-    setStore("recentPaceWeekly", (v) => decayPace(v, dt, PACE_HALF_LIFE_MS));
   }, 60_000);
 
   // Second heartbeat for live countdowns (session reset, active block). Cheap —
@@ -887,12 +876,15 @@ async function pollCredentialsMtime(initial = false) {
 export async function syncNow() {
   if (store.syncing) return;
   setStore("syncing", true);
-  setStore("syncError", null);
-  setStore("errorCode", null);
   const t0 = Date.now();
   try {
     const usage = await invoke<UsagePayload>("fetch_usage");
     setStore("usage", usage);
+    // Clear errors only on success — clearing at the start would make a
+    // persistent error blink (null → re-set) on every retry, closing the
+    // mini info overlay each sync.
+    setStore("syncError", null);
+    setStore("errorCode", null);
     setStore("lastSyncAt", new Date().toISOString());
     // Accumulate lifetimeCost on *every* sync, not just in Detail mode. The
     // lifetime total is captured by folding each record's cost in before its
@@ -1028,6 +1020,7 @@ export function setSyncFolder(path: string) {
   } else {
     setStore("combinedCost", 0);
     setStore("combinedDevices", 0);
+    setStore("combinedHistory", {});
   }
 }
 

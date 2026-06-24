@@ -68,33 +68,6 @@ describe("projectLimit — projection", () => {
     ).not.toBeNull();
   });
 
-  it("caps recentPace at maxRecentMult × the average", () => {
-    const avgPace = 50 / (W / 2);
-    const p = projectLimit(50, iso(W / 2), W, NOW, avgPace * 5, 0.2, 2)!;
-    expect(p.projectedPct).toBeCloseTo(150, 6); // 50 + 2×avg×msToReset, not 5×
-    expect(p.msToLimit).toBeCloseTo(W / 4, 3); // = avg ETA / 2
-  });
-
-  it("leaves recentPace untouched when it is below the cap", () => {
-    const avgPace = 50 / (W / 2);
-    const p = projectLimit(50, iso(W / 2), W, NOW, avgPace * 1.5, 0.2, 2)!;
-    expect(p.projectedPct).toBeCloseTo(125, 6); // 50 + 1.5×avg×msToReset
-  });
-
-  it("weekly cap (N=2) keeps a low-usage burst from warning", () => {
-    // 10% used at 30% elapsed; average alone projects ~33% (safe). A 10× burst
-    // capped at 2× the average stays under 100 → no limit warning.
-    const elapsed = WEEKLY_WINDOW_MS * 0.3;
-    const msToReset = WEEKLY_WINDOW_MS - elapsed;
-    const avgPace = 10 / elapsed;
-    const p = projectLimit(10, iso(msToReset), WEEKLY_WINDOW_MS, NOW, avgPace * 10, 0.1, 2)!;
-    expect(p.projectedPct).toBeLessThan(100);
-    expect(p.hitsBeforeReset).toBe(false);
-    // Without the cap the same burst projects way past 100 (the old behavior).
-    const uncapped = projectLimit(10, iso(msToReset), WEEKLY_WINDOW_MS, NOW, avgPace * 10, 0.1)!;
-    expect(uncapped.hitsBeforeReset).toBe(true);
-  });
-
   it("msToLimit never exceeds msToReset when hitsBeforeReset (invariant)", () => {
     // hitsBeforeReset ⟺ projected ≥ 100 ⟺ msToReset ≥ (100−pct)/pace = msToLimit,
     // so even a pace barely over break-even lands the ETA at (not past) reset.

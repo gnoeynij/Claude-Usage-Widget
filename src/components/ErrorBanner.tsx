@@ -14,7 +14,7 @@ type BannerInfo = {
   Icon: Component<{ size?: number; style?: Record<string, string> }>;
 };
 
-function bannerFor(code: ErrorCode): BannerInfo | null {
+export function bannerFor(code: ErrorCode): BannerInfo | null {
   const s = t();
   switch (code) {
     case "TOKEN_EXPIRED":

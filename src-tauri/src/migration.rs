@@ -72,7 +72,9 @@ fn run_windows(app: &tauri::AppHandle) -> anyhow::Result<()> {
     // `sync_interval` (seconds) → `syncIntervalMin` (minutes).
     // `bg_opacity` (0-100) → `opacity` (same scale).
     if let Some(secs) = read_u32_loose(&key, "sync_interval") {
-        let mins = (secs / 60) as i64;
+        // Round to nearest minute; never let a sub-minute value truncate to 0
+        // (which would silently migrate auto-sync to OFF). 0 stays 0 (= off).
+        let mins = if secs == 0 { 0 } else { ((secs + 30) / 60).max(1) } as i64;
         store.set("syncIntervalMin", serde_json::json!(mins));
     }
     if let Some(o) = read_u32_loose(&key, "bg_opacity") {

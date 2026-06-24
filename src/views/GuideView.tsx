@@ -104,7 +104,7 @@ const CALLOUTS: Record<GuideMode, Callout[]> = {
       desc: { en: "Click the handle to expand to Normal mode.", ko: "아래 핸들을 클릭하면 기본 모드로 전환합니다." } },
     { anchor: "badge", side: "right", y: 120, cond: "risk",
       title: { en: "Warning badge", ko: "경고 배지" },
-      desc: { en: "Appears only when on pace to hit a limit. Click for details.", ko: "한도 도달이 예상될 때만 표시됩니다. 클릭하면 상세 정보를 볼 수 있습니다." } },
+      desc: { en: "Appears when on pace to hit a limit, or when the connection needs attention (e.g. token expired). Click for details.", ko: "한도 도달이 예상되거나 연결에 주의가 필요할 때(예: 토큰 만료) 표시됩니다. 클릭하면 상세 정보를 볼 수 있습니다." } },
     { anchor: "weekly", side: "right", y: 240,
       title: { en: "Weekly usage", ko: "주간 사용량" },
       desc: { en: "All models · Sonnet, as compact bars. A projected dot marks expected usage at reset.", ko: "전체 모델·Sonnet, 얇은 막대로 표시합니다. 예측 도트는 초기화 시 예상 사용량을 표시합니다." } },

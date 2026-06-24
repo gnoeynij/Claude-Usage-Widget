@@ -1,13 +1,14 @@
 import { createSignal, createMemo, createEffect, Show, For } from "solid-js";
 import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
+import { AlertCircle } from "lucide-solid";
 import { store, setMode, syncNow } from "../state/store";
+import { bannerFor } from "../components/ErrorBanner";
 import { t } from "../i18n";
 import {
   projectLimit,
   SESSION_WINDOW_MS,
   WEEKLY_WINDOW_MS,
-  WEEKLY_RECENT_PACE_CAP,
   type LimitProjection,
 } from "../utils/project";
 import { startWindowDrag } from "../utils/drag";
@@ -74,21 +75,24 @@ export function MiniView() {
       store.usage.weekly_resets_at,
       WEEKLY_WINDOW_MS,
       Date.now(),
-      store.recentPaceWeekly,
+      undefined, // weekly: week-to-date average only (no burst escalation)
       0.1, // weekly's 7d window banks enough data sooner — see projectLimit
-      WEEKLY_RECENT_PACE_CAP, // cap a burst at 2× the weekly average
     );
   });
   // Any tracked limit on pace to hit before reset → a small amber warning
   // badge. Icon (shape), not color, so it reads even amber-on-amber where the
   // ghost marker blends with an already-amber arc.
   const atRisk = () => Boolean(sessionProj()?.hitsBeforeReset || weeklyProj()?.hitsBeforeReset);
+  // Mini has no header status dot or ErrorBanner (both omitted in mini mode), so
+  // a sync error like TOKEN_EXPIRED would otherwise be invisible here. Surface it
+  // on the same warning badge + info overlay the at-risk projection already uses.
+  const errInfo = createMemo(() => bannerFor(store.errorCode));
   const [infoOpen, setInfoOpen] = createSignal(false);
   // When the projection stabilizes, the at-risk badge disappears — close the
   // info overlay too so it can't get stranded open with no badge left to toggle
   // it off (overlay-click still dismisses it while a warning is active).
   createEffect(() => {
-    if (!atRisk()) setInfoOpen(false);
+    if (!atRisk() && !errInfo()) setInfoOpen(false);
   });
   // Each tracked limit's current % + projection — drives both the click-to-open
   // in-Mini info overlay and the native-title hover summary.
@@ -124,13 +128,13 @@ export function MiniView() {
       }}
       ondblclick={() => setMode("normal")}
     >
-      <Show when={atRisk()}>
+      <Show when={atRisk() || errInfo()}>
         <span
           class="no-drag"
           data-guide="badge"
           role="button"
           tabindex={0}
-          title={riskTooltip()}
+          title={errInfo() ? `${errInfo()!.title} — ${errInfo()!.hint}` : riskTooltip()}
           onClick={(e) => {
             e.stopPropagation();
             setInfoOpen((v) => !v);
@@ -149,7 +153,14 @@ export function MiniView() {
             right: "10px",
             "font-size": "13px",
             "line-height": 1,
-            color: "var(--warning)",
+            // at-risk ⚠ = amber. Errors get the red circle below — except
+            // RATE_LIMITED (info tone: "retrying soon"), which uses the calm
+            // accent so it doesn't read as an alarm, matching ErrorBanner.
+            color: !errInfo()
+              ? "var(--warning)"
+              : errInfo()!.tone === "info"
+                ? "var(--accent)"
+                : "var(--danger, #ff3b30)",
             "z-index": 4,
             // Click → toggle an in-Mini info overlay (stays in-bounds, no nav);
             // native title is a bonus
@@ -157,7 +168,12 @@ export function MiniView() {
             cursor: "pointer",
           }}
         >
-          ⚠
+          {/* Shape carries the distinction (per the "icon, not color" note):
+              at-risk = ⚠ triangle, errors = ● circle — so they don't read as
+              the same warning even where amber-on-amber would blend. */}
+          <Show when={errInfo()} fallback={"⚠"}>
+            <AlertCircle size={13} style={{ display: "block" }} />
+          </Show>
         </span>
       </Show>
       {/* Click-the-badge info overlay — a glass panel covering the Mini content
@@ -186,30 +202,44 @@ export function MiniView() {
             cursor: "default",
           }}
         >
-          <For each={limitRows()}>
-            {(r) => {
-              const pj = projText(r.proj);
-              return (
-                <div
-                  class="t-caption"
-                  style={{ "white-space": "nowrap", overflow: "hidden", "text-overflow": "ellipsis" }}
-                >
-                  <span class="label-secondary">{r.label}</span>{" "}
-                  <span class="tabular-nums" style={{ "font-weight": 600 }}>
-                    {Math.round(r.pct || 0)}%
-                  </span>
-                  <Show when={pj}>
-                    <span
-                      style={{ color: r.proj?.hitsBeforeReset ? "var(--warning)" : "var(--label-tertiary)" }}
+          <Show
+            when={errInfo()}
+            fallback={
+              <For each={limitRows()}>
+                {(r) => {
+                  const pj = projText(r.proj);
+                  return (
+                    <div
+                      class="t-caption"
+                      style={{ "white-space": "nowrap", overflow: "hidden", "text-overflow": "ellipsis" }}
                     >
-                      {" · "}
-                      {pj}
-                    </span>
-                  </Show>
-                </div>
-              );
-            }}
-          </For>
+                      <span class="label-secondary">{r.label}</span>{" "}
+                      <span class="tabular-nums" style={{ "font-weight": 600 }}>
+                        {Math.round(r.pct || 0)}%
+                      </span>
+                      <Show when={pj}>
+                        <span
+                          style={{ color: r.proj?.hitsBeforeReset ? "var(--warning)" : "var(--label-tertiary)" }}
+                        >
+                          {" · "}
+                          {pj}
+                        </span>
+                      </Show>
+                    </div>
+                  );
+                }}
+              </For>
+            }
+          >
+            {(ei) => (
+              <div class="t-caption" style={{ display: "flex", "flex-direction": "column", gap: "2px" }}>
+                <span style={{ "font-weight": 600, color: ei().tone === "info" ? "var(--accent)" : "var(--danger, #ff3b30)" }}>{ei().title}</span>
+                <span class="label-secondary" style={{ "white-space": "normal" }}>
+                  {ei().hint}
+                </span>
+              </div>
+            )}
+          </Show>
         </div>
       </Show>
       {/* "Tap to expand" handle anchored at the bottom-center — mirrors the
