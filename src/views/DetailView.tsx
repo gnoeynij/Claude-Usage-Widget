@@ -324,10 +324,14 @@ function DailyCostCard() {
 
         {/* Chart: gridline + max label give scale; bars are tappable. */}
         <div style={{ position: "relative", height: "128px" }}>
+          {/* Gridlines + max label align to the bar AREA, which starts 16px
+              down: the flex container below reserves padding-top:16px for the
+              on-bar $ labels. Matching that offset keeps the peak bar meeting
+              the max line (otherwise every bar floats 16px below the scale). */}
           <div
             style={{
               position: "absolute",
-              top: 0,
+              top: "16px",
               left: 0,
               right: 0,
               "border-top": "1px dashed var(--separator)",
@@ -337,7 +341,7 @@ function DailyCostCard() {
             class="t-caption label-tertiary tabular-nums"
             style={{
               position: "absolute",
-              top: "-8px",
+              top: "8px",
               right: 0,
               "font-size": "10px",
               background: "transparent",
@@ -348,7 +352,7 @@ function DailyCostCard() {
           <div
             style={{
               position: "absolute",
-              top: "50%",
+              top: "calc(16px + (100% - 16px) / 2)",
               left: 0,
               right: 0,
               "border-top": "1px dashed var(--separator)",
@@ -371,6 +375,7 @@ function DailyCostCard() {
                   onClick={() => setSelected(d.date)}
                   style={{
                     flex: 1,
+                    position: "relative",
                     display: "flex",
                     "flex-direction": "column",
                     "justify-content": "flex-end",
@@ -390,9 +395,15 @@ function DailyCostCard() {
                     <div
                       class="tabular-nums"
                       style={{
+                        // Absolute so the label doesn't consume bar-container
+                        // height — otherwise a labeled bar (peak/selected) is
+                        // shorter than unlabeled bars of equal/greater cost.
+                        position: "absolute",
+                        bottom: "calc(100% + 2px)",
+                        left: 0,
+                        right: 0,
                         "font-size": "10px",
                         "text-align": "center",
-                        "margin-bottom": "2px",
                         "white-space": "nowrap",
                         color:
                           i() === peakIdx() || d.date === selDate()
