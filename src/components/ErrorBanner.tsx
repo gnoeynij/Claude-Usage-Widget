@@ -30,6 +30,16 @@ export function bannerFor(code: ErrorCode): BannerInfo | null {
   }
 }
 
+/** Fallback when a sync failed but parseErrorCode didn't recognize it (e.g.
+ *  JSON_PARSE_ERROR, HTTP 5xx). The red status dot lights on any `syncError`,
+ *  so without this an unmatched error shows a red dot with no on-screen
+ *  explanation. Keeps the banner in sync with the dot. */
+function genericSyncError(): BannerInfo | null {
+  if (!store.syncError) return null;
+  const s = t();
+  return { title: s.syncFailed, hint: s.syncFailedHint, tone: "danger", Icon: AlertTriangle };
+}
+
 // Color tokens per tone — `--accent` already covers the warn/info path
 // (Liquid Glass design system has one accent color), so warn/info share the
 // same tint and only differ in icon. danger gets the dedicated red.
@@ -47,7 +57,7 @@ function toneStyles(tone: Tone) {
 }
 
 export function ErrorBanner() {
-  const info = () => bannerFor(store.errorCode);
+  const info = () => bannerFor(store.errorCode) ?? genericSyncError();
 
   return (
     <Show when={info()}>

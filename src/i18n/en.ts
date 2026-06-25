@@ -86,6 +86,7 @@ export const en = {
   never: "never",
   syncing: "Syncing…",
   syncFailed: "Sync failed",
+  syncFailedHint: "The widget couldn't read the API response. It will retry automatically.",
 
   tokenExpired: "Auth token expired",
   tokenExpiredHint: "Run `claude` (or `/login` if it doesn't reconnect) — the widget recovers automatically.",

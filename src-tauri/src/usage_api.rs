@@ -134,8 +134,10 @@ struct UsageResponse {
     five_hour: UsageBlock,
     #[serde(default)]
     seven_day: UsageBlock,
+    // Option like seven_day_opus: the API sends `null` for this block on some
+    // plans/rollouts, and a bare UsageBlock fails the whole response on null.
     #[serde(default)]
-    seven_day_sonnet: UsageBlock,
+    seven_day_sonnet: Option<UsageBlock>,
     // Opus has its own weekly cap on some plans; the API sends `null` when the
     // account has no Opus-specific weekly limit, so this must be Option — a bare
     // UsageBlock would fail to deserialize the null.
@@ -246,13 +248,22 @@ async fn call_usage(access_token: &str) -> Result<UsageOutput> {
         return Err(anyhow!("HTTP {}", status.as_u16()));
     }
 
-    let body: UsageResponse = resp.json().await.context("JSON_PARSE_ERROR")?;
+    // Read as text first so a parse failure can log the actual body — the
+    // endpoint sometimes returns HTTP 200 with a body that doesn't fit
+    // UsageResponse (schema drift / intermittent non-JSON). The body is usage
+    // utilization + reset times only (no token), safe to log a short preview.
+    let text = resp.text().await.context("JSON_PARSE_ERROR")?;
+    let body: UsageResponse = serde_json::from_str(&text).map_err(|e| {
+        let preview: String = text.chars().take(300).collect();
+        warn!("usage parse failed: {e}; body[..300]={preview:?}");
+        anyhow!("JSON_PARSE_ERROR")
+    })?;
 
     let extra = body.extra_usage.unwrap_or_default();
     Ok(UsageOutput {
         five_hour: body.five_hour.utilization.unwrap_or(0.0),
         seven_day: body.seven_day.utilization.unwrap_or(0.0),
-        seven_day_sonnet: body.seven_day_sonnet.utilization.unwrap_or(0.0),
+        seven_day_sonnet: body.seven_day_sonnet.and_then(|b| b.utilization).unwrap_or(0.0),
         seven_day_opus: body.seven_day_opus.and_then(|b| b.utilization),
         extra_usage_enabled: extra.is_enabled,
         extra_usage: if extra.is_enabled { extra.utilization } else { None },
@@ -276,6 +287,10 @@ mod tests {
             r#"{"five_hour":{"utilization":50.0},"seven_day_opus":{"utilization":10.0},"extra_usage":{"is_enabled":true,"utilization":42.0}}"#,
             r#"{"five_hour":{"utilization":50.0},"seven_day":{"utilization":60.0}}"#,
             r#"{"extra_usage":{}}"#,
+            // Regression (2026-06-25): the API began sending seven_day_sonnet:null
+            // plus new per-block dollar fields (limit/used/remaining_dollars).
+            // Neither may fail the whole response (sonnet was a bare struct before).
+            r#"{"five_hour":{"utilization":8.0,"limit_dollars":null,"used_dollars":null,"remaining_dollars":null},"seven_day":{"utilization":50.0},"seven_day_sonnet":null}"#,
         ];
         for v in variants {
             let parsed: Result<UsageResponse, _> = serde_json::from_str(v);

@@ -88,6 +88,7 @@ export const ko: Strings = {
   never: "없음",
   syncing: "동기화 중…",
   syncFailed: "동기화 실패",
+  syncFailedHint: "API 응답을 읽지 못했어요. 잠시 후 자동으로 다시 시도해요.",
 
   tokenExpired: "인증 토큰 만료",
   tokenExpiredHint: "터미널에서 `claude` 실행 (안 되면 `/login` 으로 재로그인) — 위젯이 자동 복구돼요.",
