@@ -337,18 +337,6 @@ function DailyCostCard() {
               "border-top": "1px dashed var(--separator)",
             }}
           />
-          <span
-            class="t-caption label-tertiary tabular-nums"
-            style={{
-              position: "absolute",
-              top: "8px",
-              right: 0,
-              "font-size": "10px",
-              background: "transparent",
-            }}
-          >
-            {compactCost(maxTotal())}
-          </span>
           <div
             style={{
               position: "absolute",
