@@ -13,7 +13,7 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
-| _(현재 막힘 없음 — 직전 P0 "v2.4.0 릴리즈" 진행 중)_ | — | — | — |
+| _(현재 막힘 없음 — v2.4.x 라인 발행 완료, 현재 v2.4.3)_ | — | — | — |
 
 (OAuth 직접 refresh 는 P1 으로 격하.)
 
@@ -32,7 +32,7 @@
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
 | **6/15 usage 엔드포인트 생존 재확인** | 인증·리스크 | (이번 세션 2026-06-04) | 6/15 = Anthropic 자동화 워크로드 구독한도→별도 크레딧 전환일. 로컬에서 `/api/oauth/usage` 라이브 HTTP 200 확인(credentials accessToken, 마스킹) + 6/15 정책이 usage *조회* 에도 적용됐는지 WebSearch 재검토. 위젯은 추론 안 하고 조회만 해 직접 대상 아닐 것으로 분석(6/4 기준 200 동작)됐으나 그날 실측 필요. **remote 스케줄 불가**(로컬 credentials 접근 X) → 그날 사용자가 직접 트리거 ("위젯 6/15 확인"). |
-| **6/23 Fable gating — usage 스키마 재확인 + extra_usage 크레딧 표시** | 인증·비용 | (2026-06-18 확인) | 6/23 = Fable 5 가 Pro/Max/Team/Enterprise 플랜 한도에서 제외 → usage 크레딧(API 요율) 전환일 (6/9~6/22 무료). 이때 `extra_usage` 블록이 실제 활성화 — 위젯은 null-safe 파싱이라 안 깨짐. 후보 ① 서브필드(`used_credits`/`monthly_limit`/`currency`) 파싱해 "추가 크레딧 N%" 를 실제 "$X / $Y" 금액 표시로 확장, ② gating 후 usage 응답 스키마 생존 재확인 (위 6/15 항목과 동일 — 로컬 라이브 호출 필요·remote 스케줄 불가). **pricing.rs 는 6/18 공식 가격표와 전 항목 일치 확인됨 (변경 불필요).** 메모리 `oauth-usage-new-fields` 참조. |
+| **6/23 Fable gating — usage 스키마 재확인 ✅ + extra_usage $X/$Y 금액 표시** | 인증·비용 | (2026-06-18 → 2026-06-25 실측) | 6/23 = Fable 5 가 Pro/Max/Team/Enterprise 플랜 한도에서 제외 → usage 크레딧(API 요율) 전환일. **✅ 스키마 재확인 done (2026-06-25 라이브 실측)**: 6/23 이후 usage 응답에 `seven_day_sonnet: null` + 블록별 신필드 `limit_dollars`/`used_dollars`/`remaining_dollars` 등장. sonnet null 이 non-Option struct 파싱을 깨 sync 실패 → `seven_day_sonnet` Option 방어 fix (✓ 완료 참조). **남은 것**: `limit_dollars`/`used_dollars`/`remaining_dollars` 파싱해 "추가 크레딧 N%" → 실제 "$X / $Y" 금액 표시로 확장 (서브필드 추정명 정정 — 실제는 `extra_usage` 하위가 아니라 *각 usage 블록*의 dollar 필드). pricing.rs 는 6/18·6/25 공식 가격표와 전 항목 일치(변경 불필요). 메모리 `oauth-usage-new-fields` 참조. |
 | **자동화 테스트 도입 검토** | 인프라·품질 | [CLAUDE.md "테스트 프레임워크"](CLAUDE.md) | (a) **부분 이행** — `cargo test` 23개: `pricing.rs` 13 (cost_usd/resolve/family_of/web_search/inference_geo, 회귀 §19 방어) + `jsonl_aggregator.rs` 8 + `usage_api.rs` 2 (응답 신필드 null 방어) (group_blocks 5h 경계/active_view/overall_stats/family_totals/recent_blocks). 후속: `period_totals` (Local::now 주입 리팩터 필요) + `migration` 단위 테스트. (b) Vitest — `src/state/store.ts` Solid 신호 로직 미도입. (c) Playwright — Tauri WebView 한정이라 dev URL에서만, 실 .exe 시각 회귀는 여전히 `capture-widget.ps1` 의존. **(d) ✓ CI 통합 완료** — [release.yml](.github/workflows/release.yml) rust-cache 후 `cargo test` 게이트 추가 (양 OS matrix, tauri-action 전). macOS 자동 검증 공백 해소. (본 커밋) |
 | **Win10 호환 검증** | 시각 회귀 | [vibrancy_win.rs](src-tauri/src/vibrancy_win.rs) | Mica/Acrylic은 Win11 전제. Win10에서 fallback이 정상인지 실 머신 확인 필요. |
 | **Linux 지원** | 인프라 | (없음) | Tauri 2가 지원하나 OAuth + `.credentials.json` 경로 + vibrancy 미구현 + AppImage·deb 분기 등 macOS와 별개. 수요 신호 있을 때만. |
@@ -84,6 +84,9 @@
 | **Opus 4.8 단가 추가** ([회귀 §19](CLAUDE.md)) — `pricing.rs` 에 `claude-opus-4-8` → `opus_current` ($5/$25). 미등록이라 `resolve()` 가 `claude-opus-4`(opus_legacy $15/$75) 로 longest-prefix 매칭 → Opus 4.8 사용분 3배 과대. 공식 가격표(2026-06-02 재검증) 대조 + 5개 단가 그룹 전부 일치 확인. 회귀 테스트 `opus_4_8_uses_current_pricing` (bare + date-suffix). 사용자 JSONL 에 opus-4-8 434건 기록 중이라 실 영향. cargo test 21 passed. | `a2df72e` | 2026-06-02 |
 | **구독 플랜 칩 (옵션 패널 헤더)** — credentials `subscriptionType`+`rateLimitTier` → "Max 20×" 라벨을 `SettingsPanel` 헤더 타이틀 옆 `.pill-accent` 칩으로 (height 를 `--text-headline-lh` 로 맞춰 타이틀과 정렬). `usage_api.rs read_plan()` (토큰 만료 무관 읽기 전용) + `fetch_plan` command + `store.ts planLabel()` (`(\d+)x`→배수, 미지값 capitalize fallback) + i18n plan 키. 사용량 계산 무관 정보 라벨, 미로그인 시 자동 숨김. typecheck + cargo test 21 passed. | `b63c044` | 2026-06-02 |
 | **v2.1.7 릴리즈 발행** — Opus 4.8 단가 정정(`a2df72e`) + 구독 플랜 칩(`b63c044`) 을 6 파일 bump + `docs/release-notes/v2.1.7.md` + tag push → CI 양 OS 빌드로 발행. GitHub Release 2026-06-04 게시 (이전 "보류" 결정에서 발행으로 전환, origin push 완료). | `5628ec7` (tag `v2.1.7`) | 2026-06-04 |
+| **weekly 투영 평균 전환 + 미니 토큰 만료 표시 + 버그 수정 묶음** — (1) weekly `projectLimit` recentPace 제외(평균-only) + `recentPaceWeekly`/`WEEKLY_RECENT_PACE_CAP`/`maxRecentMult` 정리 — 업무시간 burst 가 밤·주말로 외삽돼 ETA 과소되던 갭 완화. (2) 미니모드 errorCode 표시(이전엔 미니에서 안 뜸) — errInfo 배지(at-risk 노란 삼각 vs error 빨강 원형 색·형태 구분) + info 오버레이 + RATE_LIMITED accent 톤 + `bannerFor` export + GuideView callout. (3) 버그 탐색 수정: migration `sync_interval` 초→분 0 절단(자동sync off), store `combinedHistory` 미정리 + `errorCode` 재싱크 깜빡임, DetailView `active.start` NaN 가드, project.ts `maxRecentMult` 죽은코드. typecheck + vitest 23 + cargo 32. | `d77c3d6` | 2026-06-25 |
+| **Detail 일별 비용 차트 막대 비례 fix** — (1) 막대 위 $라벨을 `position:absolute` 로 분리: 라벨이 막대 컨테이너(고정 높이)를 잠식해 라벨 붙는 peak/선택 막대가 같은/더 큰 비용의 라벨 없는 막대보다 짧아지던 버그 (30일에서 Jun 9 peak 가 Jun 8/15 보다 낮게; 7일은 전 막대 라벨이라 균등 단축돼 안 드러남). (2) 눈금선·최댓값 라벨을 막대 영역(flex `padding-top:16px`) 에 정렬 — peak 막대가 최댓값 점선에 16px 못 미치던 정렬. 실 .exe detail 캡처 검증. | `a8e5d92` | 2026-06-25 |
+| **usage sync 파싱 fix — seven_day_sonnet null + 에러 가시성** (6/23 gating 회귀) — API 가 `seven_day_sonnet: null` + 블록별 `limit/used/remaining_dollars` 신필드 전송 → non-Option struct 가 HTTP 200 응답 전체 파싱 실패(`JSON_PARSE_ERROR`, 간헐) → usage 패널 공백 + status dot/트레이 빨강. 단 `errorCode=UNKNOWN` 이라 ErrorBanner 미표시(빨강 dot 인데 화면 경고 없는 갭). fix: (1) `seven_day_sonnet` → `Option<UsageBlock>` (seven_day_opus 패턴) + null 회귀 테스트, (2) JSON 파싱 실패 시 응답 body 300자 로깅(진단 — 이게 원인 특정: `invalid type: null, expected struct UsageBlock`), (3) ErrorBanner 가 매칭 안 된 `syncError` 도 generic 경고 표시(dot 과 일관) + i18n `syncFailedHint`. 로그 sync ok + status dot 초록 캡처 확인. cargo test 32. **always-spot-check (usage_api)**. | `45e47b1` | 2026-06-25 |
 
 ---
 
@@ -91,4 +94,4 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
-| `.claude/worktrees/clever-darwin-e89051/` 빈 고아 디렉토리 | 인프라 | (점검 발견 2026-05-28) | `git worktree list` 미등록 + 빈 디렉토리. 현 세션 cwd 라 in-use lock 으로 자동 삭제 불가. 다음 세션 외부 셸에서 `Remove-Item -Recurse -Force .claude/worktrees/clever-darwin-e89051`. **회귀 패턴** — harness 가 worktree 를 checkout 없이 빈 폴더로 남기는 사례 반복 (이전 `awesome-kepler-2868ae` 는 2026-05-28 확인 시 이미 정리됨). git 명령이 부모 메인 리포로 fall-through 하므로 작업엔 지장 없으나 누적되면 청소 필요. |
+| `.claude/worktrees/clever-darwin-e89051/` 빈 고아 디렉토리 | 인프라 | (점검 발견 2026-05-28) | `git worktree list` 미등록 + 빈 디렉토리. 현 세션 cwd 라 in-use lock 으로 자동 삭제 불가. 다음 세션 외부 셸에서 `Remove-Item -Recurse -Force .claude/worktrees/clever-darwin-e89051`. **회귀 패턴** — harness 가 worktree 를 checkout 없이 빈 폴더로 남기는 사례 반복 (이전 `awesome-kepler-2868ae` 는 2026-05-28 확인 시 이미 정리됨). git 명령이 부모 메인 리포로 fall-through 하므로 작업엔 지장 없으나 누적되면 청소 필요. **(2026-06-25 재확인: 여전히 존재 — 이번 세션도 이 워크트리가 cwd. 정리는 다음 세션 외부 셸에서.)** |
