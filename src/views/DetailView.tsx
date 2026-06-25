@@ -379,7 +379,7 @@ function DailyCostCard() {
                     display: "flex",
                     "flex-direction": "column",
                     "justify-content": "flex-end",
-                    height: `${Math.max((d.total / maxTotal()) * 100, 2)}%`,
+                    height: `${Math.max((d.total / maxTotal()) * 100, 1)}%`,
                     "min-width": 0,
                     cursor: "pointer",
                     outline:
