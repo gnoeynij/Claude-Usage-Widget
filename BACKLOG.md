@@ -24,6 +24,7 @@
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
 | **OAuth 직접 refresh (B 방식)** — P0 에서 격하 | UX·인증 | [docs/plans/2026-05-20-oauth-refresh.md](docs/plans/2026-05-20-oauth-refresh.md) §"B 격하 근거" | Anthropic spec 미공개·cred 파일 race·client_id 폐기 위험. recovery (A+D, ✓ 60) 로 80% 효과 달성. **always-spot-check** (진행 결정 시) |
+| **Sonnet 5 표준 단가 전환 (2026-09-01)** | 비용 정확도 | 2026-07-01 세션 — Sonnet 5 도입가 추가, [`src-tauri/src/pricing.rs:52`](src-tauri/src/pricing.rs) `sonnet_5` | Sonnet 5 도입가 $2/$10 (input/output, per MTok)가 Anthropic 공식 전환일 2026-09-01 부로 표준 Sonnet 티어 $3/$15 (기존 `sonnet` 변수와 동일)로 50% 인상. `pricing.rs` 는 날짜 분기 로직이 없는 정적 테이블이라 자동 반영 안 됨 — 2026-09-01 이후 첫 작업 세션에서 `sonnet_5` 를 `sonnet` 과 병합(또는 단가만 갱신). 방치 시 Sonnet 5 사용자 비용이 실제보다 ~33% 과소 표시(회귀 사례 §19 유형). **always-spot-check** |
 
 ---
 

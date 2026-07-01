@@ -13,7 +13,7 @@ pub struct Pricing {
 
 /// USD per million tokens.
 /// Official Anthropic pricing: https://platform.claude.com/docs/en/about-claude/pricing
-/// (last verified 2026-06-22). When Anthropic ships a new model generation,
+/// (last verified 2026-07-01). When Anthropic ships a new model generation,
 /// add an entry below and re-verify the existing ones.
 pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
     let fable = Pricing {
@@ -49,6 +49,16 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
         cache_write_1h: 6.0,
         cache_read: 0.3,
     };
+    let sonnet_5 = Pricing {
+        // Sonnet 5 (released 2026-06-30). Introductory pricing through
+        // 2026-08-31; on 2026-09-01 it rises to the standard Sonnet tier
+        // ($3/$15 — the `sonnet` values above). Update this block then.
+        input: 2.0,
+        output: 10.0,
+        cache_write_5m: 2.5,
+        cache_write_1h: 4.0,
+        cache_read: 0.2,
+    };
     let haiku_45 = Pricing {
         input: 1.0,
         output: 5.0,
@@ -76,6 +86,7 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
     m.insert("claude-opus-4-5", opus_current);
     m.insert("claude-opus-4-1", opus_legacy);
     m.insert("claude-opus-4", opus_legacy);
+    m.insert("claude-sonnet-5", sonnet_5);
     m.insert("claude-sonnet-4-6", sonnet);
     m.insert("claude-sonnet-4-5", sonnet);
     m.insert("claude-sonnet-4", sonnet);
@@ -302,6 +313,21 @@ mod tests {
         approx(cost_usd("claude-mythos-5", &toks(1_000_000, 0, 0, 0, 0)), 10.0);
         approx(cost_usd("claude-mythos-5", &toks(0, 1_000_000, 0, 0, 0)), 50.0);
         assert_eq!(family_of("claude-mythos-5"), "Fable");
+    }
+
+    #[test]
+    fn sonnet_5_introductory_pricing() {
+        // Sonnet 5 (released 2026-06-30), introductory pricing through
+        // 2026-08-31: $2 in / $10 out. Must not resolve to None -> $0: the
+        // `claude-sonnet-4` entry is NOT a prefix of `claude-sonnet-5`.
+        approx(cost_usd("claude-sonnet-5", &toks(1_000_000, 0, 0, 0, 0)), 2.0);
+        approx(cost_usd("claude-sonnet-5", &toks(0, 1_000_000, 0, 0, 0)), 10.0);
+        approx(cost_usd("claude-sonnet-5", &toks(0, 0, 1_000_000, 0, 0)), 2.5);
+        approx(cost_usd("claude-sonnet-5", &toks(0, 0, 0, 1_000_000, 0)), 4.0);
+        approx(cost_usd("claude-sonnet-5", &toks(0, 0, 0, 0, 1_000_000)), 0.2);
+        // Date-suffixed id from JSONL resolves too.
+        approx(cost_usd("claude-sonnet-5-20260630", &toks(1_000_000, 0, 0, 0, 0)), 2.0);
+        assert_eq!(family_of("claude-sonnet-5"), "Sonnet");
     }
 
     #[test]
