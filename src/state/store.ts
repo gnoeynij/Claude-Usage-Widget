@@ -683,6 +683,16 @@ export async function initStore() {
       (v) => setStore("mode", v),
       (v): v is Mode => v === "mini" || v === "normal" || v === "detail",
     );
+    // Spawn floor survives restarts: a restart mid-expiry-episode must not
+    // launch a second CLI while the pre-restart one may still be running
+    // (two concurrent refreshes of the same rotating token → regression §21).
+    await loadSetting<number>(
+      "lastRefreshSpawnAt",
+      (v) => {
+        lastRefreshSpawnAt = v;
+      },
+      (v): v is number => typeof v === "number" && v > 0,
+    );
   } finally {
     suppressPersist = false;
   }
@@ -873,6 +883,71 @@ async function pollCredentialsMtime(initial = false) {
   }
 }
 
+// One *CLI run* per expiry episode: the spawned call costs real money
+// (~$0.015 measured 2026-07-03) and there are non-converging states where it
+// can never fix the widget (persistent 403 mapped to TOKEN_EXPIRED; a user
+// with ANTHROPIC_API_KEY configured, where the CLI succeeds without touching
+// the OAuth token) — an interval-based retry would bill indefinitely there.
+// `spawnedThisEpisode` resets only when a sync succeeds; an invoke *rejection*
+// (spawn never launched — bin missing, spawn error) also resets it since no
+// CLI ran and no money was spent, so a later manual donut click can retry.
+// `lastRefreshSpawnAt` is a hard once-per-10min floor on top, persisted so a
+// widget restart mid-episode can't race a still-running CLI with a second
+// spawn — two processes refreshing the same one-time rotating token is the
+// regression-§21 chain-revocation scenario.
+let refreshSpawnInFlight = false;
+let spawnedThisEpisode = false;
+let lastRefreshSpawnAt = 0;
+const REFRESH_SPAWN_MIN_INTERVAL_MS = 10 * 60_000;
+
+async function maybeSpawnTokenRefresh() {
+  if (refreshSpawnInFlight || spawnedThisEpisode) return;
+  const now = Date.now();
+  if (now - lastRefreshSpawnAt < REFRESH_SPAWN_MIN_INTERVAL_MS) return;
+  refreshSpawnInFlight = true;
+  spawnedThisEpisode = true;
+  lastRefreshSpawnAt = now;
+  void persistLastRefreshSpawnAt(now);
+  try {
+    void info("token expired — spawning claude CLI to refresh");
+    const code = await invoke<number>("trigger_token_refresh");
+    if (code === 0) {
+      void info("claude refresh run exited 0");
+    } else {
+      void warn(`claude refresh run exited ${code} — token likely not refreshed`);
+    }
+  } catch (e) {
+    spawnedThisEpisode = false;
+    void warn(`token refresh spawn failed: ${toErrorMessage(e)}`);
+  } finally {
+    refreshSpawnInFlight = false;
+  }
+  void syncNow();
+}
+
+async function persistLastRefreshSpawnAt(ms: number) {
+  try {
+    const ps = await getPersistStore();
+    await ps.set("lastRefreshSpawnAt", ms);
+    await ps.save();
+  } catch (e) {
+    console.error("persist lastRefreshSpawnAt failed", e);
+  }
+}
+
+/** NO_CREDENTIALS banner button — opens a terminal running `claude auth
+ *  login` (browser flow). User-initiated only: auth login wipes stored
+ *  credentials on start, so it must never fire automatically. Failure is
+ *  surfaced as a toast (not just a log): this button is the recovery
+ *  funnel's last resort, and a silently inert button reads as "widget is
+ *  broken" (e.g. CLI binary not found, macOS Automation permission denied). */
+export function openLoginTerminal() {
+  void invoke("open_login_terminal").catch((e) => {
+    void warn(`open login terminal failed: ${toErrorMessage(e)}`);
+    pushToast(t().loginOpenFailed, t().loginOpenFailedHint, "warn");
+  });
+}
+
 export async function syncNow() {
   if (store.syncing) return;
   setStore("syncing", true);
@@ -885,6 +960,9 @@ export async function syncNow() {
     // mini info overlay each sync.
     setStore("syncError", null);
     setStore("errorCode", null);
+    // New expiry episode after this point may spawn again (the 10-min floor
+    // still applies — deliberately NOT reset, so an expiry flap can't re-bill).
+    spawnedThisEpisode = false;
     setStore("lastSyncAt", new Date().toISOString());
     // Accumulate lifetimeCost on *every* sync, not just in Detail mode. The
     // lifetime total is captured by folding each record's cost in before its
@@ -909,6 +987,9 @@ export async function syncNow() {
     setStore("syncError", msg);
     const code = parseErrorCode(msg);
     setStore("errorCode", code);
+    // Both entry points (donut click and the auto-sync interval) land here,
+    // so one hook covers the "widget refreshes the token itself" feature.
+    if (code === "TOKEN_EXPIRED") void maybeSpawnTokenRefresh();
     void warn(`sync failed ${Date.now() - t0}ms code=${code ?? "UNKNOWN"} msg=${msg}`);
     void invoke("set_tray_state", { state: "err" }).catch(() => {});
   } finally {

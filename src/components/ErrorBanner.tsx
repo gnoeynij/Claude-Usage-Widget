@@ -1,7 +1,7 @@
 import { Show } from "solid-js";
 import { AlertTriangle, AlertCircle, WifiOff, Clock } from "lucide-solid";
 import type { Component } from "solid-js";
-import { store } from "../state/store";
+import { store, openLoginTerminal } from "../state/store";
 import type { ErrorCode } from "../state/store";
 import { t } from "../i18n";
 
@@ -12,6 +12,8 @@ type BannerInfo = {
   hint: string;
   tone: Tone;
   Icon: Component<{ size?: number; style?: Record<string, string> }>;
+  /** Optional action button (banner only — the Mini overlay ignores it). */
+  action?: { label: string; run: () => void };
 };
 
 export function bannerFor(code: ErrorCode): BannerInfo | null {
@@ -20,7 +22,13 @@ export function bannerFor(code: ErrorCode): BannerInfo | null {
     case "TOKEN_EXPIRED":
       return { title: s.tokenExpired, hint: s.tokenExpiredHint, tone: "warn", Icon: AlertTriangle };
     case "NO_CREDENTIALS":
-      return { title: s.noCredentials, hint: s.noCredentialsHint, tone: "warn", Icon: AlertCircle };
+      return {
+        title: s.noCredentials,
+        hint: s.noCredentialsHint,
+        tone: "warn",
+        Icon: AlertCircle,
+        action: { label: s.loginOpen, run: openLoginTerminal },
+      };
     case "RATE_LIMITED":
       return { title: s.rateLimited, hint: s.rateLimitedHint, tone: "info", Icon: Clock };
     case "NETWORK":
@@ -112,6 +120,30 @@ export function ErrorBanner() {
             >
               <span style={{ "font-weight": 600 }}>{i().title}</span>
               <span class="label-secondary">{i().hint}</span>
+              <Show when={i().action}>
+                {(a) => (
+                  <button
+                    class="no-drag ring-hover"
+                    onClick={() => a().run()}
+                    style={{
+                      // The banner itself is pointer-events:none (floating
+                      // overlay must not block the donut) — re-enable just
+                      // for the button.
+                      "pointer-events": "auto",
+                      "align-self": "flex-start",
+                      "margin-top": "2px",
+                      padding: "3px 10px",
+                      "border-radius": "7px",
+                      border: "1px solid var(--accent-tint-strong)",
+                      color: "var(--accent)",
+                      background: "var(--fill-2)",
+                      "font-weight": 600,
+                    }}
+                  >
+                    {a().label}
+                  </button>
+                )}
+              </Show>
             </div>
           </div>
         );

@@ -23,7 +23,7 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
-| **OAuth 직접 refresh (B 방식)** — P0 에서 격하 | UX·인증 | [docs/plans/2026-05-20-oauth-refresh.md](docs/plans/2026-05-20-oauth-refresh.md) §"B 격하 근거" | Anthropic spec 미공개·cred 파일 race·client_id 폐기 위험. recovery (A+D, ✓ 60) 로 80% 효과 달성. **always-spot-check** (진행 결정 시) |
+| **OAuth 직접 refresh (B 방식)** — 사실상 폐기 (C-변형으로 대체) | UX·인증 | [docs/plans/2026-05-20-oauth-refresh.md](docs/plans/2026-05-20-oauth-refresh.md) 2026-07-03 부록 | 2026-07-03 **CLI spawn 자동 갱신 (C-변형) 구현 완료** — `TOKEN_EXPIRED` 시 `claude -p` 최소 호출 spawn (~$0.015/회, 에피소드당 1회), `NO_CREDENTIALS` 배너에 "로그인 열기" 버튼. B 방식 (직접 OAuth 호출) 은 spec 미공개 + **회귀 §21 rotating token 체인 오염 실증**으로 진행 근거 소멸. macOS 미실측 (`open_login_terminal` osascript·CLI PATH). **always-spot-check** |
 | **Sonnet 5 표준 단가 전환 (2026-09-01)** | 비용 정확도 | 2026-07-01 세션 — Sonnet 5 도입가 추가, [`src-tauri/src/pricing.rs:52`](src-tauri/src/pricing.rs) `sonnet_5` | Sonnet 5 도입가 $2/$10 (input/output, per MTok)가 Anthropic 공식 전환일 2026-09-01 부로 표준 Sonnet 티어 $3/$15 (기존 `sonnet` 변수와 동일)로 50% 인상. `pricing.rs` 는 날짜 분기 로직이 없는 정적 테이블이라 자동 반영 안 됨 — 2026-09-01 이후 첫 작업 세션에서 `sonnet_5` 를 `sonnet` 과 병합(또는 단가만 갱신). 방치 시 Sonnet 5 사용자 비용이 실제보다 ~33% 과소 표시(회귀 사례 §19 유형). **always-spot-check** |
 
 ---

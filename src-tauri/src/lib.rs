@@ -99,6 +99,8 @@ pub fn run() {
             commands::detect_sync_folders,
             commands::sync_device_cost,
             commands::open_guide_window,
+            commands::trigger_token_refresh,
+            commands::open_login_terminal,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").expect("main window missing");

@@ -34,6 +34,145 @@ pub fn credentials_mtime() -> Option<f64> {
     usage_api::credentials_mtime_ms()
 }
 
+/// Locate the Claude Code CLI across its install shapes: PATH (probing
+/// `claude.exe` AND the npm shim `claude.cmd` on Windows — npm global
+/// installs ship no .exe), then fixed fallbacks for launch contexts where a
+/// GUI process sees a narrower PATH than the user's shell: the native
+/// installer's `~/.local/bin`, the migrate-installer's `~/.claude/local`,
+/// and (macOS, where launchd PATH lacks them) Homebrew/`/usr/local/bin`.
+fn find_claude_bin() -> Option<std::path::PathBuf> {
+    let names: &[&str] = if cfg!(windows) { &["claude.exe", "claude.cmd"] } else { &["claude"] };
+    let probe = |dir: &std::path::Path| -> Option<std::path::PathBuf> {
+        names.iter().map(|n| dir.join(n)).find(|c| c.is_file())
+    };
+    if let Ok(path_var) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            if let Some(hit) = probe(&dir) {
+                return Some(hit);
+            }
+        }
+    }
+    if let Some(home) = dirs::home_dir() {
+        for rel in [&[".local", "bin"][..], &[".claude", "local"][..]] {
+            let dir = rel.iter().fold(home.clone(), |p, seg| p.join(seg));
+            if let Some(hit) = probe(&dir) {
+                return Some(hit);
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    for dir in ["/opt/homebrew/bin", "/usr/local/bin"] {
+        if let Some(hit) = probe(std::path::Path::new(dir)) {
+            return Some(hit);
+        }
+    }
+    None
+}
+
+/// Spawn a minimal Claude Code call so the CLI silently refreshes an expired
+/// OAuth token (it does so on any real API call — verified 2026-07-03, see
+/// docs/plans/2026-05-20-oauth-refresh.md addendum). Neutral temp cwd keeps
+/// project CLAUDE.md context out (~$0.015/call measured vs $0.107 from a
+/// project dir); --no-session-persistence keeps the call's own JSONL out of
+/// ~/.claude/projects so the widget's *local cost stats* never count it (the
+/// call still consumes the server-side 5h/weekly windows like any API call).
+/// Returns the CLI exit code; non-zero means the token was likely not
+/// refreshed (stderr tail goes to the log). Callers re-sync afterwards — the
+/// sync result decides the new state (recovered, or NO_CREDENTIALS when the
+/// refresh token itself is dead and the CLI wiped it).
+///
+/// Deliberately no kill-timeout: SIGKILL landing between the server rotating
+/// the refresh token and the CLI writing .credentials.json would strand a
+/// consumed one-time token on disk — the regression-§21 chain-revocation
+/// scenario. A hung CLI parks one blocking thread instead, and the frontend's
+/// in-flight/per-episode guards prevent pile-up.
+#[tauri::command]
+pub async fn trigger_token_refresh() -> Result<i32, String> {
+    let bin = find_claude_bin().ok_or("CLAUDE_BIN_NOT_FOUND")?;
+    let cwd = std::env::temp_dir().join("claude-widget-refresh");
+    let _ = std::fs::create_dir_all(&cwd);
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut cmd = std::process::Command::new(bin);
+        cmd.args(["-p", "ok", "--model", "haiku", "--no-session-persistence", "--tools", ""])
+            .current_dir(cwd)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            // Piped so a failure is diagnosable; read only after exit. The CLI's
+            // error output is small (a usage/auth line), nowhere near the 64KB
+            // pipe buffer that could deadlock a pre-exit reader.
+            .stderr(std::process::Stdio::piped());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW — no console flash
+        }
+        let mut child = cmd.spawn().map_err(|e| format!("spawn failed: {e}"))?;
+        let status = child.wait().map_err(|e| format!("wait failed: {e}"))?;
+        let code = status.code().unwrap_or(-1);
+        if code != 0 {
+            use std::io::Read;
+            let mut tail = String::new();
+            if let Some(mut err) = child.stderr.take() {
+                let _ = err.read_to_string(&mut tail);
+            }
+            let tail = tail.trim();
+            // Char-boundary-safe last ~300 chars (byte slicing could panic mid-UTF-8).
+            let start = tail.char_indices().rev().nth(299).map_or(0, |(i, _)| i);
+            log::warn!("claude refresh run exited {code}: {}", &tail[start..]);
+        }
+        Ok(code)
+    })
+    .await
+    .map_err(|e| format!("join failed: {e}"))?
+}
+
+/// Open a visible terminal running `claude auth login`. The CLI opens the
+/// OAuth browser page itself; the terminal stays for the paste-the-code
+/// fallback. Never call automatically: `auth login` wipes the stored
+/// credentials the moment it starts (verified 2026-07-03), so it must stay
+/// behind an explicit user click on the NO_CREDENTIALS banner. Errors
+/// propagate to the frontend, which surfaces a toast — this button is the
+/// recovery funnel's last resort and must not fail invisibly.
+#[tauri::command]
+pub fn open_login_terminal() -> Result<(), String> {
+    let bin = find_claude_bin().ok_or("CLAUDE_BIN_NOT_FOUND")?;
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        // Direct argv spawn with its own console — no cmd.exe `start` line,
+        // so no %VAR% expansion / quote-mangling of the path (cmd expands
+        // %pairs% even inside double quotes).
+        std::process::Command::new(&bin)
+            .args(["auth", "login"])
+            .creation_flags(0x0000_0010) // CREATE_NEW_CONSOLE — interactive window
+            .spawn()
+            .map_err(|e| format!("spawn failed: {e}"))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        // The path is embedded in two nested string contexts — shell single
+        // quotes inside an AppleScript literal — so escape both layers
+        // (shell first, then AppleScript's \\ and \").
+        let sh = format!("'{}' auth login", bin.display().to_string().replace('\'', r"'\''"));
+        let script = format!(
+            "tell application \"Terminal\"\nactivate\ndo script \"{}\"\nend tell",
+            sh.replace('\\', r"\\").replace('"', "\\\"")
+        );
+        // osascript returns promptly (`do script` doesn't wait for the shell),
+        // so a blocking status() is fine — and it's the only way to see a TCC
+        // Automation denial, which exits non-zero with no other signal.
+        let out = std::process::Command::new("osascript")
+            .args(["-e", &script])
+            .output()
+            .map_err(|e| format!("spawn failed: {e}"))?;
+        if !out.status.success() {
+            let err = String::from_utf8_lossy(&out.stderr);
+            return Err(format!("osascript failed: {}", err.trim()));
+        }
+    }
+    Ok(())
+}
+
 /// Open (or focus) the standalone guide window. `lang`/`dark` are passed from
 /// the widget so the guide matches the current theme/language; the frontend
 /// renders `<GuideApp>` when the URL carries `?guide`.
