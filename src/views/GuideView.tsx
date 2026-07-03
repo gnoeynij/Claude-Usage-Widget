@@ -32,8 +32,8 @@ const PROJ_FORMULA: Txt = {
   ko: "예상 % = 현재 % × (전체 기간 / 경과 시간)",
 };
 const PROJ_NOTE1: Txt = {
-  en: "If your recent pace runs faster than that average, the faster pace is used instead — so warnings surface sooner.",
-  ko: "최근 속도가 이 평균보다 빠르면 더 빠른 쪽을 적용해, 경고가 더 일찍 나타납니다.",
+  en: "For the session, a faster recent pace is blended in so warnings surface sooner. Weekly uses the week-to-date average only, since a work-hours burst shouldn't extrapolate to the rest of the week.",
+  ko: "세션은 최근 속도가 더 빠르면 이를 반영해 경고가 더 일찍 나타납니다. 주간은 업무시간 burst가 한 주 전체로 확대 적용되지 않도록 누적 평균만 사용합니다.",
 };
 const PROJ_NOTE2: Txt = {
   en: "Skipped for a short while after each reset (~1h for the session, ~17h for the week) until there's enough data to extrapolate.",
