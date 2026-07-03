@@ -86,6 +86,13 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
+        // OS-level launch-at-login. The OS entry (HKCU Run key / LaunchAgent)
+        // is the source of truth — the Settings toggle reads isEnabled() live
+        // instead of persisting a shadow copy that could drift (§15 pattern).
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
             commands::fetch_usage,
             commands::credentials_mtime,

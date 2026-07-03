@@ -93,6 +93,7 @@ export const en = {
   noCredentials: "No credentials found",
   noCredentialsHint: "Sign in by running `claude` in a terminal — sync resumes once you're signed in.",
   loginOpen: "Open login",
+  autoStart: "Start with PC",
   loginOpenFailed: "Couldn't open the login terminal",
   loginOpenFailedHint: "Run `claude auth login` in a terminal manually.",
   rateLimited: "Rate limited",

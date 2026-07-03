@@ -95,6 +95,7 @@ export const ko: Strings = {
   noCredentials: "인증 정보 없음",
   noCredentialsHint: "터미널에서 `claude` 를 실행해 로그인하면 동기화가 다시 시작돼요.",
   loginOpen: "로그인 열기",
+  autoStart: "PC 시작 시 자동 실행",
   loginOpenFailed: "로그인 터미널을 열지 못했어요",
   loginOpenFailedHint: "터미널에서 `claude auth login` 을 직접 실행해 주세요.",
   rateLimited: "요청 제한",

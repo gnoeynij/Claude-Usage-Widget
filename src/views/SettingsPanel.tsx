@@ -1,6 +1,8 @@
 import { createSignal, onCleanup, onMount, For, Show } from "solid-js";
 import type { JSX } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
+import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
+import { warn } from "@tauri-apps/plugin-log";
 import { RefreshCw, X, BookOpen } from "lucide-solid";
 import { Switch } from "../components/Switch";
 import { SegmentedControl } from "../components/SegmentedControl";
@@ -309,6 +311,27 @@ export function SettingsPanel() {
   onMount(() => window.addEventListener("keydown", handleKey));
   onCleanup(() => window.removeEventListener("keydown", handleKey));
 
+  // Launch-at-login: the OS entry (registry Run key / LaunchAgent) is the
+  // source of truth, so read it on every panel open instead of persisting a
+  // shadow copy that could drift when the user toggles it from the OS side.
+  const [autoStart, setAutoStart] = createSignal(false);
+  onMount(() => {
+    void isAutostartEnabled()
+      .then(setAutoStart)
+      .catch((e) => void warn(`autostart read failed: ${String(e)}`));
+  });
+  async function toggleAutoStart(on: boolean) {
+    setAutoStart(on); // optimistic — reverted below if the plugin call fails
+    try {
+      if (on) await enableAutostart();
+      else await disableAutostart();
+      setAutoStart(await isAutostartEnabled());
+    } catch (e) {
+      void warn(`autostart toggle failed: ${String(e)}`);
+      setAutoStart(!on);
+    }
+  }
+
   return (
     <div
       class="fade-in"
@@ -448,6 +471,11 @@ export function SettingsPanel() {
             label={t().darkMode}
             checked={store.dark}
             onChange={setDark}
+          />
+          <SwitchRow
+            label={t().autoStart}
+            checked={autoStart()}
+            onChange={(v) => void toggleAutoStart(v)}
           />
         </div>
         <Section guide="set-opacity" label={t().opacity}>
