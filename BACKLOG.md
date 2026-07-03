@@ -13,7 +13,7 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
-| _(현재 막힘 없음 — v2.4.x 라인 발행 완료, 현재 v2.4.3)_ | — | — | — |
+| _(현재 막힘 없음 — v2.4.x 라인 발행 완료, 현재 v2.4.6)_ | — | — | — |
 
 (OAuth 직접 refresh 는 P1 으로 격하.)
 
@@ -37,7 +37,7 @@
 | **자동화 테스트 도입 검토** | 인프라·품질 | [CLAUDE.md "테스트 프레임워크"](CLAUDE.md) | (a) **부분 이행** — `cargo test` 23개: `pricing.rs` 13 (cost_usd/resolve/family_of/web_search/inference_geo, 회귀 §19 방어) + `jsonl_aggregator.rs` 8 + `usage_api.rs` 2 (응답 신필드 null 방어) (group_blocks 5h 경계/active_view/overall_stats/family_totals/recent_blocks). 후속: `period_totals` (Local::now 주입 리팩터 필요) + `migration` 단위 테스트. (b) Vitest — `src/state/store.ts` Solid 신호 로직 미도입. (c) Playwright — Tauri WebView 한정이라 dev URL에서만, 실 .exe 시각 회귀는 여전히 `capture-widget.ps1` 의존. **(d) ✓ CI 통합 완료** — [release.yml](.github/workflows/release.yml) rust-cache 후 `cargo test` 게이트 추가 (양 OS matrix, tauri-action 전). macOS 자동 검증 공백 해소. (본 커밋) |
 | **Win10 호환 검증** | 시각 회귀 | [vibrancy_win.rs](src-tauri/src/vibrancy_win.rs) | Mica/Acrylic은 Win11 전제. Win10에서 fallback이 정상인지 실 머신 확인 필요. |
 | **Linux 지원** | 인프라 | (없음) | Tauri 2가 지원하나 OAuth + `.credentials.json` 경로 + vibrancy 미구현 + AppImage·deb 분기 등 macOS와 별개. 수요 신호 있을 때만. |
-| **자동 시작 (Windows + macOS 동시)** | UX | (없음) | 현재 자동 시작 기능 자체가 미구현. Windows 추가 시 macOS LaunchAgent 도 같이 (`~/Library/LaunchAgents/com.gnoeynij.claude-widget.plist`). Settings UI 토글 + cfg 분기 모듈. 수요 있을 때. |
+| **자동 시작 ✅ 구현 (2026-07-03, `51bb25b`) — macOS 실기기 검증만 잔여** | UX | `tauri-plugin-autostart` | Settings Appearance 블록에 "PC 시작 시 자동 실행" 토글. OS 항목(HKCU Run 키 / macOS LaunchAgent)이 진실의 출처 — 패널 열 때 `isEnabled()` 라이브 읽기(§15 drift 회피), 기본 OFF. **Windows 실측 완료**(ON→레지스트리 생성·OFF→삭제 왕복). macOS 는 플러그인 동일 경로(LaunchAgent)나 실기기 미검증 — open_login_terminal 미실측분과 같은 검증 세션에서 일괄 처리. |
 | **macOS 트레이 템플릿 이미지** | 디자인 | [src-tauri/src/icon_render.rs](src-tauri/src/icon_render.rs) | macOS 다크 메뉴바 자동 색반전 (NSImage `isTemplate = true`). 현재 컬러 PNG 그대로 — 사용성 OK 지만 macOS HIG 부정합. 별도 PR. |
 | **macOS Universal binary** | 인프라 | (없음) | aarch64 only 첫 release. Intel Mac 수요 있을 때 `--target universal-apple-darwin`. `rustup target add x86_64-apple-darwin` 은 이미 설치됨. |
 
