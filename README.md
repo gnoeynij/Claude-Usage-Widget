@@ -90,7 +90,7 @@ Every string switches instantly, including time labels and AM/PM.
 - **Hide** — `×` in the footer sends the widget to the tray; left-click the tray icon to bring it back
 - **Quit** — Right-click the tray icon → `Quit`
 - **Settings** — `⚙` button in the header
-- **Appearance** — Settings → theme (dark / light) and an *always on top* pin to keep the widget above other windows
+- **Appearance** — Settings → theme (dark / light), an *always on top* pin, and a *Start with PC* toggle to launch the widget at sign-in
 - **Auto-sync** — Settings → Auto sync (`Off / 5m / 10m / 30m / 1h`, default `5m`).
 
 <p align="center">
@@ -145,6 +145,7 @@ npm run tauri build
 
 ### v2.0.x (Tauri 2 + SolidJS line)
 
+- [**v2.4.7**](docs/release-notes/v2.4.7.md) — "Start with PC" toggle in Settings: registers an OS-level login entry (HKCU Run key on Windows, LaunchAgent on macOS) so the widget launches at sign-in; off by default, and the OS entry is the source of truth so the switch always reflects reality.
 - [**v2.4.6**](docs/release-notes/v2.4.6.md) — The widget now recovers from an expired Claude Code token on its own: it quietly runs a minimal Claude Code call in the background to trigger the CLI's token refresh, then re-syncs (measured: expired to recovered in under a minute, capped at one CLI run per expiry episode, ~$0.015) + when credentials are missing entirely, the error banner gains an "Open login" button that launches the `claude auth login` browser flow in a terminal (failures surface as a toast instead of silently doing nothing) + clearer token-expired / no-credentials hints in both languages.
 - [**v2.4.5**](docs/release-notes/v2.4.5.md) — Claude Sonnet 5 (released June 30, 2026) usage now shows a real cost instead of silently pricing at $0, using Anthropic's introductory rate ($2/$10 per MTok, in effect through August 31, 2026 — a follow-up update will be needed when the standard $3/$15 rate takes effect) + removed a redundant max-value label that overlapped the peak bar's own label in the Detail-view daily cost chart.
 - [**v2.4.4**](docs/release-notes/v2.4.4.md) — Weekly limit projection now uses week-to-date average only, instead of extrapolating a work-hours activity burst forward into nights and weekends (which made "on pace to exceed" fire too early) + Mini mode now surfaces token-expiry/auth/network errors it previously hid entirely (a badge and info overlay distinguish at-risk in yellow from hard errors in red, and no longer get stuck open once the warning clears) + daily cost chart bars are now proportional to actual cost (the $ label was eating into bar height, so a labeled peak day could render shorter than a smaller unlabeled one) + the usage panel no longer goes blank when the API returns `null` for `seven_day_sonnet` (post-6/23 model-gating change) — it now parses correctly and shows a warning banner instead of a silent red status dot + auto-sync intervals under 60 seconds no longer get silently truncated to 0 (off) during settings migration + the token-expiry notice now includes a `/login` reauth hint.
