@@ -362,7 +362,10 @@ export function SettingsPanel() {
           gap: "var(--s-3)",
           padding: "var(--s-3) var(--s-4)",
           "max-height": "100%",
-          "overflow-y": "auto",
+          // Scrolling lives on the inner wrapper below, not the card: a
+          // scrollbar on the card itself runs through the rounded corners
+          // and the ::before specular outline, hugging the outer edge.
+          overflow: "hidden",
         }}
       >
         {/* Header row — title + close button as normal flex children so the
@@ -415,6 +418,19 @@ export function SettingsPanel() {
           </button>
         </div>
 
+        {/* Scroll region — header above stays pinned; the bar renders inside
+            the card's right padding, clear of the rounded corners. min-height
+            0 lets the flex child actually shrink below content height. */}
+        <div
+          style={{
+            flex: 1,
+            "min-height": 0,
+            "overflow-y": "auto",
+            display: "flex",
+            "flex-direction": "column",
+            gap: "var(--s-3)",
+          }}
+        >
         <button
           class="ring-hover"
           data-guide="set-guide"
@@ -490,6 +506,7 @@ export function SettingsPanel() {
         </Section>
         <DeviceSyncSection />
         <UpdateSection />
+        </div>
       </div>
     </div>
   );
