@@ -43,6 +43,10 @@ export type UsagePayload = {
   extra_usage?: number | null;
   session_resets_at?: string | null;
   weekly_resets_at?: string | null;
+  /** Scoped weekly caps from the API's `limits` array — label comes straight
+   *  from the server (e.g. "Fable"), so a re-scoped cap renders without a
+   *  widget update. Empty/absent → the legacy sonnet/opus rows render. */
+  scoped_limits?: { label: string; percent: number }[];
 };
 
 export type PlanPayload = {
@@ -952,10 +956,13 @@ async function persistLastRefreshSpawnAt(ms: number) {
 export function usageSummaryText(): string {
   const s = t();
   const u = store.usage;
+  const scoped = u.scoped_limits ?? [];
   const parts = [
     `${s.session} ${Math.round(u.five_hour)}%`,
     `${s.allModels} ${Math.round(u.seven_day)}%`,
-    `${s.sonnetOnly} ${Math.round(u.seven_day_sonnet)}%`,
+    ...(scoped.length
+      ? scoped.map((r) => `${r.label} ${Math.round(r.percent)}%`)
+      : [`${s.sonnetOnly} ${Math.round(u.seven_day_sonnet)}%`]),
   ];
   const today = store.detail?.periods.today_cost;
   if (today != null) parts.push(`${formatCost(today)} (${s.todayMark})`);

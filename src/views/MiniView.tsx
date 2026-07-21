@@ -100,10 +100,17 @@ export function MiniView() {
     const rows = [
       { label: t().session, pct: store.usage.five_hour, proj: sessionProj() },
       { label: t().allModels, pct: store.usage.seven_day, proj: weeklyProj() },
-      { label: t().sonnetOnly, pct: store.usage.seven_day_sonnet, proj: null },
     ];
-    if (store.usage.seven_day_opus != null) {
-      rows.push({ label: t().opusOnly, pct: store.usage.seven_day_opus, proj: null });
+    // Scoped caps come labeled from the API (`limits` array, e.g. "Fable");
+    // the fixed sonnet/opus rows are the legacy fallback when none arrive.
+    const scoped = store.usage.scoped_limits ?? [];
+    if (scoped.length > 0) {
+      for (const r of scoped) rows.push({ label: r.label, pct: r.percent, proj: null });
+    } else {
+      rows.push({ label: t().sonnetOnly, pct: store.usage.seven_day_sonnet, proj: null });
+      if (store.usage.seven_day_opus != null) {
+        rows.push({ label: t().opusOnly, pct: store.usage.seven_day_opus, proj: null });
+      }
     }
     return rows;
   };
@@ -315,9 +322,12 @@ export function MiniView() {
           value={store.usage.seven_day}
           projected={weeklyProj()?.projectedPct ?? null}
         />
+        {/* Mini fits exactly one more capsule: the first scoped cap from the
+            API (e.g. "Fable"), or the legacy Sonnet row when none arrive.
+            The badge overlay lists every scoped row regardless. */}
         <MiniRow
-          label={t().sonnetOnly}
-          value={store.usage.seven_day_sonnet}
+          label={store.usage.scoped_limits?.[0]?.label ?? t().sonnetOnly}
+          value={store.usage.scoped_limits?.[0]?.percent ?? store.usage.seven_day_sonnet}
         />
       </div>
     </main>

@@ -128,6 +128,39 @@ struct ExtraUsageBlock {
     utilization: Option<f64>,
 }
 
+/// One entry of the `limits` array — the labeled per-limit surface the
+/// official apps render from (2026-07-21 live probe: kinds `session` /
+/// `weekly_all` / `weekly_scoped`, the scoped entry carrying
+/// `scope.model.display_name` "Fable"). This replaced the fixed
+/// `seven_day_sonnet`-style fields: the server can re-scope the per-model cap
+/// (Sonnet → Fable → whatever ships next) without a schema change, so the
+/// widget renders whatever arrives instead of hardcoding a model row.
+/// Every field is Option per the §gotcha: bare fields fail the whole response
+/// on explicit null — and the array itself guards element-level nulls.
+#[derive(Deserialize, Debug, Default)]
+struct LimitEntry {
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    percent: Option<f64>,
+    #[serde(default)]
+    scope: Option<LimitScope>,
+}
+
+#[derive(Deserialize, Debug, Default)]
+struct LimitScope {
+    #[serde(default)]
+    model: Option<LimitScopeModel>,
+    #[serde(default)]
+    surface: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Default)]
+struct LimitScopeModel {
+    #[serde(default)]
+    display_name: Option<String>,
+}
+
 #[derive(Deserialize, Debug, Default)]
 struct UsageResponse {
     #[serde(default)]
@@ -148,6 +181,32 @@ struct UsageResponse {
     // whole response on explicit null (serde `default` fills only *absent* fields).
     #[serde(default)]
     extra_usage: Option<ExtraUsageBlock>,
+    // Vec<Option<...>> so a null *element* inside the array can't fail the
+    // whole response either (array-level cousin of the §gotcha above).
+    #[serde(default)]
+    limits: Option<Vec<Option<LimitEntry>>>,
+}
+
+/// Extract renderable scoped weekly rows (`weekly_scoped` kind) from the
+/// `limits` array. Label preference: model display name → surface → generic.
+/// Entries without a percent are dropped — nothing to draw.
+fn scoped_from_limits(limits: Option<Vec<Option<LimitEntry>>>) -> Vec<ScopedLimitOut> {
+    limits
+        .unwrap_or_default()
+        .into_iter()
+        .flatten()
+        .filter(|e| e.kind.as_deref() == Some("weekly_scoped"))
+        .filter_map(|e| {
+            let percent = e.percent?;
+            let scope = e.scope.unwrap_or_default();
+            let label = scope
+                .model
+                .and_then(|m| m.display_name)
+                .or(scope.surface)
+                .unwrap_or_else(|| "Model".to_string());
+            Some(ScopedLimitOut { label, percent })
+        })
+        .collect()
 }
 
 #[derive(Serialize, Default, Debug)]
@@ -162,6 +221,16 @@ pub struct UsageOutput {
     pub extra_usage: Option<f64>,
     pub session_resets_at: Option<String>,
     pub weekly_resets_at: Option<String>,
+    /// Scoped weekly caps from the `limits` array (e.g. the Fable-only cap the
+    /// official apps show). Empty when the API sends none — the frontend then
+    /// falls back to the legacy sonnet/opus rows.
+    pub scoped_limits: Vec<ScopedLimitOut>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ScopedLimitOut {
+    pub label: String,
+    pub percent: f64,
 }
 
 #[derive(Serialize, Default, Debug)]
@@ -269,6 +338,7 @@ async fn call_usage(access_token: &str) -> Result<UsageOutput> {
         extra_usage: if extra.is_enabled { extra.utilization } else { None },
         session_resets_at: body.five_hour.resets_at,
         weekly_resets_at: body.seven_day.resets_at,
+        scoped_limits: scoped_from_limits(body.limits),
     })
 }
 
@@ -296,6 +366,43 @@ mod tests {
             let parsed: Result<UsageResponse, _> = serde_json::from_str(v);
             assert!(parsed.is_ok(), "should parse but failed: {v} -> {:?}", parsed.err());
         }
+    }
+
+    #[test]
+    fn limits_array_tolerates_null_variants_and_extracts_scoped_rows() {
+        // §gotcha 배열판: 배열 자체 null/누락 + 원소 null + percent/scope null —
+        // 어느 것도 응답 전체 파싱을 깨면 안 된다.
+        let variants = [
+            r#"{"limits":null}"#,
+            r#"{}"#,
+            r#"{"limits":[]}"#,
+            r#"{"limits":[null]}"#,
+            r#"{"limits":[{"kind":"weekly_scoped","percent":null}]}"#,
+            r#"{"limits":[{"kind":"weekly_scoped","percent":10.0,"scope":null}]}"#,
+        ];
+        for v in variants {
+            let parsed: Result<UsageResponse, _> = serde_json::from_str(v);
+            assert!(parsed.is_ok(), "should parse but failed: {v} -> {:?}", parsed.err());
+        }
+
+        // 2026-07-21 실측 형태: session/weekly_all 제외, weekly_scoped 만 추출,
+        // 라벨은 display_name → surface 순 폴백, percent 없는 엔트리는 스킵.
+        let body: UsageResponse = serde_json::from_str(
+            r#"{"limits":[
+                {"kind":"session","group":"session","percent":33.0,"severity":"normal","is_active":true},
+                {"kind":"weekly_all","percent":8.0},
+                null,
+                {"kind":"weekly_scoped","percent":10.0,"scope":{"model":{"id":null,"display_name":"Fable"},"surface":null}},
+                {"kind":"weekly_scoped","percent":null},
+                {"kind":"weekly_scoped","percent":5.0,"scope":{"model":null,"surface":"Cowork"}}
+            ]}"#,
+        )
+        .unwrap();
+        let scoped = scoped_from_limits(body.limits);
+        assert_eq!(scoped.len(), 2);
+        assert_eq!(scoped[0].label, "Fable");
+        assert_eq!(scoped[0].percent, 10.0);
+        assert_eq!(scoped[1].label, "Cowork");
     }
 
     #[test]

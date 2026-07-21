@@ -1,4 +1,4 @@
-import { Show, createMemo } from "solid-js";
+import { For, Show, createMemo } from "solid-js";
 import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
 import { store, syncNow } from "../state/store";
@@ -200,9 +200,23 @@ export function NormalView() {
           value={store.usage.seven_day}
           projected={weeklyProj()?.projectedPct ?? null}
         />
-        <MiniMetric label={t().sonnetOnly} value={store.usage.seven_day_sonnet} />
-        <Show when={store.usage.seven_day_opus != null}>
-          <MiniMetric label={t().opusOnly} value={store.usage.seven_day_opus ?? 0} />
+        {/* Scoped weekly caps arrive labeled from the API (`limits` array —
+            e.g. "Fable" while that promo cap runs); the legacy fixed
+            sonnet/opus rows only render when the server sends none. */}
+        <Show
+          when={(store.usage.scoped_limits?.length ?? 0) > 0}
+          fallback={
+            <>
+              <MiniMetric label={t().sonnetOnly} value={store.usage.seven_day_sonnet} />
+              <Show when={store.usage.seven_day_opus != null}>
+                <MiniMetric label={t().opusOnly} value={store.usage.seven_day_opus ?? 0} />
+              </Show>
+            </>
+          }
+        >
+          <For each={store.usage.scoped_limits}>
+            {(row) => <MiniMetric label={row.label} value={row.percent} />}
+          </For>
         </Show>
         <Show when={weeklyReset()}>
           {(s) => (

@@ -89,7 +89,7 @@ const CALLOUTS: Record<GuideMode, Callout[]> = {
       desc: { en: "Language, theme, opacity, auto-sync, multi-device totals, updates, and this guide.", ko: "언어·테마·투명도·자동 동기화·기기 통합·업데이트·이 가이드." } },
     { anchor: "weekly", side: "right", y: 286,
       title: { en: "Weekly usage", ko: "주간 사용량" },
-      desc: { en: "Resets every 7 days. All models · Sonnet (Opus on some plans). A projected dot marks expected usage at reset.", ko: "7일마다 초기화. 전체 모델·Sonnet (플랜에 따라 Opus). 예측 도트는 초기화 시 예상 사용량을 표시합니다." } },
+      desc: { en: "Resets every 7 days. All models, plus any per-model cap your plan tracks (e.g. Fable). A projected dot marks expected usage at reset.", ko: "7일마다 초기화. 전체 모델과 플랜이 추적하는 모델별 한도(예: Fable)를 함께 표시합니다. 예측 도트는 초기화 시 예상 사용량을 표시합니다." } },
     { anchor: "modes", side: "right", y: 370,
       title: { en: "Mode switch", ko: "모드 전환" },
       desc: { en: "Switch between Mini (compact overlay), Normal (session + weekly), and Detail (cost trend chart).", ko: "미니(소형 오버레이)·기본(세션+주간)·상세(비용 추세 차트) 간에 전환합니다." } },
@@ -112,7 +112,7 @@ const CALLOUTS: Record<GuideMode, Callout[]> = {
       desc: { en: "Appears when on pace to hit a limit, or when the connection needs attention (e.g. token expired). Click for details.", ko: "한도 도달이 예상되거나 연결에 주의가 필요할 때(예: 토큰 만료) 표시됩니다. 클릭하면 상세 정보를 볼 수 있습니다." } },
     { anchor: "weekly", side: "right", y: 240,
       title: { en: "Weekly usage", ko: "주간 사용량" },
-      desc: { en: "All models · Sonnet, as compact bars. A projected dot marks expected usage at reset.", ko: "전체 모델·Sonnet, 얇은 막대로 표시합니다. 예측 도트는 초기화 시 예상 사용량을 표시합니다." } },
+      desc: { en: "All models plus your plan's per-model cap (e.g. Fable), as compact bars. A projected dot marks expected usage at reset.", ko: "전체 모델과 모델별 한도(예: Fable)를 얇은 막대로 표시합니다. 예측 도트는 초기화 시 예상 사용량을 표시합니다." } },
   ],
   detail: [
     { anchor: "active", side: "left", y: 120,
@@ -182,6 +182,7 @@ function setUsage(level: number) {
   setStore("usage", "five_hour", level);
   setStore("usage", "seven_day", level);
   setStore("usage", "seven_day_sonnet", Math.round(level * 0.3));
+  setStore("usage", "scoped_limits", 0, "percent", Math.round(level * 0.3));
 }
 
 function seedStore() {
@@ -189,6 +190,8 @@ function seedStore() {
   setStore("usage", {
     five_hour: 40, seven_day: 40, seven_day_sonnet: 12,
     seven_day_opus: null, // match the common plan (no Opus-specific weekly row)
+    // Mirror today's live API shape: one server-labeled scoped weekly cap.
+    scoped_limits: [{ label: "Fable", percent: 12 }],
     session_resets_at: nowPlus(SESSION_RESET_MS),
     weekly_resets_at: nowPlus(WEEKLY_RESET_MS),
     extra_usage_enabled: false,
