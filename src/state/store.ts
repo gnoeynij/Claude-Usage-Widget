@@ -35,7 +35,10 @@ export type ErrorCode =
 export type UsagePayload = {
   five_hour: number;
   seven_day: number;
-  seven_day_sonnet: number;
+  /** Fixed Sonnet weekly cap — retired server-side in favor of
+   *  `scoped_limits` (null since 2026-07-21); the legacy row hides on null,
+   *  same as seven_day_opus. */
+  seven_day_sonnet?: number | null;
   /** Opus-specific weekly cap; null when the plan has none (row hidden). */
   seven_day_opus?: number | null;
   /** 2026-06-15 separate-credit pool; shown only when enabled. */
@@ -222,7 +225,7 @@ const [store, setStore] = createStore<StoreShape>({
   syncIntervalMin: 5,
   opacity: 0,
   settingsOpen: false,
-  usage: { five_hour: 0, seven_day: 0, seven_day_sonnet: 0, session_resets_at: null, weekly_resets_at: null },
+  usage: { five_hour: 0, seven_day: 0, seven_day_sonnet: null, session_resets_at: null, weekly_resets_at: null },
   plan: null,
   detail: null,
   lastSyncAt: null,
@@ -962,7 +965,9 @@ export function usageSummaryText(): string {
     `${s.allModels} ${Math.round(u.seven_day)}%`,
     ...(scoped.length
       ? scoped.map((r) => `${r.label} ${Math.round(r.percent)}%`)
-      : [`${s.sonnetOnly} ${Math.round(u.seven_day_sonnet)}%`]),
+      : u.seven_day_sonnet != null
+        ? [`${s.sonnetOnly} ${Math.round(u.seven_day_sonnet)}%`]
+        : []),
   ];
   const today = store.detail?.periods.today_cost;
   if (today != null) parts.push(`${formatCost(today)} (${s.todayMark})`);

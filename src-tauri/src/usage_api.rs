@@ -213,7 +213,11 @@ fn scoped_from_limits(limits: Option<Vec<Option<LimitEntry>>>) -> Vec<ScopedLimi
 pub struct UsageOutput {
     pub five_hour: f64,
     pub seven_day: f64,
-    pub seven_day_sonnet: f64,
+    /// `None` when the API nulls/omits the fixed Sonnet weekly cap — which is
+    /// its steady state since the labeled `limits` array replaced the fixed
+    /// per-model fields (2026-07-21 probe). The frontend hides the legacy row
+    /// then, same as seven_day_opus, instead of showing a misleading 0%.
+    pub seven_day_sonnet: Option<f64>,
     /// `None` when the account has no Opus-specific weekly cap (API sent null);
     /// the frontend hides the row in that case.
     pub seven_day_opus: Option<f64>,
@@ -332,7 +336,7 @@ async fn call_usage(access_token: &str) -> Result<UsageOutput> {
     Ok(UsageOutput {
         five_hour: body.five_hour.utilization.unwrap_or(0.0),
         seven_day: body.seven_day.utilization.unwrap_or(0.0),
-        seven_day_sonnet: body.seven_day_sonnet.and_then(|b| b.utilization).unwrap_or(0.0),
+        seven_day_sonnet: body.seven_day_sonnet.and_then(|b| b.utilization),
         seven_day_opus: body.seven_day_opus.and_then(|b| b.utilization),
         extra_usage_enabled: extra.is_enabled,
         extra_usage: if extra.is_enabled { extra.utilization } else { None },

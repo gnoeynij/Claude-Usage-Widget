@@ -107,7 +107,9 @@ export function MiniView() {
     if (scoped.length > 0) {
       for (const r of scoped) rows.push({ label: r.label, pct: r.percent, proj: null });
     } else {
-      rows.push({ label: t().sonnetOnly, pct: store.usage.seven_day_sonnet, proj: null });
+      if (store.usage.seven_day_sonnet != null) {
+        rows.push({ label: t().sonnetOnly, pct: store.usage.seven_day_sonnet, proj: null });
+      }
       if (store.usage.seven_day_opus != null) {
         rows.push({ label: t().opusOnly, pct: store.usage.seven_day_opus, proj: null });
       }
@@ -323,12 +325,20 @@ export function MiniView() {
           projected={weeklyProj()?.projectedPct ?? null}
         />
         {/* Mini fits exactly one more capsule: the first scoped cap from the
-            API (e.g. "Fable"), or the legacy Sonnet row when none arrive.
-            The badge overlay lists every scoped row regardless. */}
-        <MiniRow
-          label={store.usage.scoped_limits?.[0]?.label ?? t().sonnetOnly}
-          value={store.usage.scoped_limits?.[0]?.percent ?? store.usage.seven_day_sonnet}
-        />
+            API (e.g. "Fable"), else the legacy Sonnet row, else nothing — a
+            null must never reach MiniRow (would render NaN%). With a single
+            row the space-evenly column simply centers it. The badge overlay
+            lists every scoped row regardless. */}
+        <Show
+          when={
+            store.usage.scoped_limits?.[0] ??
+            (store.usage.seven_day_sonnet != null
+              ? { label: t().sonnetOnly, percent: store.usage.seven_day_sonnet }
+              : null)
+          }
+        >
+          {(row) => <MiniRow label={row().label} value={row().percent} />}
+        </Show>
       </div>
     </main>
   );

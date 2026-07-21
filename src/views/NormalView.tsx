@@ -207,7 +207,9 @@ export function NormalView() {
           when={(store.usage.scoped_limits?.length ?? 0) > 0}
           fallback={
             <>
-              <MiniMetric label={t().sonnetOnly} value={store.usage.seven_day_sonnet} />
+              <Show when={store.usage.seven_day_sonnet != null}>
+                <MiniMetric label={t().sonnetOnly} value={store.usage.seven_day_sonnet ?? 0} />
+              </Show>
               <Show when={store.usage.seven_day_opus != null}>
                 <MiniMetric label={t().opusOnly} value={store.usage.seven_day_opus ?? 0} />
               </Show>
