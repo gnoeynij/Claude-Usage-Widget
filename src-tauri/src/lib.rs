@@ -6,6 +6,8 @@ mod pricing;
 mod tray;
 mod usage_api;
 #[cfg(target_os = "windows")]
+mod nc_menu_win;
+#[cfg(target_os = "windows")]
 mod vibrancy_win;
 #[cfg(target_os = "macos")]
 mod vibrancy_mac;
@@ -117,6 +119,11 @@ pub fn run() {
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").expect("main window missing");
+
+            // Drag-region right-clicks: swallow the OS system menu and route
+            // to the widget's own context menu (see nc_menu_win.rs).
+            #[cfg(target_os = "windows")]
+            nc_menu_win::setup(&window);
 
             #[cfg(target_os = "windows")]
             {
