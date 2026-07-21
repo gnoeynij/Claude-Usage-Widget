@@ -4,8 +4,10 @@ import "virtual:uno.css";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/glass.css";
+import { invoke } from "@tauri-apps/api/core";
 import { App } from "./App";
 import { GuideApp } from "./views/GuideView";
+import { store, usageSummaryText } from "./state/store";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root not found");
@@ -13,6 +15,20 @@ if (!root) throw new Error("#root not found");
 // Separate guide window (opened from Settings) loads the same bundle with
 // `?guide` — render the standalone guide instead of the widget.
 const isGuide = new URLSearchParams(window.location.search).has("guide");
+
+// Right-click: suppress the WebView's default browser menu everywhere
+// (reload/print/inspect make no sense on a desktop widget — drag regions only
+// intercept the LEFT button, so right-clicks reach the page). The widget
+// window replaces it with a native popup; the guide window just stays silent.
+window.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  if (!isGuide) {
+    void invoke("show_context_menu", {
+      lang: store.lang,
+      summary: usageSummaryText(),
+    }).catch(() => {});
+  }
+});
 
 // macOS: tag the document *before first paint* so `:root.mac` strips
 // backdrop-filter (see glass.css). If the class lands after the panel's first

@@ -11,6 +11,7 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { checkForUpdate } from "./updater";
 import { toErrorMessage } from "../utils/error";
+import { formatCost } from "../utils/format";
 import {
   projectLimit,
   blendPace,
@@ -807,13 +808,23 @@ export async function initStore() {
     }, 500);
   });
 
-  // Tray menu → frontend bridge
+  // Tray menu → frontend bridge (the widget context menu reuses these events)
   await listen<string>("tray://mode", (e) => {
     const v = e.payload;
     if (v === "mini" || v === "normal" || v === "detail") setMode(v);
   });
   await listen("tray://sync", () => {
     void syncNow();
+  });
+
+  // Context-menu feedback: copy confirmation + the click-through restore
+  // hint (once cursor events are ignored the widget can't be clicked, so the
+  // user must learn the tray escape hatch *now*).
+  await listen("ctx://copied", () => {
+    pushToast(t().copied, usageSummaryText(), "warn");
+  });
+  await listen("ctx://click-through", () => {
+    pushToast(t().clickThroughOn, t().clickThroughOnHint, "warn");
   });
 
   // Minute heartbeat for time-based UI (header dot freshness, "X min ago"
@@ -933,6 +944,22 @@ async function persistLastRefreshSpawnAt(ms: number) {
   } catch (e) {
     console.error("persist lastRefreshSpawnAt failed", e);
   }
+}
+
+/** One-line usage snapshot for the context menu's "copy usage summary" —
+ *  composed sentence, so it's built here (store + i18n in scope) and handed
+ *  to Rust at right-click time. */
+export function usageSummaryText(): string {
+  const s = t();
+  const u = store.usage;
+  const parts = [
+    `${s.session} ${Math.round(u.five_hour)}%`,
+    `${s.allModels} ${Math.round(u.seven_day)}%`,
+    `${s.sonnetOnly} ${Math.round(u.seven_day_sonnet)}%`,
+  ];
+  const today = store.detail?.periods.today_cost;
+  if (today != null) parts.push(`${formatCost(today)} (${s.todayMark})`);
+  return `Claude — ${parts.join(" · ")}`;
 }
 
 /** NO_CREDENTIALS banner button — opens a terminal running `claude auth

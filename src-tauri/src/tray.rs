@@ -51,6 +51,7 @@ struct TrayLabels {
     mode_normal: &'static str,
     mode_detail: &'static str,
     sync: &'static str,
+    click_through_off: &'static str,
     quit: &'static str,
 }
 
@@ -62,6 +63,7 @@ fn tray_labels(lang: &str) -> TrayLabels {
             mode_normal: "Normal 모드",
             mode_detail: "Detail 모드",
             sync: "지금 동기화",
+            click_through_off: "클릭 통과 해제",
             quit: "종료",
         },
         _ => TrayLabels {
@@ -70,6 +72,7 @@ fn tray_labels(lang: &str) -> TrayLabels {
             mode_normal: "Normal mode",
             mode_detail: "Detail mode",
             sync: "Sync now",
+            click_through_off: "Disable click-through",
             quit: "Quit",
         },
     }
@@ -84,10 +87,15 @@ pub fn setup(app: &mut App, lang: &str) -> tauri::Result<()> {
     let mode_detail =
         MenuItem::with_id(app, "mode_detail", labels.mode_detail, true, None::<&str>)?;
     let sync = MenuItem::with_id(app, "sync", labels.sync, true, None::<&str>)?;
+    // Escape hatch for the widget context menu's click-through mode: once
+    // cursor events are ignored, the widget itself can't be clicked, so the
+    // tray is the only surface left to restore it. No-op when not active.
+    let click_through_off =
+        MenuItem::with_id(app, "click_through_off", labels.click_through_off, true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", labels.quit, true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
-        &[&show, &mode_mini, &mode_normal, &mode_detail, &sync, &quit],
+        &[&show, &mode_mini, &mode_normal, &mode_detail, &sync, &click_through_off, &quit],
     )?;
 
     let icon = icon_for(TrayState::Ok);
@@ -108,6 +116,12 @@ pub fn setup(app: &mut App, lang: &str) -> tauri::Result<()> {
             }
             "sync" => {
                 let _ = app.emit("tray://sync", ());
+            }
+            "click_through_off" => {
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.set_ignore_cursor_events(false);
+                    let _ = win.set_focus();
+                }
             }
             "quit" => app.exit(0),
             _ => {}

@@ -39,6 +39,11 @@ const PROJ_NOTE2: Txt = {
   en: "Skipped for a short while after each reset (~1h for the session, ~17h for the week) until there's enough data to extrapolate.",
   ko: "초기화 직후 잠깐(세션 약 1시간, 주간 약 17시간)은 데이터가 적어 예상치를 표시하지 않습니다.",
 };
+const CTX_TITLE: Txt = { en: "Right-click menu", ko: "우클릭 메뉴" };
+const CTX_DESC: Txt = {
+  en: "Right-click anywhere on the widget for quick actions: copy a one-line usage summary, sync now, switch modes, hide, open the log folder, or turn on click-through (the widget ignores the mouse — restore it from the tray).",
+  ko: "위젯 아무 곳이나 우클릭하면 빠른 메뉴가 열립니다: 사용량 요약 복사 · 지금 동기화 · 모드 전환 · 숨기기 · 로그 폴더 열기 · 클릭 통과(위젯이 마우스를 통과시킴 — 해제는 트레이에서).",
+};
 const TRAY_TITLE: Txt = { en: "System tray icon", ko: "시스템 트레이 아이콘" };
 const TRAY_DESC: Txt = {
   en: "The widget keeps running in the tray when hidden. Right-click for Show / Quit. The icon color reflects sync status:",
@@ -441,9 +446,11 @@ function GuideView() {
         </Show>
       </div>
 
-      {/* tray icon explanation — pinned at the bottom of the guide, always visible */}
+      {/* right-click + tray explanations — pinned at the bottom, always visible */}
       <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "6px", padding: "10px 18px 14px", "border-top": "0.5px solid var(--separator)", "flex-shrink": 0 }}>
-        <div class="t-body" style={{ "font-weight": 600 }}>{tx(TRAY_TITLE)}</div>
+        <div class="t-body" style={{ "font-weight": 600 }}>{tx(CTX_TITLE)}</div>
+        <div class="t-caption label-secondary" style={{ "max-width": "620px", "text-align": "center", "line-height": 1.4 }}>{tx(CTX_DESC)}</div>
+        <div class="t-body" style={{ "font-weight": 600, "margin-top": "6px" }}>{tx(TRAY_TITLE)}</div>
         <div class="t-caption label-secondary" style={{ "max-width": "620px", "text-align": "center", "line-height": 1.4 }}>{tx(TRAY_DESC)}</div>
         <div style={{ display: "flex", gap: "20px", "margin-top": "2px" }}>
           <TrayChip src={trayOkPng} label={tx(TRAY_OK)} />

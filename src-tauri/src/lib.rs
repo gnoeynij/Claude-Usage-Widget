@@ -93,6 +93,11 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_clipboard_manager::init())
+        // Window popup-menu (widget right-click) events land here; tray menu
+        // events keep their own handler in tray.rs. Context items use ctx_*
+        // ids so the two never overlap even if a runtime routes both here.
+        .on_menu_event(|app, event| commands::handle_context_menu_event(app, event.id().as_ref()))
         .invoke_handler(tauri::generate_handler![
             commands::fetch_usage,
             commands::credentials_mtime,
@@ -108,6 +113,7 @@ pub fn run() {
             commands::open_guide_window,
             commands::trigger_token_refresh,
             commands::open_login_terminal,
+            commands::show_context_menu,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").expect("main window missing");

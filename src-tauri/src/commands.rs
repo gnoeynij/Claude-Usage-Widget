@@ -311,3 +311,142 @@ pub async fn set_window_size(
     }
     Ok(())
 }
+
+/// Snapshot of the usage line captured when the context menu opens, consumed
+/// by the copy handler — menu events arrive after `show_context_menu` returns,
+/// so the frontend can't pass it at click time.
+static CTX_SUMMARY: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+struct CtxLabels {
+    copy_usage: &'static str,
+    sync: &'static str,
+    mode_mini: &'static str,
+    mode_normal: &'static str,
+    mode_detail: &'static str,
+    click_through: &'static str,
+    hide: &'static str,
+    open_logs: &'static str,
+}
+
+fn ctx_labels(lang: &str) -> CtxLabels {
+    match lang {
+        "ko" => CtxLabels {
+            copy_usage: "사용량 요약 복사",
+            sync: "지금 동기화",
+            mode_mini: "Mini 모드",
+            mode_normal: "Normal 모드",
+            mode_detail: "Detail 모드",
+            click_through: "클릭 통과 (트레이에서 해제)",
+            hide: "숨기기",
+            open_logs: "로그 폴더 열기",
+        },
+        _ => CtxLabels {
+            copy_usage: "Copy usage summary",
+            sync: "Sync now",
+            mode_mini: "Mini mode",
+            mode_normal: "Normal mode",
+            mode_detail: "Detail mode",
+            click_through: "Click-through (undo via tray)",
+            hide: "Hide",
+            open_logs: "Open log folder",
+        },
+    }
+}
+
+/// Native right-click menu for the widget body. The default WebView context
+/// menu (reload/print/inspect — browser chrome that makes no sense on a
+/// desktop widget) is suppressed by the frontend's `contextmenu` handler,
+/// which then invokes this. Item events arrive in lib.rs `on_menu_event` →
+/// `handle_context_menu_event`; mode/sync reuse the existing `tray://` events
+/// so the frontend wiring is shared with the tray menu.
+#[tauri::command]
+pub fn show_context_menu(
+    window: tauri::WebviewWindow,
+    lang: String,
+    summary: String,
+) -> Result<(), String> {
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+    use tauri::Manager;
+    if let Ok(mut s) = CTX_SUMMARY.lock() {
+        *s = summary;
+    }
+    let app = window.app_handle();
+    let l = ctx_labels(&lang);
+    let copy = MenuItem::with_id(app, "ctx_copy_usage", l.copy_usage, true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    let sync = MenuItem::with_id(app, "ctx_sync", l.sync, true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    let mini = MenuItem::with_id(app, "ctx_mode_mini", l.mode_mini, true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    let normal = MenuItem::with_id(app, "ctx_mode_normal", l.mode_normal, true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    let detail = MenuItem::with_id(app, "ctx_mode_detail", l.mode_detail, true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    let click_through =
+        MenuItem::with_id(app, "ctx_click_through", l.click_through, true, None::<&str>)
+            .map_err(|e| e.to_string())?;
+    let hide = MenuItem::with_id(app, "ctx_hide", l.hide, true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    let logs = MenuItem::with_id(app, "ctx_open_logs", l.open_logs, true, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    let sep1 = PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?;
+    let sep2 = PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?;
+    let sep3 = PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &copy, &sep1, &sync, &mini, &normal, &detail, &sep2, &click_through, &hide, &sep3,
+            &logs,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    window.popup_menu(&menu).map_err(|e| e.to_string())
+}
+
+pub fn handle_context_menu_event(app: &tauri::AppHandle, id: &str) {
+    use tauri::{Emitter, Manager};
+    match id {
+        "ctx_copy_usage" => {
+            use tauri_plugin_clipboard_manager::ClipboardExt;
+            let text = CTX_SUMMARY.lock().map(|s| s.clone()).unwrap_or_default();
+            if !text.is_empty() && app.clipboard().write_text(text).is_ok() {
+                let _ = app.emit("ctx://copied", ());
+            }
+        }
+        "ctx_sync" => {
+            let _ = app.emit("tray://sync", ());
+        }
+        "ctx_mode_mini" => {
+            let _ = app.emit("tray://mode", "mini");
+        }
+        "ctx_mode_normal" => {
+            let _ = app.emit("tray://mode", "normal");
+        }
+        "ctx_mode_detail" => {
+            let _ = app.emit("tray://mode", "detail");
+        }
+        "ctx_click_through" => {
+            if let Some(win) = app.get_webview_window("main") {
+                // Toast first: after ignore-cursor-events the widget keeps
+                // rendering but no longer receives input, so the restore hint
+                // must already be on its way to the screen.
+                let _ = app.emit("ctx://click-through", ());
+                let _ = win.set_ignore_cursor_events(true);
+            }
+        }
+        "ctx_hide" => {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.hide();
+            }
+        }
+        "ctx_open_logs" => {
+            if let Ok(dir) = app.path().app_log_dir() {
+                #[cfg(target_os = "windows")]
+                let _ = std::process::Command::new("explorer").arg(&dir).spawn();
+                #[cfg(target_os = "macos")]
+                let _ = std::process::Command::new("open").arg(&dir).spawn();
+            }
+        }
+        _ => {}
+    }
+}
