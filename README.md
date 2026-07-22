@@ -20,7 +20,7 @@ A lightweight desktop tool that sits in a corner of your screen and tracks your 
 
 ### Three-mode widget
 - **Mini** (240×112) — Donut + 2-row capsule. Minimum footprint
-- **Normal** (320×360) — Donut hero + weekly capsules. Default
+- **Normal** (320×360) — Donut hero + weekly capsules: All models plus any per-model cap your plan tracks, rendered with the server's own label (e.g. **Fable** on Max — the row re-scopes automatically when Anthropic changes it). Default
 - **Detail** (592×619, minSize 520×520) — dashboard: Active session (current 5h block — spend · time left · spend/hour), a daily cost trend chart (colored by model, 7 / 14 / 30-day ranges, click a bar to pick a date, per-device toggle), a per-model cost breakdown (Opus · Fable · Sonnet · Haiku with token counts), and a totals card (this week / month · per-device & combined lifetime · cache-hit rate)
 
 Switch via footer SegmentedControl or tray menu. Each mode has its own default size + minSize, and any size you drag-adjust is remembered per mode.
@@ -29,6 +29,9 @@ Switch via footer SegmentedControl or tray menu. Each mode has its own default s
 A translucent **ghost arc/dot** overlays the donut and weekly bars to show where usage is expected to land at reset if your current pace holds, and the reset captions add the projected figure. The session estimate blends in a faster recent pace so warnings surface sooner; weekly uses the week-to-date average only, since a work-hours burst shouldn't extrapolate to the rest of the week. Projection pauses for a short while after each reset until there's enough data to extrapolate.
 
 When you're on pace to hit a limit, Mini shows a **⚠ risk badge** (click it for a per-limit breakdown) and a **tray alert** fires in the background. Mini has no header status dot or error banner, so this same badge also surfaces sync failures — token expired, no credentials, network down — as a **red ●** (blue for the calmer "rate limited, retrying" case) instead of the triangle; click it for the error explanation.
+
+### Right-click quick menu
+Right-click anywhere on the widget — including the drag areas, where Windows would normally show the window system menu — for quick actions: **copy a one-line usage summary** (session / weekly / scoped % + today's cost), sync now, switch modes, hide, open the log folder, and **click-through mode**, which makes the widget ignore the mouse so you can work through it (restore via tray right-click → "Disable click-through").
 
 ### Liquid Glass + OS-native vibrancy
 System backdrop composited with OS-level vibrancy — **Win11 Mica/Acrylic** on Windows, **NSVisualEffectView (HudWindow material)** on macOS. The background-opacity slider fades only the background — text, donuts, and gauges stay fully opaque.
