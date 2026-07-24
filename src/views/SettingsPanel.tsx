@@ -10,6 +10,7 @@ import {
   store,
   setStore,
   setLang,
+  setTheme,
   setDark,
   setAlwaysOnTop,
   setSyncIntervalMin,
@@ -18,6 +19,7 @@ import {
   detectSyncFolders,
   planLabel,
   type Lang,
+  type Theme,
 } from "../state/store";
 import { checkForUpdate, installUpdate } from "../state/updater";
 import { formatCost } from "../utils/format";
@@ -465,6 +467,16 @@ export function SettingsPanel() {
             options={[
               { value: "en", label: "English" },
               { value: "ko", label: "한국어" },
+            ]}
+          />
+        </Section>
+        <Section guide="set-theme" label={t().theme}>
+          <SegmentedControl<Theme>
+            value={store.theme}
+            onChange={setTheme}
+            options={[
+              { value: "glass", label: t().themeGlass },
+              { value: "instrument", label: t().themeInstrument },
             ]}
           />
         </Section>

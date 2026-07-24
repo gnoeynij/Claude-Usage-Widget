@@ -141,15 +141,23 @@ export type Toast = { id: number; title: string; body: string; tone: "warn" | "d
  *  container-query breakpoint that switches the detail grid to 2 columns. */
 export const MODE_DEFAULTS: Record<Mode, [number, number, number, number]> = {
   mini: [240, 112, 240, 112],
-  // 334 → 360: the imminent-risk warning chip (S1+T4) adds a ~24px line under
-  // the weekly caption; at 334 it clipped into the footer.
-  normal: [320, 360, 320, 360],
+  // 334 fits the inline weekly caption (projection appended to the reset line).
+  // Was bumped to 360 for the S1+T4 warning chip; the chip is gone (projection
+  // is inline again), so 334 is the tight fit — 360 left a gap above the footer.
+  normal: [320, 334, 320, 334],
   detail: [592, 619, 520, 520],
 };
+
+/** Visual grammar of the three widget modes: `glass` = the original Liquid
+ *  Glass look; `instrument` = the retro instrument-panel skin (7-seg session,
+ *  block gauges, zones). Palette (graphite/silver) is shared — the theme only
+ *  switches structure. Aux surfaces (settings/guide/milestone) stay glass. */
+export type Theme = "glass" | "instrument";
 
 type StoreShape = {
   mode: Mode;
   lang: Lang;
+  theme: Theme;
   dark: boolean;
   alwaysOnTop: boolean;
   syncIntervalMin: number;
@@ -222,6 +230,7 @@ type StoreShape = {
 const [store, setStore] = createStore<StoreShape>({
   mode: "normal",
   lang: "en",
+  theme: "glass",
   dark: false,
   alwaysOnTop: false,
   syncIntervalMin: 5,
@@ -669,6 +678,11 @@ export async function initStore() {
     if (!darkApplied && typeof window.matchMedia === "function") {
       setDark(window.matchMedia("(prefers-color-scheme: dark)").matches);
     }
+    await loadSetting<Theme>(
+      "theme",
+      (v) => setTheme(v),
+      (v): v is Theme => v === "glass" || v === "instrument",
+    );
     await loadSetting<boolean>(
       "alwaysOnTop",
       (v) => void setAlwaysOnTop(v),
@@ -724,6 +738,7 @@ export async function initStore() {
   // already did this if a stored value was found, but call once more in case
   // neither key was persisted yet (fresh install).
   applyDarkClass(store.dark);
+  applyThemeClass(store.theme);
   document.documentElement.lang = store.lang;
 
   // Plan label — read once from credentials. Independent of token validity,
@@ -1216,6 +1231,16 @@ export function setLang(value: Lang) {
   setStore("lang", value);
   document.documentElement.lang = value;
   if (!suppressPersist) void persistSetting("lang", value);
+}
+
+export function setTheme(value: Theme) {
+  setStore("theme", value);
+  applyThemeClass(value);
+  if (!suppressPersist) void persistSetting("theme", value);
+}
+
+export function applyThemeClass(theme: Theme) {
+  document.documentElement.classList.toggle("theme-instrument", theme === "instrument");
 }
 
 export async function setAlwaysOnTop(value: boolean) {

@@ -7,6 +7,15 @@
   font-display: swap;
 }
 
+/* 7-segment LCD face for the instrument theme (session %). SIL OFL, bundled
+   like SUIT. Glyph set is digits + a few marks, so the file is tiny. */
+@font-face {
+  font-family: "DSEG7 Classic";
+  src: url("../assets/fonts/DSEG7Classic-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: block;
+}
+
 /* Reset + base typography. Liquid Glass requires a fully transparent root
    so the OS material (Mica/Acrylic on Windows, NSVisualEffect on macOS)
    can show through the WebView. */
@@ -125,6 +134,23 @@ a {
 }
 .dark .guide-root {
   background: rgba(21, 20, 19, 0.86);
+}
+
+/* Instrument theme primitives — the inset "well" zone and the microcaps
+   label. Kept here so the instrument views stay markup-light. */
+.inst-zone {
+  background: var(--inst-zone-bg);
+  border: 1px solid var(--inst-zone-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.inst-caps {
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--inst-label);
 }
 
 /* Drag region for frameless window. */

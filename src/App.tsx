@@ -4,6 +4,7 @@ import { ErrorBanner } from "./components/ErrorBanner";
 import { HeaderBar } from "./views/HeaderBar";
 import { FooterBar } from "./views/FooterBar";
 import { NormalView } from "./views/NormalView";
+import { NormalInstrument } from "./views/NormalInstrument";
 import { MiniView } from "./views/MiniView";
 import { DetailView } from "./views/DetailView";
 import { SettingsPanel } from "./views/SettingsPanel";
@@ -30,7 +31,8 @@ export function WidgetChrome() {
         }}
       >
         {store.mode === "mini" && <MiniView />}
-        {store.mode === "normal" && <NormalView />}
+        {store.mode === "normal" &&
+          (store.theme === "instrument" ? <NormalInstrument /> : <NormalView />)}
         {store.mode === "detail" && <DetailView />}
         {store.mode !== "mini" && <ErrorBanner />}
       </div>

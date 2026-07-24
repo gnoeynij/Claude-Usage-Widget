@@ -132,6 +132,29 @@
   /* ─── Component metrics ──────────────────────────────────────────────── */
   --capsule-h: 10px;
   --capsule-h-sm: 6px;
+
+  --font-seg: "DSEG7 Classic", ui-monospace, monospace;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Instrument theme — retro instrument-panel skin. Palette (graphite/silver)
+   is shared with glass; these tokens only add the panel's inset "well" look
+   and the off-segment / off-block ghosts. Light (silver) defaults here; the
+   .dark override follows. See docs/plans/2026-07-23-instrument-theme.md.
+   ────────────────────────────────────────────────────────────────────────── */
+:root.theme-instrument {
+  --inst-zone-bg: rgba(255, 255, 255, 0.55);
+  --inst-zone-border: rgba(40, 40, 40, 0.12);
+  --inst-seg-off: rgba(40, 40, 40, 0.10);
+  --inst-block-off: rgba(40, 40, 40, 0.12);
+  --inst-label: rgba(40, 40, 40, 0.55);
+}
+:root.theme-instrument.dark {
+  --inst-zone-bg: rgba(0, 0, 0, 0.32);
+  --inst-zone-border: rgba(240, 240, 240, 0.10);
+  --inst-seg-off: rgba(240, 240, 240, 0.09);
+  --inst-block-off: rgba(240, 240, 240, 0.11);
+  --inst-label: rgba(240, 240, 240, 0.50);
 }
 
 /* macOS window corner radius varies by app (~10–13px); 24px is well above

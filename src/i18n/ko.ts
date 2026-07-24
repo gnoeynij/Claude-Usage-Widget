@@ -15,6 +15,7 @@ export const ko: Strings = {
   projRisk: (h, m) =>
     h > 0 ? `⚠ 한도까지 ~${h}시간 ${m}분` : `⚠ 한도까지 ~${m}분`,
   projRiskDays: (d, h) => `⚠ 한도까지 ~${d}일 ${h}시간`,
+  projReached: (label) => `⚠ ${label} 한도 도달`,
   durHM: (h, m) => (h > 0 ? `~${h}시간 ${m}분` : `~${m}분`),
   durH: (h) => `~${h}시간`,
   durDH: (d, h) => `~${d}일 ${h}시간`,
@@ -24,6 +25,9 @@ export const ko: Strings = {
   settings: "설정",
   guide: "가이드",
   language: "언어",
+  theme: "테마",
+  themeGlass: "글래스",
+  themeInstrument: "계기판",
   autoSync: "자동 동기화",
   alwaysOnTop: "항상 위",
   darkMode: "다크 모드",
