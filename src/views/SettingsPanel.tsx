@@ -420,12 +420,16 @@ export function SettingsPanel() {
 
         {/* Scroll region — header above stays pinned; the bar renders inside
             the card's right padding, clear of the rounded corners. min-height
-            0 lets the flex child actually shrink below content height. */}
+            0 lets the flex child actually shrink below content height.
+            overflow-x must be explicit: with overflow-y:auto alone the spec
+            computes x:visible → auto, so the vertical bar's width steal
+            spawned a permanent horizontal scrollbar. */}
         <div
           style={{
             flex: 1,
             "min-height": 0,
             "overflow-y": "auto",
+            "overflow-x": "hidden",
             display: "flex",
             "flex-direction": "column",
             gap: "var(--s-3)",

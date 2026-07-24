@@ -145,6 +145,16 @@ a {
   animation: spin 1s linear infinite;
 }
 
+@keyframes egg-flip {
+  0%   { transform: rotate(0) scale(1); }
+  45%  { transform: rotate(360deg) scale(1.3); }
+  70%  { transform: rotate(360deg) scale(0.9); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+.egg-flip {
+  animation: egg-flip 0.9s var(--ease-smooth);
+}
+
 @keyframes panel-reveal {
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }

@@ -49,7 +49,7 @@ export type UsagePayload = {
   /** Scoped weekly caps from the API's `limits` array — label comes straight
    *  from the server (e.g. "Fable"), so a re-scoped cap renders without a
    *  widget update. Empty/absent → the legacy sonnet/opus rows render. */
-  scoped_limits?: { label: string; percent: number }[];
+  scoped_limits?: { label: string; percent: number; resets_at?: string | null }[];
 };
 
 export type PlanPayload = {
@@ -141,7 +141,9 @@ export type Toast = { id: number; title: string; body: string; tone: "warn" | "d
  *  container-query breakpoint that switches the detail grid to 2 columns. */
 export const MODE_DEFAULTS: Record<Mode, [number, number, number, number]> = {
   mini: [240, 112, 240, 112],
-  normal: [320, 334, 320, 334],
+  // 334 → 360: the imminent-risk warning chip (S1+T4) adds a ~24px line under
+  // the weekly caption; at 334 it clipped into the footer.
+  normal: [320, 360, 320, 360],
   detail: [592, 619, 520, 520],
 };
 
@@ -701,8 +703,21 @@ export async function initStore() {
       },
       (v): v is number => typeof v === "number" && v > 0,
     );
+    await loadSetting<number>(
+      "celebratedUpTo",
+      (v) => {
+        celebratedUpTo = v;
+      },
+      (v): v is number => typeof v === "number" && v >= 0,
+    );
   } finally {
     suppressPersist = false;
+  }
+  // First boot with an existing history: baseline silently so only *new*
+  // crossings fire, not ones that happened before this build existed.
+  if (celebratedUpTo < 0) {
+    celebratedUpTo = highestStepAtOrBelow(store.lifetimeCost);
+    void persistCelebratedUpTo(celebratedUpTo);
   }
 
   // Apply DOM-level defaults *after* lang/dark are restored — setLang/setDark
@@ -1097,8 +1112,42 @@ export async function refreshDetail() {
     setStore("lifetimeCountedUntilMs", detail.max_ts_ms);
     void persistSetting("lifetimeCost", next);
     void persistSetting("lifetimeCountedUntilMs", detail.max_ts_ms);
+    maybeCelebrate(next);
   }
   if (store.syncFolder) void syncDevices();
+}
+
+// Undocumented, on purpose.
+const CELEBRATION_STEPS = [
+  1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000,
+];
+let celebratedUpTo = -1; // -1 = baseline pending (set silently on first boot)
+function highestStepAtOrBelow(v: number): number {
+  let best = 0;
+  for (const m of CELEBRATION_STEPS) if (v >= m) best = m;
+  return best;
+}
+async function persistCelebratedUpTo(v: number) {
+  try {
+    const ps = await getPersistStore();
+    await ps.set("celebratedUpTo", v);
+    await ps.save();
+  } catch (e) {
+    console.error("persist celebratedUpTo failed", e);
+  }
+}
+function maybeCelebrate(lifetime: number) {
+  if (celebratedUpTo < 0) return; // baseline not established yet
+  const step = highestStepAtOrBelow(lifetime);
+  if (step > celebratedUpTo) {
+    celebratedUpTo = step;
+    void persistCelebratedUpTo(step);
+    void invoke("open_milestone_window", {
+      amount: step,
+      lang: store.lang,
+      dark: store.dark,
+    }).catch(() => {});
+  }
 }
 
 /** Combined lifetime cost + daily history across devices via a shared cloud

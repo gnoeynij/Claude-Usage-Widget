@@ -190,8 +190,9 @@ function seedStore() {
   setStore("usage", {
     five_hour: 40, seven_day: 40, seven_day_sonnet: 12,
     seven_day_opus: null, // match the common plan (no Opus-specific weekly row)
-    // Mirror today's live API shape: one server-labeled scoped weekly cap.
-    scoped_limits: [{ label: "Fable", percent: 12 }],
+    // Mirror today's live API shape: one server-labeled scoped weekly cap
+    // (resets_at rides the weekly cadence, so its projection dot shows too).
+    scoped_limits: [{ label: "Fable", percent: 12, resets_at: nowPlus(WEEKLY_RESET_MS) }],
     session_resets_at: nowPlus(SESSION_RESET_MS),
     weekly_resets_at: nowPlus(WEEKLY_RESET_MS),
     extra_usage_enabled: false,

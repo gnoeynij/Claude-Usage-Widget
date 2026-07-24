@@ -450,3 +450,56 @@ pub fn handle_context_menu_event(app: &tauri::AppHandle, id: &str) {
         _ => {}
     }
 }
+
+/// Small always-on-top dialog near the tray corner. Opened by the frontend
+/// on rare occasions; stays until the user closes it (no auto-dismiss).
+#[tauri::command]
+pub async fn open_milestone_window(
+    app: tauri::AppHandle,
+    amount: f64,
+    lang: String,
+    dark: bool,
+) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window("milestone") {
+        w.show().map_err(|e| e.to_string())?;
+        w.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    let (win_w, win_h) = (360.0, 168.0);
+    // Bottom-right, near the system tray. Monitor size is physical px —
+    // convert to logical before subtracting; 72px clears a standard taskbar.
+    let (mut x, mut y) = (120.0, 120.0);
+    if let Ok(Some(m)) = app.primary_monitor() {
+        let s = m.scale_factor();
+        let size = m.size().to_logical::<f64>(s);
+        x = size.width - win_w - 16.0;
+        y = size.height - win_h - 72.0;
+    }
+    let url = format!(
+        "index.html?milestone&amount={amount}&lang={lang}&dark={}",
+        if dark { 1 } else { 0 }
+    );
+    let window =
+        tauri::WebviewWindowBuilder::new(&app, "milestone", tauri::WebviewUrl::App(url.into()))
+            .title("Claude Widget")
+            .inner_size(win_w, win_h)
+            .position(x, y)
+            .decorations(false)
+            .transparent(true)
+            .resizable(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .build()
+            .map_err(|e| e.to_string())?;
+    #[cfg(target_os = "windows")]
+    {
+        let _ = crate::vibrancy_win::apply_mica(&window);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = crate::vibrancy_mac::apply_mica(&window);
+    }
+    let _ = &window;
+    Ok(())
+}

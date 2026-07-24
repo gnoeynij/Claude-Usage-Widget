@@ -64,6 +64,21 @@ export function projectLimit(
   return { projectedPct, hitsBeforeReset: false, msToLimit: 0 };
 }
 
+// ── Risk tiers ───────────────────────────────────────────────────────────────
+// Display intensity scales with proximity: a projection that hits the limit
+// ≥24h out is a "distant" whisper (tinted % only), under 24h it's "imminent"
+// (full amber + warning chip). Keeps the calm layout calm — text only appears
+// when the limit is a today-problem.
+
+export const IMMINENT_MS = 24 * 3_600_000;
+
+export type RiskTone = "distant" | "imminent" | null;
+
+export function riskTone(p: LimitProjection | null): RiskTone {
+  if (!p || !p.hitsBeforeReset) return null;
+  return p.msToLimit < IMMINENT_MS ? "imminent" : "distant";
+}
+
 // ── Recent-pace estimate (pure core; the store owns the side effects) ────────
 // `recentPace` feeds projectLimit's max(average, recent) blend so a current
 // burst escalates the projection sooner. It is grown by `blendPace` on each

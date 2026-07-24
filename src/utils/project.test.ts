@@ -3,6 +3,8 @@ import {
   projectLimit,
   blendPace,
   decayPace,
+  riskTone,
+  IMMINENT_MS,
   SESSION_WINDOW_MS,
   WEEKLY_WINDOW_MS,
 } from "./project";
@@ -142,5 +144,22 @@ describe("decayPace", () => {
   });
   it("decreases monotonically with elapsed time", () => {
     expect(decayPace(1, 120_000, HL)).toBeLessThan(decayPace(1, 60_000, HL));
+  });
+});
+
+describe("riskTone", () => {
+  const proj = (hits: boolean, msToLimit: number) => ({
+    projectedPct: 120,
+    hitsBeforeReset: hits,
+    msToLimit,
+  });
+  it("null for no projection or a safe one", () => {
+    expect(riskTone(null)).toBeNull();
+    expect(riskTone(proj(false, 0))).toBeNull();
+  });
+  it("imminent under 24h, distant at/over 24h", () => {
+    expect(riskTone(proj(true, IMMINENT_MS - 1))).toBe("imminent");
+    expect(riskTone(proj(true, IMMINENT_MS))).toBe("distant");
+    expect(riskTone(proj(true, IMMINENT_MS * 3))).toBe("distant");
   });
 });

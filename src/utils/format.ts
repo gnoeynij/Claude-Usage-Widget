@@ -1,3 +1,17 @@
+import { t } from "../i18n";
+import type { LimitProjection } from "./project";
+
+/** Plain-text projection summary for native title tooltips (no markup).
+ *  Shared by Mini's badge overlay and Normal's weekly-caption hover. */
+export function projText(p: LimitProjection | null): string {
+  if (!p) return "";
+  if (!p.hitsBeforeReset) return t().projSafe(Math.floor(p.projectedPct));
+  const ms = p.msToLimit;
+  return ms >= 24 * 3_600_000
+    ? t().projRiskDays(Math.floor(ms / 86_400_000), Math.floor((ms % 86_400_000) / 3_600_000))
+    : t().projRisk(Math.floor(ms / 3_600_000), Math.floor((ms % 3_600_000) / 60_000));
+}
+
 /** USD cost with thousands separator and 2 decimals. Locale-fixed (en-US)
  *  because Claude pricing is published in USD and locale-dependent comma vs
  *  period would be ambiguous (e.g. "1.038,16" in fr-FR reads wrong here). */

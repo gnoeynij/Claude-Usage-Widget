@@ -116,6 +116,7 @@ pub fn run() {
             commands::trigger_token_refresh,
             commands::open_login_terminal,
             commands::show_context_menu,
+            commands::open_milestone_window,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").expect("main window missing");

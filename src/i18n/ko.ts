@@ -15,6 +15,10 @@ export const ko: Strings = {
   projRisk: (h, m) =>
     h > 0 ? `⚠ 한도까지 ~${h}시간 ${m}분` : `⚠ 한도까지 ~${m}분`,
   projRiskDays: (d, h) => `⚠ 한도까지 ~${d}일 ${h}시간`,
+  durHM: (h, m) => (h > 0 ? `~${h}시간 ${m}분` : `~${m}분`),
+  durH: (h) => `~${h}시간`,
+  durDH: (d, h) => `~${d}일 ${h}시간`,
+  riskLine: (items) => `한도까지 ${items}`,
 
   syncNow: "지금 동기화",
   settings: "설정",

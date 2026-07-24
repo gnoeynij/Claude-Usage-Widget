@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { App } from "./App";
 import { GuideApp } from "./views/GuideView";
+import { MilestoneApp } from "./views/MilestoneWindow";
 import { store, usageSummaryText } from "./state/store";
 
 const root = document.getElementById("root");
@@ -16,6 +17,7 @@ if (!root) throw new Error("#root not found");
 // Separate guide window (opened from Settings) loads the same bundle with
 // `?guide` — render the standalone guide instead of the widget.
 const isGuide = new URLSearchParams(window.location.search).has("guide");
+const isMilestone = new URLSearchParams(window.location.search).has("milestone");
 
 // Right-click: suppress the WebView's default browser menu everywhere
 // (reload/print/inspect make no sense on a desktop widget) and open the
@@ -32,9 +34,9 @@ const showContextMenu = () => {
 };
 window.addEventListener("contextmenu", (e) => {
   e.preventDefault();
-  if (!isGuide) showContextMenu();
+  if (!isGuide && !isMilestone) showContextMenu();
 });
-if (!isGuide) {
+if (!isGuide && !isMilestone) {
   void listen("nc://contextmenu", showContextMenu);
 }
 
@@ -46,4 +48,7 @@ if (/Mac/i.test(navigator.userAgent)) {
   document.documentElement.classList.add("mac");
 }
 
-render(() => (isGuide ? <GuideApp /> : <App />), root);
+render(
+  () => (isMilestone ? <MilestoneApp /> : isGuide ? <GuideApp /> : <App />),
+  root,
+);

@@ -13,6 +13,14 @@ export const en = {
   projRisk: (h: number, m: number) =>
     h > 0 ? `⚠ ~${h}h ${m}m to limit` : `⚠ ~${m}m to limit`,
   projRiskDays: (d: number, h: number) => `⚠ ~${d}d ${h}h to limit`,
+  // Weekly risk line pieces — durations stay bare so the "to limit" phrase
+  // appears once per line, not once per at-risk limit.
+  durHM: (h: number, m: number) => (h > 0 ? `~${h}h ${m}m` : `~${m}m`),
+  durH: (h: number) => `~${h}h`,
+  durDH: (d: number, h: number) => `~${d}d ${h}h`,
+  // No ⚠ here — the chip renders the icon as a separate amber span (Apple
+  // grammar: colored icon + neutral text), so the string stays plain.
+  riskLine: (items: string) => `${items} to limit`,
 
   syncNow: "Sync now",
   settings: "Settings",

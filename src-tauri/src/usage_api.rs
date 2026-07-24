@@ -145,6 +145,8 @@ struct LimitEntry {
     percent: Option<f64>,
     #[serde(default)]
     scope: Option<LimitScope>,
+    #[serde(default)]
+    resets_at: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -204,7 +206,7 @@ fn scoped_from_limits(limits: Option<Vec<Option<LimitEntry>>>) -> Vec<ScopedLimi
                 .and_then(|m| m.display_name)
                 .or(scope.surface)
                 .unwrap_or_else(|| "Model".to_string());
-            Some(ScopedLimitOut { label, percent })
+            Some(ScopedLimitOut { label, percent, resets_at: e.resets_at })
         })
         .collect()
 }
@@ -235,6 +237,10 @@ pub struct UsageOutput {
 pub struct ScopedLimitOut {
     pub label: String,
     pub percent: f64,
+    /// Reset time of this scoped cap (weekly cadence per the 2026-07-21 probe).
+    /// The frontend projects "at this pace" against it, same as the all-models
+    /// weekly row; absent → the row renders without a projection.
+    pub resets_at: Option<String>,
 }
 
 #[derive(Serialize, Default, Debug)]
@@ -396,7 +402,7 @@ mod tests {
                 {"kind":"session","group":"session","percent":33.0,"severity":"normal","is_active":true},
                 {"kind":"weekly_all","percent":8.0},
                 null,
-                {"kind":"weekly_scoped","percent":10.0,"scope":{"model":{"id":null,"display_name":"Fable"},"surface":null}},
+                {"kind":"weekly_scoped","percent":10.0,"scope":{"model":{"id":null,"display_name":"Fable"},"surface":null},"resets_at":"2026-07-23T00:00:00Z"},
                 {"kind":"weekly_scoped","percent":null},
                 {"kind":"weekly_scoped","percent":5.0,"scope":{"model":null,"surface":"Cowork"}}
             ]}"#,
@@ -406,7 +412,10 @@ mod tests {
         assert_eq!(scoped.len(), 2);
         assert_eq!(scoped[0].label, "Fable");
         assert_eq!(scoped[0].percent, 10.0);
+        // resets_at threads through for the frontend projection; absent → None.
+        assert_eq!(scoped[0].resets_at.as_deref(), Some("2026-07-23T00:00:00Z"));
         assert_eq!(scoped[1].label, "Cowork");
+        assert!(scoped[1].resets_at.is_none());
     }
 
     #[test]

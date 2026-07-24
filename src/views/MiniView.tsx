@@ -13,17 +13,7 @@ import {
 } from "../utils/project";
 import { startWindowDrag } from "../utils/drag";
 import { clamp } from "../utils/math";
-
-/** Plain-text projection summary for the badge tooltip (no markup — it's a
- *  native title attribute). Mirrors RiskCaption's day/hour split. */
-function projText(p: LimitProjection | null): string {
-  if (!p) return "";
-  if (!p.hitsBeforeReset) return t().projSafe(Math.floor(p.projectedPct));
-  const ms = p.msToLimit;
-  return ms >= 24 * 3_600_000
-    ? t().projRiskDays(Math.floor(ms / 86_400_000), Math.floor((ms % 86_400_000) / 3_600_000))
-    : t().projRisk(Math.floor(ms / 3_600_000), Math.floor((ms % 3_600_000) / 60_000));
-}
+import { projText } from "../utils/format";
 
 function MiniRow(props: { label: string; value: number; projected?: number | null }) {
   return (
@@ -79,10 +69,23 @@ export function MiniView() {
       0.1, // weekly's 7d window banks enough data sooner — see projectLimit
     );
   });
+  // Scoped caps ride the weekly cadence (their resets_at matches the weekly
+  // reset) — average-only, same as weeklyProj. Plain function, not a memo:
+  // called inside JSX/derivations so tickMinute keeps it live per row.
+  const scopedProj = (row: { percent: number; resets_at?: string | null }) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    store.tickMinute;
+    return projectLimit(row.percent, row.resets_at, WEEKLY_WINDOW_MS, Date.now(), undefined, 0.1);
+  };
   // Any tracked limit on pace to hit before reset → a small amber warning
   // badge. Icon (shape), not color, so it reads even amber-on-amber where the
   // ghost marker blends with an already-amber arc.
-  const atRisk = () => Boolean(sessionProj()?.hitsBeforeReset || weeklyProj()?.hitsBeforeReset);
+  const atRisk = () =>
+    Boolean(
+      sessionProj()?.hitsBeforeReset ||
+        weeklyProj()?.hitsBeforeReset ||
+        (store.usage.scoped_limits ?? []).some((r) => scopedProj(r)?.hitsBeforeReset),
+    );
   // Mini has no header status dot or ErrorBanner (both omitted in mini mode), so
   // a sync error like TOKEN_EXPIRED would otherwise be invisible here. Surface it
   // on the same warning badge + info overlay the at-risk projection already uses.
@@ -105,7 +108,7 @@ export function MiniView() {
     // the fixed sonnet/opus rows are the legacy fallback when none arrive.
     const scoped = store.usage.scoped_limits ?? [];
     if (scoped.length > 0) {
-      for (const r of scoped) rows.push({ label: r.label, pct: r.percent, proj: null });
+      for (const r of scoped) rows.push({ label: r.label, pct: r.percent, proj: scopedProj(r) });
     } else {
       if (store.usage.seven_day_sonnet != null) {
         rows.push({ label: t().sonnetOnly, pct: store.usage.seven_day_sonnet, proj: null });
@@ -337,7 +340,13 @@ export function MiniView() {
               : null)
           }
         >
-          {(row) => <MiniRow label={row().label} value={row().percent} />}
+          {(row) => (
+            <MiniRow
+              label={row().label}
+              value={row().percent}
+              projected={scopedProj(row())?.projectedPct ?? null}
+            />
+          )}
         </Show>
       </div>
     </main>

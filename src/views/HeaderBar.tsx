@@ -1,8 +1,15 @@
 import { Settings as SettingsIcon, RefreshCw } from "lucide-solid";
-import { Show } from "solid-js";
-import { store, syncNow, toggleSettings } from "../state/store";
+import { Show, createSignal } from "solid-js";
+import { store, syncNow, toggleSettings, pushToast } from "../state/store";
 import { t } from "../i18n";
 import { startWindowDrag } from "../utils/drag";
+
+// Not in the dictionaries — on purpose.
+let taps: number[] = [];
+const EGG_LINES = {
+  en: ["👀 You found me", "Seven taps. Impressive dedication."],
+  ko: ["👀 찾으셨네요", "일곱 번이나 눌러보다니, 그 집요함으로 오늘도 토큰을 태웁시다."],
+};
 
 function updateDotLabel() {
   const v = store.updateInfo?.version;
@@ -49,6 +56,24 @@ function statusTooltip() {
 }
 
 export function HeaderBar() {
+  const [flip, setFlip] = createSignal(false);
+  const tap = () => {
+    if (flip()) return;
+    const now = Date.now();
+    taps = taps.filter((v) => now - v < 2500);
+    taps.push(now);
+    if (taps.length >= 7) {
+      taps = [];
+      setFlip(true);
+      const [title, body] = EGG_LINES[store.lang];
+      // Toast only after the flip settles — it drops in fixed over the header,
+      // so showing it mid-burst covers the animation and eats the next click.
+      window.setTimeout(() => {
+        setFlip(false);
+        pushToast(title, body, "warn");
+      }, 950);
+    }
+  };
   return (
     <header
       class="drag"
@@ -81,7 +106,15 @@ export function HeaderBar() {
         class="t-body label-secondary"
         style={{ flex: 1, "font-weight": 500 }}
       >
-        Claude
+        {/* Inner span only: the flex-1 remainder must stay draggable, and
+            drag regions swallow clicks on Windows — no-drag re-arms them. */}
+        <span
+          class={`no-drag${flip() ? " egg-flip" : ""}`}
+          onClick={tap}
+          style={{ display: "inline-block", "user-select": "none" }}
+        >
+          Claude
+        </span>
       </span>
       <button
         class="no-drag ring-hover"
