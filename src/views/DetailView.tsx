@@ -253,7 +253,7 @@ function DailyCostCard() {
           "margin-bottom": "var(--s-3)",
         }}
       >
-        <span class="t-section">{t().history}</span>
+        <span class={isInst() ? "inst-caps" : "t-section"}>{t().history}</span>
         <div style={{ display: "flex", "align-items": "center", gap: "var(--s-2)" }}>
           <Show when={canToggle()}>
             <div
@@ -633,7 +633,7 @@ function TotalsCard() {
     <div
       style={{ display: "flex", "align-items": "baseline", "justify-content": "space-between", gap: "var(--s-2)" }}
     >
-      <span class="t-caption label-secondary" style={{ "min-width": 0 }}>{label}</span>
+      <span class={isInst() ? "inst-caps" : "t-caption label-secondary"} style={{ "min-width": 0 }}>{label}</span>
       <span class="t-body tabular-nums" style={{ "font-weight": 600 }}>{value}</span>
     </div>
   );
@@ -662,7 +662,7 @@ function TotalsCard() {
       </div>
 
       <div
-        class="t-caption label-tertiary"
+        class={isInst() ? "inst-caps" : "t-caption label-tertiary"}
         style={{
           "text-align": "right",
           "margin-top": "var(--s-3)",
