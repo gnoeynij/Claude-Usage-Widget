@@ -1,6 +1,8 @@
 import { createSignal, createMemo, createEffect, Show, For } from "solid-js";
 import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
+import { SegDigits } from "../components/SegDigits";
+import { BlockGauge } from "../components/BlockGauge";
 import { AlertCircle } from "lucide-solid";
 import { store, setMode, syncNow } from "../state/store";
 import { bannerFor } from "../components/ErrorBanner";
@@ -35,6 +37,37 @@ function MiniRow(props: { label: string; value: number; projected?: number | nul
         <CapsuleProgress value={props.value} size="sm" projected={props.projected} />
       </div>
     </div>
+  );
+}
+
+/** Instrument-skin Mini row: microcaps label + % over a compact block gauge —
+ *  the LCD answer to MiniRow's capsule. No projection ghost (the at-risk badge
+ *  carries that signal in Mini). */
+function MiniRowInst(props: { label: string; value: number }) {
+  return (
+    <div>
+      <div style={{ display: "flex", "align-items": "baseline", "justify-content": "space-between" }}>
+        <span class="inst-caps">{props.label}</span>
+        <span class="inst-caps tabular-nums" style={{ "font-size": "11px" }}>
+          {Math.round(clamp(props.value))}%
+        </span>
+      </div>
+      <div style={{ "margin-top": "4px" }}>
+        <BlockGauge value={props.value} cells={10} cellW={9} cellH={7} />
+      </div>
+    </div>
+  );
+}
+
+/** Theme-aware Mini row — same data, glass capsule or instrument blocks. */
+function MiniRowT(props: { label: string; value: number; projected?: number | null }) {
+  return (
+    <Show
+      when={store.theme === "instrument"}
+      fallback={<MiniRow label={props.label} value={props.value} projected={props.projected} />}
+    >
+      <MiniRowInst label={props.label} value={props.value} />
+    </Show>
   );
 }
 
@@ -298,16 +331,41 @@ export function MiniView() {
           }}
         />
       </button>
-      <div data-guide="donut">
-        <Donut
-          value={store.usage.five_hour}
-          size={96}
-          stroke={7}
-          label={t().session.toLowerCase()}
-          projected={sessionProj()?.projectedPct ?? null}
-          onClick={() => void syncNow()}
-        />
-      </div>
+      <Show
+        when={store.theme === "instrument"}
+        fallback={
+          <div data-guide="donut">
+            <Donut
+              value={store.usage.five_hour}
+              size={96}
+              stroke={7}
+              label={t().session.toLowerCase()}
+              projected={sessionProj()?.projectedPct ?? null}
+              onClick={() => void syncNow()}
+            />
+          </div>
+        }
+      >
+        {/* 7-seg session hero — Mini has no room for a projection caption, so
+            the at-risk badge (shared) carries the "heading past limit" signal. */}
+        <div
+          data-guide="donut"
+          style={{
+            width: "96px",
+            display: "flex",
+            "flex-direction": "column",
+            "align-items": "center",
+            "justify-content": "center",
+            gap: "3px",
+          }}
+        >
+          <span class="inst-caps">{t().session}</span>
+          <div style={{ display: "flex", "align-items": "flex-end", gap: "3px" }}>
+            <SegDigits value={store.usage.five_hour} size={42} />
+            <span class="inst-caps" style={{ "font-size": "11px", "margin-bottom": "4px" }}>%</span>
+          </div>
+        </div>
+      </Show>
       <div
         data-guide="weekly"
         style={{
@@ -322,7 +380,7 @@ export function MiniView() {
           "justify-content": "space-evenly",
         }}
       >
-        <MiniRow
+        <MiniRowT
           label={t().allModels}
           value={store.usage.seven_day}
           projected={weeklyProj()?.projectedPct ?? null}
@@ -341,7 +399,7 @@ export function MiniView() {
           }
         >
           {(row) => (
-            <MiniRow
+            <MiniRowT
               label={row().label}
               value={row().percent}
               projected={scopedProj(row())?.projectedPct ?? null}

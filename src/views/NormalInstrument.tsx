@@ -5,7 +5,7 @@ import { store, syncNow } from "../state/store";
 import { t } from "../i18n";
 import { formatCountdown } from "../utils/format";
 import { startWindowDrag } from "../utils/drag";
-import { createLimitsVm, formatResetsIn, riskText } from "./limitsVm";
+import { createLimitsVm, formatResetsIn, riskText, weeklyMsgText } from "./limitsVm";
 import type { LimitProjection } from "../utils/project";
 
 /** Instrument-theme Normal view — the retro LCD panel skin. Shares all pace/
@@ -148,42 +148,22 @@ export function NormalInstrument() {
             <For each={scoped()}>{(row) => <BlockRow label={row.label} value={row.percent} />}</For>
           </Show>
         </div>
-        <Show
-          when={vm.imminentRisks().length > 0}
-          fallback={
-            <Show when={vm.weeklyCaptionProj()}>
-              {(d) => (
-                <div
-                  class="inst-caps"
-                  title={vm.weeklyTooltip()}
-                  style={{
-                    "margin-top": "9px",
-                    "padding-top": "8px",
-                    "border-top": "1px solid var(--inst-zone-border)",
-                    "text-align": "right",
-                    color: d().over ? "var(--warning)" : "var(--inst-label)",
-                  }}
-                >
-                  {t().projSafe(d().pct)}
-                </div>
-              )}
-            </Show>
-          }
-        >
-          <div
-            class="inst-caps"
-            title={vm.weeklyTooltip()}
-            style={{
-              "margin-top": "9px",
-              "padding-top": "8px",
-              "border-top": "1px solid var(--inst-zone-border)",
-              "text-align": "right",
-              color: "var(--label)",
-            }}
-          >
-            <span style={{ color: "var(--warning)" }}>{"⚠ "}</span>
-            {vm.imminentLine()}
-          </div>
+        <Show when={weeklyMsgText(vm.weeklyMsg())}>
+          {(m) => (
+            <div
+              class="inst-caps"
+              title={vm.weeklyTooltip()}
+              style={{
+                "margin-top": "9px",
+                "padding-top": "8px",
+                "border-top": "1px solid var(--inst-zone-border)",
+                "text-align": "right",
+                color: m().warn ? "var(--warning)" : "var(--inst-label)",
+              }}
+            >
+              {m().text}
+            </div>
+          )}
         </Show>
         <Show when={store.usage.extra_usage_enabled}>
           <div class="inst-caps" style={{ "margin-top": "8px", "text-align": "right" }}>

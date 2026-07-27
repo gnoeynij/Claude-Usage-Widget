@@ -3,7 +3,6 @@ import { store } from "../state/store";
 import { t } from "../i18n";
 import {
   projectLimit,
-  riskTone,
   SESSION_WINDOW_MS,
   WEEKLY_WINDOW_MS,
   type LimitProjection,
@@ -28,11 +27,23 @@ export function durText(ms: number) {
     : t().durHM(Math.floor(ms / 3_600_000), Math.floor((ms % 3_600_000) / 60_000));
 }
 
-/** Hours-only variant for 2+ items — the full minutes form overflows the
- *  320px panel in Korean and wraps. Minutes only matter inside the final hour. */
-export function durTextCompact(ms: number) {
-  const h = Math.floor(ms / 3_600_000);
-  return h > 0 ? t().durH(h) : t().durHM(0, Math.floor(ms / 60_000));
+/** The single weekly-caption message, resolved by priority in weeklyMsg().
+ *  label null = All models (the primary weekly, rendered unlabeled). */
+export type WeeklyMsg =
+  | { kind: "risk"; label: string | null; ms: number }
+  | { kind: "reached"; label: string }
+  | { kind: "safe"; label: string | null; pct: number }
+  | null;
+
+/** The weekly message as localized text (⚠ included for risk/reached). Both
+ *  skins share the wording — they differ only in wrapping/color. Returns the
+ *  bare text + whether it's a warning (amber). null → nothing to show. */
+export function weeklyMsgText(m: WeeklyMsg): { text: string; warn: boolean } | null {
+  if (!m) return null;
+  const lbl = m.label ? `${m.label} ` : "";
+  if (m.kind === "safe") return { text: `${lbl}${t().projSafe(m.pct)}`, warn: false };
+  if (m.kind === "reached") return { text: t().projReached(m.label), warn: true };
+  return { text: `⚠ ${lbl}${t().riskLine(durText(m.ms))}`, warn: true };
 }
 
 /** Localized "resets in …" for the weekly caption (days+hours ≥24h). */
@@ -91,41 +102,26 @@ export function createLimitsVm() {
     store.tickMinute;
     return projectLimit(row.percent, row.resets_at, WEEKLY_WINDOW_MS, Date.now(), undefined, 0.1);
   };
-  // Imminent (<24h) weekly limits for the warning line/chip, in ROW order so
-  // the list mirrors the bars above it. Distant risks stay text-free — their
-  // signal is the projection dot (glass) / tooltip; text shows up only when a
-  // limit is a today-problem.
-  const imminentRisks = () => {
-    const risks: Array<{ label: string; msToLimit: number }> = [];
-    const w = weeklyProj();
-    if (riskTone(w) === "imminent")
-      risks.push({ label: t().allModels, msToLimit: w!.msToLimit });
-    for (const r of store.usage.scoped_limits ?? []) {
-      const p = scopedProj(r);
-      if (riskTone(p) === "imminent") risks.push({ label: r.label, msToLimit: p!.msToLimit });
+  // Priority message for the weekly caption's single slot: All models projected
+  // over 100% owns it (the primary weekly); otherwise the scoped (Fable) cap —
+  // its ETA, "…at limit" once maxed (projectLimit is null at 100%, handled
+  // here), or its projected %. Falls back to All models' safe % when no scoped
+  // cap is active. Structured data — glass/instrument render it their own way.
+  const weeklyMsg = (): WeeklyMsg => {
+    const seven = store.usage.seven_day;
+    const am = weeklyProj();
+    if (am?.hitsBeforeReset) return { kind: "risk", label: null, ms: am.msToLimit };
+    const scoped = store.usage.scoped_limits?.[0];
+    if (scoped) {
+      if (scoped.percent >= 100) return { kind: "reached", label: scoped.label };
+      const sp = scopedProj(scoped);
+      if (sp?.hitsBeforeReset) return { kind: "risk", label: scoped.label, ms: sp.msToLimit };
+      if (sp && sp.projectedPct > scoped.percent + 0.5)
+        return { kind: "safe", label: scoped.label, pct: Math.floor(sp.projectedPct) };
     }
-    return risks;
-  };
-  /** One "Label ~dur / Label ~dur" line body for t().riskLine — minutes drop
-   *  when 2+ items share the line. */
-  const imminentLine = () =>
-    t().riskLine(
-      imminentRisks()
-        .map((r, _i, all) =>
-          `${r.label} ${(all.length > 1 ? durTextCompact : durText)(r.msToLimit)}`,
-        )
-        .join(" / "),
-    );
-  // Calm projected-% for the All-models weekly caption. Distant risk (heading
-  // over 100% but ≥24h out) has no loud text — its signal is this "proj 118%"
-  // readout (amber `over`). Imminent (<24h) is escalated to the chip instead,
-  // so it's suppressed here. null = nothing worth showing (flat pace).
-  const weeklyCaptionProj = (): { over: boolean; pct: number } | null => {
-    const p = weeklyProj();
-    if (!p || riskTone(p) === "imminent") return null;
-    const value = store.usage.seven_day;
-    if (!p.hitsBeforeReset && p.projectedPct <= value + 0.5) return null;
-    return { over: p.hitsBeforeReset, pct: Math.floor(p.projectedPct) };
+    if (am && am.projectedPct > seven + 0.5)
+      return { kind: "safe", label: null, pct: Math.floor(am.projectedPct) };
+    return null;
   };
   // Hover tooltip: every tracked weekly limit with its own projection — the
   // visible text carries only the soonest facts, the full list lives here.
@@ -149,9 +145,7 @@ export function createLimitsVm() {
     sessionProj,
     weeklyProj,
     scopedProj,
-    imminentRisks,
-    imminentLine,
-    weeklyCaptionProj,
+    weeklyMsg,
     weeklyTooltip,
   };
 }

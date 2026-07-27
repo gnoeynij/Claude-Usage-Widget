@@ -5,7 +5,7 @@ import { store, syncNow } from "../state/store";
 import { t } from "../i18n";
 import { clamp } from "../utils/math";
 import { formatCountdown } from "../utils/format";
-import { createLimitsVm, durText, formatResetsIn, riskText } from "./limitsVm";
+import { createLimitsVm, formatResetsIn, riskText, weeklyMsgText } from "./limitsVm";
 import type { LimitProjection } from "../utils/project";
 import { startWindowDrag } from "../utils/drag";
 
@@ -46,25 +46,14 @@ function amberMsg(text: string) {
   );
 }
 
-/** Priority projection for the weekly caption's single inline slot: All models
- *  projected over 100% owns it (its ETA — the primary weekly limit). When All
- *  models is safe, the scoped (Fable) cap takes over — its ETA, "…at limit"
- *  once maxed (projectLimit returns null at 100%, so it's handled here), or its
- *  projected %. Falls back to All models' safe % when no scoped cap is active. */
+/** Weekly caption's inline projection slot — priority resolved in
+ *  limitsVm.weeklyMsg (shared with the instrument skin); rendered here as a
+ *  warning appended after the reset text: amber pill-less inline for
+ *  risk/reached, plain "· proj N%" for safe. */
 function weeklyProjMsg(vm: ReturnType<typeof createLimitsVm>) {
-  const seven = store.usage.seven_day;
-  const am = vm.weeklyProj();
-  if (am?.hitsBeforeReset) return projInline(am, seven); // All models over → priority
-  const scoped = store.usage.scoped_limits?.[0];
-  if (scoped) {
-    if (scoped.percent >= 100) return amberMsg(t().projReached(scoped.label)); // maxed
-    const sp = vm.scopedProj(scoped);
-    if (sp?.hitsBeforeReset)
-      return amberMsg(`⚠ ${scoped.label} ${t().riskLine(durText(sp.msToLimit))}`); // Fable ETA
-    if (sp && sp.projectedPct > scoped.percent + 0.5)
-      return ` · ${scoped.label} ${t().projSafe(Math.floor(sp.projectedPct))}`; // Fable rising %
-  }
-  return projInline(am, seven); // no active scoped cap → All models safe %
+  const m = weeklyMsgText(vm.weeklyMsg());
+  if (!m) return null;
+  return m.warn ? amberMsg(m.text) : ` · ${m.text}`;
 }
 
 function MiniMetric(props: { label: string; value: number; projected?: number | null }) {
