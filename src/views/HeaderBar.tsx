@@ -119,7 +119,7 @@ export function HeaderBar() {
       <button
         class="no-drag ring-hover"
         data-guide="sync"
-        onClick={() => void syncNow()}
+        onClick={() => void syncNow(true)}
         title={t().syncNow}
         style={{
           width: "20px",

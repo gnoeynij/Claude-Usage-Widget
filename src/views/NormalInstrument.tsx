@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import { SegDigits } from "../components/SegDigits";
 import { BlockGauge } from "../components/BlockGauge";
-import { store, syncNow } from "../state/store";
+import { store, syncNow, sessionDisplay } from "../state/store";
 import { t } from "../i18n";
 import { formatCountdown } from "../utils/format";
 import { startWindowDrag } from "../utils/drag";
@@ -85,7 +85,7 @@ export function NormalInstrument() {
       <div
         class="inst-zone no-drag"
         data-guide="donut"
-        onClick={() => void syncNow()}
+        onClick={() => void syncNow(true)}
         style={{ cursor: "pointer" }}
         title={t().syncNow}
       >
@@ -108,7 +108,7 @@ export function NormalInstrument() {
             margin: "8px 0 4px",
           }}
         >
-          <SegDigits value={store.usage.five_hour} size={46} />
+          <SegDigits value={sessionDisplay()} size={46} />
           <span class="inst-caps" style={{ "font-size": "14px", "margin-bottom": "4px" }}>%</span>
         </div>
         <div class="inst-caps" style={{ "text-align": "right", "min-height": "12px" }}>

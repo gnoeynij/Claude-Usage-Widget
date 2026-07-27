@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
-import { store, syncNow } from "../state/store";
+import { store, syncNow, sessionDisplay, sessionRefreshing } from "../state/store";
 import { t } from "../i18n";
 import { clamp } from "../utils/math";
 import { formatCountdown } from "../utils/format";
@@ -138,12 +138,13 @@ export function NormalView() {
       >
         <div data-guide="donut">
           <Donut
-            value={store.usage.five_hour}
+            value={sessionDisplay()}
+            noArcTransition={sessionRefreshing()}
             size={144}
             stroke={8}
             label={t().session.toLowerCase()}
             projected={vm.sessionProj()?.projectedPct ?? null}
-            onClick={() => void syncNow()}
+            onClick={() => void syncNow(true)}
           />
         </div>
         <Show when={sessionCountdown()}>

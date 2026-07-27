@@ -1,4 +1,5 @@
 import { createStore } from "solid-js/store";
+import { createSignal } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -1017,7 +1018,36 @@ export function openLoginTerminal() {
   });
 }
 
-export async function syncNow() {
+// Session hero "reload from 0" animation — plays on a MANUAL sync so the click
+// gets unmistakable co-located feedback (the gauge visibly refills 0→now).
+// Shared by the Donut (glass) and SegDigits (instrument) in Normal + Mini. The
+// target is read live each frame, so it lands on the fresh value when the sync
+// resolves mid-animation.
+const [sessionAnim, setSessionAnim] = createSignal<number | null>(null);
+/** Session % for the hero: the count-up value while refreshing, else live usage. */
+export const sessionDisplay = () => sessionAnim() ?? store.usage.five_hour;
+/** True while the reload runs — heroes drop the arc CSS transition so the JS
+ *  count-up drives the fill directly (no 600ms per-frame lag). */
+export const sessionRefreshing = () => sessionAnim() !== null;
+let sessionAnimRAF = 0;
+export function playSessionRefresh() {
+  cancelAnimationFrame(sessionAnimRAF);
+  const start = Date.now();
+  const dur = 750;
+  const frame = () => {
+    const p = Math.min(1, (Date.now() - start) / dur);
+    const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
+    setSessionAnim(eased * store.usage.five_hour);
+    if (p < 1) sessionAnimRAF = requestAnimationFrame(frame);
+    else setSessionAnim(null);
+  };
+  sessionAnimRAF = requestAnimationFrame(frame);
+}
+
+export async function syncNow(manual = false) {
+  // A manual click always replays the reload cue, even mid-sync (the actual
+  // fetch is deduped below); auto-sync passes manual=false and stays silent.
+  if (manual) playSessionRefresh();
   if (store.syncing) return;
   setStore("syncing", true);
   const t0 = Date.now();

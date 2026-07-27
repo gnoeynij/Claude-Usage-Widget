@@ -17,6 +17,10 @@ type Props = {
    *  with a `cursor: pointer` and a subtle hover lift. Used in Normal view
    *  to make the hero donut also trigger a manual sync. */
   onClick?: () => void;
+  /** Drop the fill arc's dashoffset transition — set during the manual-sync
+   *  reload count-up, whose per-frame JS values would otherwise each start a
+   *  fresh 600ms ease and lag badly behind the number. */
+  noArcTransition?: boolean;
 };
 
 export function Donut(props: Props) {
@@ -114,8 +118,9 @@ export function Donut(props: Props) {
           stroke-opacity={fillVisible() ? 1 : 0}
           transform={`rotate(-90 ${size() / 2} ${size() / 2})`}
           style={{
-            transition:
-              "stroke-dashoffset var(--dur-xslow) var(--ease-swift), stroke var(--dur-base) var(--ease-smooth), stroke-opacity var(--dur-fast) var(--ease-smooth)",
+            transition: props.noArcTransition
+              ? "stroke var(--dur-base) var(--ease-smooth), stroke-opacity var(--dur-fast) var(--ease-smooth)"
+              : "stroke-dashoffset var(--dur-xslow) var(--ease-swift), stroke var(--dur-base) var(--ease-smooth), stroke-opacity var(--dur-fast) var(--ease-smooth)",
           }}
         />
         <Show when={showProj()}>

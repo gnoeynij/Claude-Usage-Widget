@@ -4,7 +4,7 @@ import { CapsuleProgress } from "../components/CapsuleProgress";
 import { SegDigits } from "../components/SegDigits";
 import { BlockGauge } from "../components/BlockGauge";
 import { AlertCircle } from "lucide-solid";
-import { store, setMode, syncNow } from "../state/store";
+import { store, setMode, syncNow, sessionDisplay, sessionRefreshing } from "../state/store";
 import { bannerFor } from "../components/ErrorBanner";
 import { t } from "../i18n";
 import {
@@ -336,12 +336,13 @@ export function MiniView() {
         fallback={
           <div data-guide="donut" class="no-drag">
             <Donut
-              value={store.usage.five_hour}
+              value={sessionDisplay()}
+              noArcTransition={sessionRefreshing()}
               size={96}
               stroke={7}
               label={t().session.toLowerCase()}
               projected={sessionProj()?.projectedPct ?? null}
-              onClick={() => void syncNow()}
+              onClick={() => void syncNow(true)}
             />
           </div>
         }
@@ -351,7 +352,7 @@ export function MiniView() {
         <div
           data-guide="donut"
           class="no-drag"
-          onClick={() => void syncNow()}
+          onClick={() => void syncNow(true)}
           title={t().syncNow}
           style={{
             width: "96px",
@@ -365,7 +366,7 @@ export function MiniView() {
         >
           <span class="inst-caps">{t().session}</span>
           <div style={{ display: "flex", "align-items": "flex-end", gap: "3px" }}>
-            <SegDigits value={store.usage.five_hour} size={42} />
+            <SegDigits value={sessionDisplay()} size={42} />
             <span class="inst-caps" style={{ "font-size": "11px", "margin-bottom": "4px" }}>%</span>
           </div>
         </div>
