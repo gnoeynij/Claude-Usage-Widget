@@ -334,7 +334,7 @@ export function MiniView() {
       <Show
         when={store.theme === "instrument"}
         fallback={
-          <div data-guide="donut">
+          <div data-guide="donut" class="no-drag">
             <Donut
               value={store.usage.five_hour}
               size={96}
@@ -350,8 +350,12 @@ export function MiniView() {
             the at-risk badge (shared) carries the "heading past limit" signal. */}
         <div
           data-guide="donut"
+          class="no-drag"
+          onClick={() => void syncNow()}
+          title={t().syncNow}
           style={{
             width: "96px",
+            cursor: "pointer",
             display: "flex",
             "flex-direction": "column",
             "align-items": "center",
