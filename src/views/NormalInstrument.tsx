@@ -43,7 +43,7 @@ function BlockRow(props: { label: string; value: number }) {
         class="tabular-nums"
         style={{ "text-align": "right", "font-size": "13px", "font-weight": 600 }}
       >
-        {Math.round(props.value)}
+        {Math.round(props.value)}%
       </span>
     </div>
   );
