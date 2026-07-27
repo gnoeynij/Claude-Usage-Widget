@@ -1,4 +1,5 @@
 import { Show, For, createMemo, createSignal } from "solid-js";
+import type { JSX } from "solid-js";
 import { GlassCard } from "../components/GlassCard";
 import { store } from "../state/store";
 import { t } from "../i18n";
@@ -40,6 +41,34 @@ function EmptyHint() {
   return <div class="t-caption label-tertiary">—</div>;
 }
 
+const isInst = () => store.theme === "instrument";
+
+/** Theme-aware card wrapper: glass card or instrument inset zone. Detail is a
+ *  reskin only — the same content/logic renders inside either shell. */
+function Panel(props: { accent?: boolean; children: JSX.Element }) {
+  return (
+    <Show when={isInst()} fallback={<GlassCard accent={props.accent}>{props.children}</GlassCard>}>
+      <div class="inst-zone">{props.children}</div>
+    </Show>
+  );
+}
+
+/** Small square color chip (instrument) vs the round ● bullet (glass). */
+function Dot(props: { color: string }) {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: "8px",
+        height: "8px",
+        "border-radius": isInst() ? "1px" : "50%",
+        background: props.color,
+        "vertical-align": "baseline",
+      }}
+    />
+  );
+}
+
 /** Thin one-line strip: the 5h block is "now" info, demoted from hero card. */
 function ActiveStrip() {
   const a = () => store.detail?.active;
@@ -62,13 +91,14 @@ function ActiveStrip() {
         };
         return (
           <div
+            class={isInst() ? "inst-zone" : undefined}
             style={{
               display: "flex",
               "align-items": "center",
               "justify-content": "space-between",
-              padding: "7px 12px",
-              background: "var(--fill-1)",
-              "border-radius": "var(--r-md)",
+              ...(isInst()
+                ? {}
+                : { padding: "7px 12px", background: "var(--fill-1)", "border-radius": "var(--r-md)" }),
             }}
           >
             <span class="t-caption label-secondary">
@@ -77,7 +107,7 @@ function ActiveStrip() {
                   display: "inline-block",
                   width: "7px",
                   height: "7px",
-                  "border-radius": "50%",
+                  "border-radius": isInst() ? "1px" : "50%",
                   background: "#30d158",
                   "margin-right": "7px",
                 }}
@@ -214,7 +244,7 @@ function DailyCostCard() {
     (range() === 7 || i === peakIdx() || d.date === selDate());
 
   return (
-    <GlassCard accent>
+    <Panel accent>
       <div
         style={{
           display: "flex",
@@ -242,7 +272,7 @@ function DailyCostCard() {
                     style={{
                       padding: "3px 9px",
                       border: "none",
-                      "border-radius": "var(--r-sm)",
+                      "border-radius": isInst() ? "2px" : "var(--r-sm)",
                       background: source() === key ? "var(--fill-2)" : "transparent",
                       color:
                         source() === key
@@ -268,7 +298,7 @@ function DailyCostCard() {
                   style={{
                     padding: "3px 9px",
                     border: "none",
-                    "border-radius": "var(--r-sm)",
+                    "border-radius": isInst() ? "2px" : "var(--r-sm)",
                     background: range() === n ? "var(--accent)" : "transparent",
                     color: range() === n ? "#2a1000" : "var(--label-tertiary)",
                     "font-weight": range() === n ? 600 : 400,
@@ -314,7 +344,11 @@ function DailyCostCard() {
               {(f, i) => (
                 <span>
                   <Show when={i() > 0}>{"  "}</Show>
-                  <span style={{ color: modelColor(f.family) }}>●</span>{" "}
+                  {isInst() ? (
+                    <Dot color={modelColor(f.family)} />
+                  ) : (
+                    <span style={{ color: modelColor(f.family) }}>●</span>
+                  )}{" "}
                   {f.family} {compactCost(f.cost)}
                 </span>
               )}
@@ -375,7 +409,7 @@ function DailyCostCard() {
                         ? "1.5px solid var(--label-tertiary)"
                         : "none",
                     "outline-offset": "2px",
-                    "border-radius": "3px",
+                    "border-radius": isInst() ? "0" : "3px",
                   }}
                   title={`${d.date} · ${formatCost(d.total)}`}
                 >
@@ -410,7 +444,7 @@ function DailyCostCard() {
                       "flex-direction": "column",
                       "justify-content": "flex-end",
                       height: "100%",
-                      "border-radius": "3px 3px 0 0",
+                      "border-radius": isInst() ? "0" : "3px 3px 0 0",
                       overflow: "hidden",
                     }}
                   >
@@ -584,7 +618,7 @@ function DailyCostCard() {
           </div>
         </Show>
       </Show>
-    </GlassCard>
+    </Panel>
   );
 }
 
@@ -604,7 +638,7 @@ function TotalsCard() {
     </div>
   );
   return (
-    <GlassCard>
+    <Panel>
       <div style={{ display: "grid", "grid-template-columns": "1fr 1fr", gap: "var(--s-1) var(--s-4)" }}>
         <div style={{ display: "flex", "flex-direction": "column", gap: "6px", "min-width": 0 }}>
           {row(t().thisWeek, formatCost(p()?.week_cost ?? 0))}
@@ -641,7 +675,7 @@ function TotalsCard() {
           {Math.round(cacheHit())}%
         </span>
       </div>
-    </GlassCard>
+    </Panel>
   );
 }
 
