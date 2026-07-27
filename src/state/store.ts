@@ -138,15 +138,18 @@ export type ModeSizes = Record<Mode, ModeSize | null>;
 export type Toast = { id: number; title: string; body: string; tone: "warn" | "danger" };
 
 /** Per-mode default (w, h, minW, minH). Mini covers donut + 2 capsule rows.
- *  Normal keeps the historical 360×420. Detail's width clears the 560px
- *  container-query breakpoint that switches the detail grid to 2 columns. */
+ *  Detail defaults to its min width since the v2.4 single-column redesign —
+ *  no wider breakpoint left to clear. */
 export const MODE_DEFAULTS: Record<Mode, [number, number, number, number]> = {
   mini: [240, 112, 240, 112],
   // 334 fits the inline weekly caption (projection appended to the reset line).
   // Was bumped to 360 for the S1+T4 warning chip; the chip is gone (projection
   // is inline again), so 334 is the tight fit — 360 left a gap above the footer.
   normal: [320, 334, 320, 334],
-  detail: [592, 619, 520, 520],
+  // 644 = measured height where the full Detail stack (active strip + chart
+  // card + totals, all post-sync rows) fits with no scrollbar under the
+  // stable scrollbar gutter (DetailView main).
+  detail: [520, 644, 520, 520],
 };
 
 /** Visual grammar of the three widget modes: `glass` = the original Liquid
@@ -622,11 +625,10 @@ let userTouchedDark = false;
 function applyModeSize(mode: Mode) {
   const saved = store.modeSizes[mode];
   const [dw, dh, mw, mh] = MODE_DEFAULTS[mode];
-  // Normal is a fixed-design compact widget — always use the default so a stale
-  // auto-persisted size can't pin it and design size changes apply. Detail and
-  // mini honor the user's resized size.
-  const w = mode === "normal" ? dw : (saved?.w ?? dw);
-  const h = mode === "normal" ? dh : (saved?.h ?? dh);
+  // Every mode restores the user's last resized size (persisted in modeSizes);
+  // fall back to the per-mode default only when no saved size exists yet.
+  const w = saved?.w ?? dw;
+  const h = saved?.h ?? dh;
   resizeSuppressUntil = Date.now() + 1000;
   void invoke("set_window_size", {
     width: w,

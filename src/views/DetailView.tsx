@@ -687,6 +687,13 @@ export function DetailView() {
         position: "relative",
         flex: 1,
         overflow: "auto",
+        // Reserve the 8px scrollbar lane permanently. The classic scrollbar
+        // eats content width, so without this Detail has two stable layouts at
+        // the same window height (bar present → labels wrap → taller → bar
+        // justified; bar absent → shorter → no bar) and the mode-switch path
+        // lands in the scrolling one. A stable gutter makes both paths render
+        // the same layout, so one default height fits deterministically.
+        "scrollbar-gutter": "stable",
         padding: "0 var(--s-1) var(--s-1)",
       }}
     >
