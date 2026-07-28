@@ -385,6 +385,11 @@ export function MiniView() {
           // and centering — which read as top-heavy because text weight
           // dominates capsule weight.
           "justify-content": "space-evenly",
+          // The corner badge (⚠/●, absolute at top 6/right 10) shares this
+          // corner with row 1's right-aligned % — reserve its lane while it
+          // shows so they never collide (pre-existing overlap, exposed once
+          // the instrument % went full-contrast white).
+          "padding-top": atRisk() || errInfo() ? "14px" : "0",
         }}
       >
         <MiniRowT
