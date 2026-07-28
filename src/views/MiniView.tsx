@@ -48,7 +48,9 @@ function MiniRowInst(props: { label: string; value: number }) {
     <div>
       <div style={{ display: "flex", "align-items": "baseline", "justify-content": "space-between" }}>
         <span class="inst-caps">{props.label}</span>
-        <span class="inst-caps tabular-nums" style={{ "font-size": "11px" }}>
+        {/* Value drops inst-caps (muted gray) to match Normal's BlockRow:
+            full label color + 600 weight, scaled to Mini's 11px. */}
+        <span class="tabular-nums" style={{ "font-size": "11px", "font-weight": 600 }}>
           {Math.round(clamp(props.value))}%
         </span>
       </div>
