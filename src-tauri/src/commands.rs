@@ -492,14 +492,10 @@ pub async fn open_milestone_window(
             .skip_taskbar(true)
             .build()
             .map_err(|e| e.to_string())?;
-    #[cfg(target_os = "windows")]
-    {
-        let _ = crate::vibrancy_win::apply_mica(&window);
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let _ = crate::vibrancy_mac::apply_mica(&window);
-    }
+    // No vibrancy on purpose: the card sits inside an 8px margin, and any OS
+    // material painted on the window shows there as a frame ring around the
+    // toast (forced-light Mica read as a white border). Fully transparent
+    // window + the CSS glass card alone is the intended look.
     let _ = &window;
     Ok(())
 }
