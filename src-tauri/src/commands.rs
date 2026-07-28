@@ -177,14 +177,14 @@ pub fn open_login_terminal() -> Result<(), String> {
 /// the widget so the guide matches the current theme/language; the frontend
 /// renders `<GuideApp>` when the URL carries `?guide`.
 #[tauri::command]
-pub async fn open_guide_window(app: tauri::AppHandle, lang: String, dark: bool) -> Result<(), String> {
+pub async fn open_guide_window(app: tauri::AppHandle, lang: String, dark: bool, theme: String) -> Result<(), String> {
     use tauri::Manager;
     if let Some(w) = app.get_webview_window("guide") {
         w.show().map_err(|e| e.to_string())?;
         w.set_focus().map_err(|e| e.to_string())?;
         return Ok(());
     }
-    let url = format!("index.html?guide&lang={lang}&dark={}", if dark { 1 } else { 0 });
+    let url = format!("index.html?guide&lang={lang}&dark={}&theme={theme}", if dark { 1 } else { 0 });
     let window = tauri::WebviewWindowBuilder::new(&app, "guide", tauri::WebviewUrl::App(url.into()))
         .title("Claude Usage Widget — Guide")
         .inner_size(1180.0, 920.0)
