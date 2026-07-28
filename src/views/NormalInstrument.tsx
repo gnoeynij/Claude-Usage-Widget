@@ -32,7 +32,9 @@ function BlockRow(props: { label: string; value: number }) {
     <div
       style={{
         display: "grid",
-        "grid-template-columns": "78px 1fr 28px",
+        // 34px fits "100%" at 13px/600 — at 28px the global overflow-wrap:
+        // break-word split it into "100"/"%" across two lines at min width.
+        "grid-template-columns": "78px 1fr 34px",
         "align-items": "center",
         gap: "8px",
       }}
@@ -41,7 +43,7 @@ function BlockRow(props: { label: string; value: number }) {
       <BlockGauge value={props.value} cellW={8} cellH={13} />
       <span
         class="tabular-nums"
-        style={{ "text-align": "right", "font-size": "13px", "font-weight": 600 }}
+        style={{ "text-align": "right", "font-size": "13px", "font-weight": 600, "white-space": "nowrap" }}
       >
         {Math.round(props.value)}%
       </span>
