@@ -13,8 +13,8 @@ pub struct Pricing {
 
 /// USD per million tokens.
 /// Official Anthropic pricing: https://platform.claude.com/docs/en/about-claude/pricing
-/// (last verified 2026-07-01). When Anthropic ships a new model generation,
-/// add an entry below and re-verify the existing ones.
+/// (last verified 2026-07-28 against models/overview.md). When Anthropic ships
+/// a new model generation, add an entry below and re-verify the existing ones.
 pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
     let fable = Pricing {
         // Fable 5 — Mythos-class tier above Opus (released 2026-06-09).
@@ -25,7 +25,8 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
         cache_read: 1.0,
     };
     let opus_current = Pricing {
-        // Opus 4.5 / 4.6 / 4.7 / 4.8 — same price tier.
+        // Opus 4.5 / 4.6 / 4.7 / 4.8 / 5 — same price tier. Opus 5 (released
+        // 2026-07) is a drop-in at Opus 4.8's pricing per the official table.
         input: 5.0,
         output: 25.0,
         cache_write_5m: 6.25,
@@ -76,6 +77,10 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
 
     let mut m = HashMap::new();
     m.insert("claude-fable-5", fable);
+    // Opus 5 — `claude-opus-4` is NOT a prefix of `claude-opus-5`, so without
+    // this entry resolve() returned None and every Opus 5 record counted $0
+    // (observed live 2026-07-28: 1.3k+ such records in a week of JSONL).
+    m.insert("claude-opus-5", opus_current);
     // Mythos 5 — same Mythos-class tier/price as Fable 5 ($10/$50). Limited
     // availability (Project Glasswing), so it won't normally appear in Claude
     // Code JSONL, but priced here so it isn't silently counted as $0.
@@ -154,12 +159,13 @@ const US_INFERENCE_MULTIPLIER: f64 = 1.1;
 
 /// Fast mode (`speed: "fast"`) reprices supported Opus models. Cache rates
 /// derive from the fast base input (5m=1.25x, 1h=2x, read=0.1x), same as the
-/// standard tiers. Official fast pricing (verified 2026-06-10):
-/// Opus 4.8 = $10/$50; Opus 4.6/4.7 = $30/$150. Fable/Sonnet/Haiku have no
-/// fast tier — `speed:"fast"` shouldn't appear for them, and resolve falls
-/// back to standard if it ever does.
+/// standard tiers. Official fast pricing (verified 2026-07-28):
+/// Opus 5 / 4.8 = $10/$50; Opus 4.6/4.7 = $30/$150 (4.6/4.7 fast has since
+/// been removed from the API — kept here so historical JSONL still prices).
+/// Fable/Sonnet/Haiku have no fast tier — `speed:"fast"` shouldn't appear for
+/// them, and resolve falls back to standard if it ever does.
 fn resolve_fast(model: &str) -> Option<Pricing> {
-    let opus_48_fast = Pricing {
+    let opus_5_48_fast = Pricing {
         input: 10.0,
         output: 50.0,
         cache_write_5m: 12.5,
@@ -177,7 +183,8 @@ fn resolve_fast(model: &str) -> Option<Pricing> {
     // must be followed by end-of-string or '-' so a date suffix matches but a
     // hypothetical `claude-opus-48` would not.
     for (base, pricing) in [
-        ("claude-opus-4-8", opus_48_fast),
+        ("claude-opus-5", opus_5_48_fast),
+        ("claude-opus-4-8", opus_5_48_fast),
         ("claude-opus-4-7", opus_67_fast),
         ("claude-opus-4-6", opus_67_fast),
     ] {
@@ -283,6 +290,32 @@ mod tests {
         // claude-opus-4-7-<date> must hit opus_current ($5), not opus_legacy ($15)
         // via the shorter `claude-opus-4` prefix.
         approx(cost_usd("claude-opus-4-7-20250416", &toks(1_000_000, 0, 0, 0, 0)), 5.0);
+    }
+
+    #[test]
+    fn opus_5_uses_current_pricing_not_zero() {
+        // Regression guard: `claude-opus-4` is not a prefix of `claude-opus-5`,
+        // so before the entry was added Opus 5 records silently cost $0.
+        // Official (2026-07-28): $5/$25, cache 6.25/10/0.5 — same as Opus 4.8.
+        approx(cost_usd("claude-opus-5", &toks(1_000_000, 0, 0, 0, 0)), 5.0);
+        approx(cost_usd("claude-opus-5", &toks(0, 1_000_000, 0, 0, 0)), 25.0);
+        approx(cost_usd("claude-opus-5", &toks(0, 0, 1_000_000, 0, 0)), 6.25);
+        approx(cost_usd("claude-opus-5", &toks(0, 0, 0, 1_000_000, 0)), 10.0);
+        approx(cost_usd("claude-opus-5", &toks(0, 0, 0, 0, 1_000_000)), 0.5);
+        // Future date-suffixed id resolves to the same tier; family is Opus.
+        approx(cost_usd("claude-opus-5-20260715", &toks(1_000_000, 0, 0, 0, 0)), 5.0);
+        assert_eq!(family_of("claude-opus-5"), "Opus");
+    }
+
+    #[test]
+    fn opus_5_fast_mode_2x() {
+        // Opus 5 fast = $10/$50 (2x standard), same tier as Opus 4.8 fast.
+        let t = UsageTokens { input: 1_000_000, speed_fast: true, ..Default::default() };
+        approx(cost_usd("claude-opus-5", &t), 10.0);
+        let t = UsageTokens { output: 1_000_000, speed_fast: true, ..Default::default() };
+        approx(cost_usd("claude-opus-5", &t), 50.0);
+        let t = UsageTokens { cache_creation_5m: 1_000_000, speed_fast: true, ..Default::default() };
+        approx(cost_usd("claude-opus-5", &t), 12.5);
     }
 
     #[test]
