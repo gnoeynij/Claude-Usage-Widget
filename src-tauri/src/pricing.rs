@@ -191,7 +191,7 @@ fn resolve_fast(model: &str) -> Option<Pricing> {
         if model == base
             || model
                 .strip_prefix(base)
-                .map_or(false, |rest| rest.starts_with('-'))
+                .is_some_and(|rest| rest.starts_with('-'))
         {
             return Some(pricing);
         }
