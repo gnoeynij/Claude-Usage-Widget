@@ -41,6 +41,12 @@ html {
   text-rendering: optimizeLegibility;
   font-variant-numeric: tabular-nums;
   letter-spacing: var(--letter-tight);
+  /* CJK default breaks anywhere, splitting Korean words mid-eojeol
+     ("사용합" / "니다"). keep-all wraps Korean at word boundaries only —
+     English is unaffected. break-word is the escape hatch so an unbreakable
+     token (URL, long path) still wraps instead of overflowing the panel. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
   user-select: none;
   -webkit-user-select: none;
   cursor: default;
@@ -219,6 +225,41 @@ a {
    ────────────────────────────────────────────────────────────────────────── */
 /* Detail is a single-column stack since the v2.4 trend-first redesign —
    the old 2-col .detail-grid (container query) was removed with it. */
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Settings inset groups — Apple-style grouped rows on the glass card.
+   Rows separate with hairlines; the group carries the fill + radius.
+   ────────────────────────────────────────────────────────────────────────── */
+.inset-group {
+  display: flex;
+  flex-direction: column;
+  background: var(--fill-3);
+  border-radius: var(--r-md);
+}
+.inset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: 8px 12px;
+  min-height: 36px;
+  box-sizing: border-box;
+}
+.inset-group > * + * {
+  border-top: 1px solid var(--separator);
+}
+/* Stacked variant: label line on top, full-width control beneath. */
+.inset-row--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+button.inset-row {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: var(--label);
+}
 
 /* ──────────────────────────────────────────────────────────────────────────
    Custom range input — Apple-flavored slider for opacity control.

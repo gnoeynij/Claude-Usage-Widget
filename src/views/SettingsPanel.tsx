@@ -25,18 +25,15 @@ import { checkForUpdate, installUpdate } from "../state/updater";
 import { formatCost } from "../utils/format";
 import { t } from "../i18n";
 
-function Section(props: { label: string; children: JSX.Element; guide?: string }) {
+/** Apple-style inset group: caps label above a filled card of hairline rows. */
+function Group(props: { label: string; children: JSX.Element; guide?: string }) {
   return (
     <div
       data-guide={props.guide}
-      style={{
-        display: "flex",
-        "flex-direction": "column",
-        gap: "6px",
-      }}
+      style={{ display: "flex", "flex-direction": "column", gap: "6px" }}
     >
       <div class="t-section">{props.label}</div>
-      {props.children}
+      <div class="inset-group">{props.children}</div>
     </div>
   );
 }
@@ -47,13 +44,7 @@ function SwitchRow(props: {
   onChange: (v: boolean) => void;
 }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        "align-items": "center",
-        "justify-content": "space-between",
-      }}
-    >
+    <div class="inset-row">
       <span class="t-body">{props.label}</span>
       <Switch checked={props.checked} onChange={props.onChange} />
     </div>
@@ -64,7 +55,7 @@ function close() {
   setStore("settingsOpen", false);
 }
 
-function UpdateSection() {
+function UpdateRows() {
   // Ephemeral "최신 버전입니다" toast — only after a manual check finds nothing.
   // The persistent updateStatus reverts to "idle" so we need a local flash
   // to confirm the click actually checked.
@@ -84,49 +75,43 @@ function UpdateSection() {
   }
 
   return (
-    <Section guide="set-update" label={t().checkForUpdates}>
+    <>
       <Show when={store.updateStatus === "idle"}>
         <button
-          class="ring-hover"
+          class="inset-row ring-hover"
+          data-guide="set-update"
           onClick={() => void onClickCheck()}
-          style={{
-            display: "inline-flex",
-            "align-items": "center",
-            "justify-content": "center",
-            gap: "6px",
-            padding: "6px 10px",
-            "border-radius": "8px",
-            background: "var(--accent-tint)",
-            color: "var(--accent)",
-            "font-weight": 500,
-            "align-self": "flex-start",
-          }}
         >
-          <RefreshCw size={12} />
-          <span class="t-body">{t().checkForUpdates}</span>
+          <span style={{ display: "inline-flex", "align-items": "center", gap: "6px" }}>
+            <RefreshCw size={12} />
+            <span class="t-body">{t().checkForUpdates}</span>
+          </span>
+          <span class="t-caption label-tertiary tabular-nums">v{store.version}</span>
         </button>
         <Show when={flash() === "up_to_date"}>
-          <span class="t-body label-secondary">{t().updateUpToDate(store.version)}</span>
+          <div class="inset-row">
+            <span class="t-caption label-secondary">{t().updateUpToDate(store.version)}</span>
+          </div>
         </Show>
         <Show when={flash() === "error"}>
-          <span class="t-body" style={{ color: "var(--danger)" }}>
-            {t().updateError}
-          </span>
+          <div class="inset-row">
+            <span class="t-caption" style={{ color: "var(--danger)" }}>
+              {t().updateError}
+            </span>
+          </div>
         </Show>
       </Show>
 
       <Show when={store.updateStatus === "checking"}>
-        <span
-          class="t-body label-secondary"
-          style={{
-            display: "inline-flex",
-            "align-items": "center",
-            gap: "6px",
-          }}
-        >
-          <RefreshCw size={12} class="spin" />
-          {t().updateChecking}
-        </span>
+        <div class="inset-row">
+          <span
+            class="t-body label-secondary"
+            style={{ display: "inline-flex", "align-items": "center", gap: "6px" }}
+          >
+            <RefreshCw size={12} class="spin" />
+            {t().updateChecking}
+          </span>
+        </div>
       </Show>
 
       <Show
@@ -135,7 +120,7 @@ function UpdateSection() {
           store.updateStatus === "downloading"
         }
       >
-        <div style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>
+        <div class="inset-row inset-row--stack">
           <span class="t-body">
             {store.updateInfo
               ? t().updateNewVersion(store.updateInfo.version)
@@ -146,7 +131,7 @@ function UpdateSection() {
               position: "relative",
               height: "4px",
               "border-radius": "2px",
-              background: "var(--fill-tertiary, rgba(255,255,255,0.08))",
+              background: "var(--fill-2)",
               overflow: "hidden",
             }}
           >
@@ -169,7 +154,7 @@ function UpdateSection() {
       </Show>
 
       <Show when={store.updateStatus === "ready"}>
-        <div style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>
+        <div class="inset-row inset-row--stack">
           <span class="t-body">
             {store.updateInfo
               ? t().updateNewVersion(store.updateInfo.version)
@@ -196,7 +181,7 @@ function UpdateSection() {
       </Show>
 
       <Show when={store.updateStatus === "error"}>
-        <div style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>
+        <div class="inset-row inset-row--stack">
           <span class="t-body" style={{ color: "var(--danger)" }}>
             {t().updateError}
           </span>
@@ -210,9 +195,8 @@ function UpdateSection() {
               gap: "6px",
               padding: "6px 10px",
               "border-radius": "8px",
-              background: "var(--accent-tint)",
-              color: "var(--accent)",
-              "font-weight": 500,
+              background: "var(--fill-3)",
+              color: "var(--label-secondary)",
               "align-self": "flex-start",
             }}
           >
@@ -221,11 +205,11 @@ function UpdateSection() {
           </button>
         </div>
       </Show>
-    </Section>
+    </>
   );
 }
 
-function DeviceSyncSection() {
+function DeviceSyncRows() {
   const [detected, setDetected] = createSignal<string[]>([]);
   const [manual, setManual] = createSignal("");
   onMount(() => {
@@ -235,30 +219,26 @@ function DeviceSyncSection() {
     const v = p.trim();
     if (v) setSyncFolder(v);
   };
+  // Row shows just the folder name — the full path lives in the tooltip so
+  // the group isn't dominated by a wrapped path string.
+  const folderName = () =>
+    store.syncFolder.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? store.syncFolder;
   return (
-    <Section guide="set-device-sync" label={t().deviceSync}>
-      <span class="t-caption label-tertiary">{t().deviceSyncHint}</span>
-      <Show
-        when={store.syncFolder}
-        fallback={
-          <>
-            <For each={detected()}>
-              {(f) => (
-                <button
-                  class="ring-hover"
-                  onClick={() => pick(f)}
-                  style={{
-                    "text-align": "left",
-                    padding: "6px 10px",
-                    "border-radius": "8px",
-                    background: "var(--fill-3)",
-                    "word-break": "break-all",
-                  }}
-                >
-                  <span class="t-caption">{f}</span>
-                </button>
-              )}
-            </For>
+    <Show
+      when={store.syncFolder}
+      fallback={
+        <>
+          <div class="inset-row">
+            <span class="t-caption label-tertiary">{t().deviceSyncHint}</span>
+          </div>
+          <For each={detected()}>
+            {(f) => (
+              <button class="inset-row ring-hover" onClick={() => pick(f)}>
+                <span class="t-caption" style={{ "word-break": "break-all" }}>{f}</span>
+              </button>
+            )}
+          </For>
+          <div class="inset-row">
             <input
               type="text"
               placeholder={t().folderManual}
@@ -266,42 +246,30 @@ function DeviceSyncSection() {
               onInput={(e) => setManual(e.currentTarget.value)}
               onChange={(e) => pick(e.currentTarget.value)}
               style={{
-                padding: "6px 10px",
-                "border-radius": "8px",
-                background: "var(--fill-3)",
-                border: "1px solid var(--separator)",
+                flex: 1,
+                padding: 0,
+                background: "transparent",
+                border: "none",
+                outline: "none",
                 color: "var(--label)",
               }}
             />
-          </>
-        }
-      >
-        <span
-          class="t-caption label-secondary"
-          style={{ "word-break": "break-all" }}
-        >
-          {store.syncFolder}
-        </span>
+          </div>
+        </>
+      }
+    >
+      <div class="inset-row" title={store.syncFolder}>
+        <span class="t-body">{folderName()}</span>
         <Show when={store.combinedDevices > 0}>
-          <span class="t-caption label-tertiary">
+          <span class="t-caption label-tertiary tabular-nums">
             {t().deviceCount(store.combinedDevices)} · {formatCost(store.combinedCost)}
           </span>
         </Show>
-        <button
-          class="ring-hover"
-          onClick={() => setSyncFolder("")}
-          style={{
-            "align-self": "flex-start",
-            padding: "6px 10px",
-            "border-radius": "8px",
-            background: "var(--fill-3)",
-            color: "var(--label-secondary)",
-          }}
-        >
-          <span class="t-caption">{t().disableSync}</span>
-        </button>
-      </Show>
-    </Section>
+      </div>
+      <button class="inset-row ring-hover" onClick={() => setSyncFolder("")}>
+        <span class="t-caption label-secondary">{t().disableSync}</span>
+      </button>
+    </Show>
   );
 }
 
@@ -437,91 +405,89 @@ export function SettingsPanel() {
             gap: "var(--s-3)",
           }}
         >
-        <button
-          class="ring-hover"
-          data-guide="set-guide"
-          onClick={() =>
-            void invoke("open_guide_window", { lang: store.lang, dark: store.dark })
-          }
-          style={{
-            display: "inline-flex",
-            "align-items": "center",
-            "justify-content": "center",
-            gap: "6px",
-            padding: "6px 10px",
-            "border-radius": "8px",
-            background: "var(--accent-tint)",
-            color: "var(--accent)",
-            "font-weight": 500,
-            "align-self": "flex-start",
-          }}
-        >
-          <BookOpen size={12} />
-          <span class="t-body">{t().guide}</span>
-        </button>
+          <Group label={t().groupAppearance} guide="set-appearance">
+            <div class="inset-row">
+              <span class="t-body">{t().theme}</span>
+              <SegmentedControl<Theme>
+                value={store.theme}
+                onChange={setTheme}
+                options={[
+                  { value: "glass", label: t().themeGlass },
+                  { value: "instrument", label: t().themeInstrument },
+                ]}
+              />
+            </div>
+            <SwitchRow label={t().darkMode} checked={store.dark} onChange={setDark} />
+            <SwitchRow
+              label={t().alwaysOnTop}
+              checked={store.alwaysOnTop}
+              onChange={(v) => void setAlwaysOnTop(v)}
+            />
+            <div class="inset-row inset-row--stack">
+              <span class="t-body">{t().opacity}</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={store.opacity}
+                onInput={(e) => setOpacity(Number(e.currentTarget.value))}
+              />
+            </div>
+          </Group>
 
-        <Section guide="set-lang" label={t().language}>
-          <SegmentedControl<Lang>
-            value={store.lang}
-            onChange={setLang}
-            options={[
-              { value: "en", label: "English" },
-              { value: "ko", label: "한국어" },
-            ]}
-          />
-        </Section>
-        <Section guide="set-theme" label={t().theme}>
-          <SegmentedControl<Theme>
-            value={store.theme}
-            onChange={setTheme}
-            options={[
-              { value: "glass", label: t().themeGlass },
-              { value: "instrument", label: t().themeInstrument },
-            ]}
-          />
-        </Section>
-        <Section guide="set-sync" label={t().autoSync}>
-          <SegmentedControl
-            value={String(store.syncIntervalMin)}
-            onChange={(v) => setSyncIntervalMin(Number(v))}
-            options={[
-              { value: "0", label: t().off },
-              { value: "5", label: t().m5 },
-              { value: "10", label: t().m10 },
-              { value: "30", label: t().m30 },
-              { value: "60", label: t().h1 },
-            ]}
-          />
-        </Section>
-        <div data-guide="set-appearance" style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>
-          <SwitchRow
-            label={t().alwaysOnTop}
-            checked={store.alwaysOnTop}
-            onChange={(v) => void setAlwaysOnTop(v)}
-          />
-          <SwitchRow
-            label={t().darkMode}
-            checked={store.dark}
-            onChange={setDark}
-          />
-          <SwitchRow
-            label={t().autoStart}
-            checked={autoStart()}
-            onChange={(v) => void toggleAutoStart(v)}
-          />
-        </div>
-        <Section guide="set-opacity" label={t().opacity}>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="5"
-            value={store.opacity}
-            onInput={(e) => setOpacity(Number(e.currentTarget.value))}
-          />
-        </Section>
-        <DeviceSyncSection />
-        <UpdateSection />
+          <Group label={t().groupGeneral} guide="set-general">
+            <div class="inset-row">
+              <span class="t-body">{t().language}</span>
+              <SegmentedControl<Lang>
+                value={store.lang}
+                onChange={setLang}
+                options={[
+                  { value: "en", label: "English" },
+                  { value: "ko", label: "한국어" },
+                ]}
+              />
+            </div>
+            <div class="inset-row inset-row--stack">
+              <span class="t-body">{t().autoSync}</span>
+              <SegmentedControl
+                value={String(store.syncIntervalMin)}
+                onChange={(v) => setSyncIntervalMin(Number(v))}
+                options={[
+                  { value: "0", label: t().off },
+                  { value: "5", label: t().m5 },
+                  { value: "10", label: t().m10 },
+                  { value: "30", label: t().m30 },
+                  { value: "60", label: t().h1 },
+                ]}
+              />
+            </div>
+            <SwitchRow
+              label={t().autoStart}
+              checked={autoStart()}
+              onChange={(v) => void toggleAutoStart(v)}
+            />
+          </Group>
+
+          <Group label={t().deviceSync} guide="set-device-sync">
+            <DeviceSyncRows />
+          </Group>
+
+          <Group label={t().groupAbout}>
+            <button
+              class="inset-row ring-hover"
+              data-guide="set-guide"
+              onClick={() =>
+                void invoke("open_guide_window", { lang: store.lang, dark: store.dark, theme: store.theme })
+              }
+            >
+              <span style={{ display: "inline-flex", "align-items": "center", gap: "6px" }}>
+                <BookOpen size={12} />
+                <span class="t-body">{t().guide}</span>
+              </span>
+            </button>
+            <UpdateRows />
+          </Group>
         </div>
       </div>
     </div>
