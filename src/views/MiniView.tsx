@@ -380,20 +380,20 @@ export function MiniView() {
           "align-self": "stretch",
           display: "flex",
           "flex-direction": "column",
-          // space-evenly distributes the two MiniRows across the full donut
-          // height (96px) instead of collapsing them to their content height
-          // and centering — which read as top-heavy because text weight
-          // dominates capsule weight.
-          "justify-content": "space-evenly",
+          // space-between (was space-evenly): each row is a tight label+gauge
+          // unit, and the leftover vertical space must land at the BOTTOM as
+          // visible breathing room — evenly split it across all three gaps,
+          // which kept the last gauge near-flush with the panel edge no
+          // matter how much the intra-row spacing was tightened.
+          "justify-content": "space-between",
           // The corner badge (⚠/●, absolute at top 6/right 10) shares this
           // corner with row 1's right-aligned % — reserve its lane while it
           // shows so they never collide (pre-existing overlap, exposed once
           // the instrument % went full-contrast white).
-          "padding-top": atRisk() || errInfo() ? "14px" : "0",
-          // Guaranteed floor breathing room: space-evenly alone would dilute
-          // the tightened label→gauge margin across all three gaps, leaving
-          // the last gauge still flush with the panel's bottom edge.
-          "padding-bottom": "4px",
+          "padding-top": atRisk() || errInfo() ? "14px" : "6px",
+          // Fixed floor margin: with space-between this IS the exact gap
+          // between the last gauge and the panel's bottom edge.
+          "padding-bottom": "10px",
         }}
       >
         <MiniRowT
