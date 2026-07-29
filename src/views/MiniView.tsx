@@ -54,7 +54,7 @@ function MiniRowInst(props: { label: string; value: number }) {
           {Math.round(clamp(props.value))}%
         </span>
       </div>
-      <div style={{ "margin-top": "4px" }}>
+      <div style={{ "margin-top": "2px" }}>
         <BlockGauge value={props.value} cells={10} cellW={9} cellH={7} />
       </div>
     </div>
@@ -390,6 +390,10 @@ export function MiniView() {
           // shows so they never collide (pre-existing overlap, exposed once
           // the instrument % went full-contrast white).
           "padding-top": atRisk() || errInfo() ? "14px" : "0",
+          // Guaranteed floor breathing room: space-evenly alone would dilute
+          // the tightened label→gauge margin across all three gaps, leaving
+          // the last gauge still flush with the panel's bottom edge.
+          "padding-bottom": "4px",
         }}
       >
         <MiniRowT
