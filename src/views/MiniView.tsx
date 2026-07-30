@@ -57,7 +57,13 @@ function MiniRowInst(props: { label: string; value: number }) {
           {Math.round(clamp(props.value))}%
         </span>
       </div>
-      <div style={{ "margin-top": "1px" }}>
+      {/* flex kills the inline line-box slack under the gauge span (~4px of
+          descender space) so the cells' bottom edge IS the unit's bottom —
+          needed for the exact FABLE-gauge ↔ session-digits bottom line-up.
+          The 3px gap widens INSIDE each unit: with the column's space-between,
+          row 1 keeps its label line (gauge drops) and row 2 keeps its gauge
+          line (label rises) — the band anchors stay put. */}
+      <div style={{ "margin-top": "6px", display: "flex" }}>
         <BlockGauge value={props.value} cells={10} cellW={9} cellH={7} />
       </div>
     </div>
@@ -199,7 +205,9 @@ export function MiniView() {
             position: "absolute",
             // Inset past the 10px window corner radius (--r-window) so the
             // glyph lands on the painted panel, not the transparent corner.
-            top: "6px",
+            // 9px (was 6): visually balances against the content band that
+            // now starts at ~28px — still clear of the ALL MODELS line.
+            top: "9px",
             right: "10px",
             "font-size": "13px",
             "line-height": 1,
@@ -389,14 +397,15 @@ export function MiniView() {
           // which kept the last gauge near-flush with the panel edge no
           // matter how much the intra-row spacing was tightened.
           "justify-content": "space-between",
-          // The corner badge (⚠/●, absolute at top 6/right 10) shares this
-          // corner with row 1's right-aligned % — reserve its lane while it
-          // shows so they never collide (pre-existing overlap, exposed once
-          // the instrument % went full-contrast white).
-          "padding-top": atRisk() || errInfo() ? "14px" : "6px",
-          // Fixed floor margin: with space-between this IS the exact gap
-          // between the last gauge and the panel's bottom edge.
-          "padding-bottom": "10px",
+          // 20px lines the ALL MODELS caps' GLYPHS up with SESSION's: box tops
+          // match at 18px, but SESSION keeps inst-caps line-height 1.2 (~2px
+          // leading above the glyphs) while this label runs line-height 1 —
+          // so the glyph line needs the extra 2px. Also clears the corner
+          // badge (⚠/●, y 6–19), so no conditional badge-lane padding.
+          "padding-top": "20px",
+          // 19px puts the FABLE gauge's bottom edge on the session digits'
+          // bottom line (measured 84.5 in the 112px window; 104 − 19 = 85).
+          "padding-bottom": "19px",
         }}
       >
         <MiniRowT
