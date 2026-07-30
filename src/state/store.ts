@@ -22,6 +22,7 @@ import {
   type LimitProjection,
   type PaceSample,
 } from "../utils/project";
+import { isSameWindow } from "../utils/notifyWindow";
 import { t } from "../i18n";
 
 export type Mode = "mini" | "normal" | "detail";
@@ -388,7 +389,10 @@ function pickDueAndReset(
   const block = blockId ?? null;
   if (block === null) return [];
   const keys = SCOPE_KEYS[scope];
-  if (block !== store[keys.block]) {
+  // Tolerant window identity — the API's resets_at jitters per poll, and an
+  // exact compare here reset the fired-flags (and re-fired the toast) on
+  // every sync once past a threshold. See utils/notifyWindow.ts.
+  if (!isSameWindow(store[keys.block], block)) {
     setStore(keys.block, block);
     setStore(keys.levels, []);
     void persistSetting(keys.block, block);
@@ -562,7 +566,9 @@ async function maybeNotifyProjection(usage: UsagePayload) {
       c.proj.projectedPct >= PROJ_NOTIFY_MARGIN &&
       c.pct < PROJ_NOTIFY_MAX_PCT &&
       c.block != null &&
-      store[c.key] !== c.block,
+      // Tolerant compare — exact equality re-armed (and re-fired) this alert
+      // on every sync because resets_at jitters per poll.
+      !isSameWindow(store[c.key], c.block),
   );
   if (due.length === 0) return;
 
