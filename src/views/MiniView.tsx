@@ -46,15 +46,18 @@ function MiniRow(props: { label: string; value: number; projected?: number | nul
 function MiniRowInst(props: { label: string; value: number }) {
   return (
     <div>
-      <div style={{ display: "flex", "align-items": "baseline", "justify-content": "space-between" }}>
-        <span class="inst-caps">{props.label}</span>
+      {/* line-height 1: the value's default body line-height left ~3px of
+          descender slack under the baseline, reading as extra text→gauge gap
+          on top of the margin. */}
+      <div style={{ display: "flex", "align-items": "baseline", "justify-content": "space-between", "line-height": 1 }}>
+        <span class="inst-caps" style={{ "line-height": 1 }}>{props.label}</span>
         {/* Value drops inst-caps (muted gray) to match Normal's BlockRow:
             full label color + 600 weight, scaled to Mini's 11px. */}
         <span class="tabular-nums" style={{ "font-size": "11px", "font-weight": 600 }}>
           {Math.round(clamp(props.value))}%
         </span>
       </div>
-      <div style={{ "margin-top": "2px" }}>
+      <div style={{ "margin-top": "1px" }}>
         <BlockGauge value={props.value} cells={10} cellW={9} cellH={7} />
       </div>
     </div>
