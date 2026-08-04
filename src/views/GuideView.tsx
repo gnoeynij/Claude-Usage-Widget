@@ -129,8 +129,8 @@ const CALLOUTS: Record<GuideMode, Callout[]> = {
       desc: { en: "Appears when on pace to hit a limit, or when the connection needs attention (e.g. token expired). Click for details.", ko: "한도 도달이 예상되거나 연결에 주의가 필요할 때(예: 토큰 만료) 표시됩니다. 클릭하면 상세 정보를 볼 수 있습니다." } },
     { anchor: "weekly", side: "right", y: 240,
       title: { en: "Weekly usage", ko: "주간 사용량" },
-      desc: { en: "All models plus your plan's per-model cap (e.g. Fable), as compact bars. A projected dot marks expected usage at reset.", ko: "전체 모델과 모델별 한도(예: Fable)를 얇은 막대로 표시합니다. 예측 도트는 초기화 시 예상 사용량을 표시합니다." },
-      inst: { desc: { en: "All models plus your plan's per-model cap (e.g. Fable), as micro block gauges.", ko: "전체 모델과 모델별 한도(예: Fable)를 마이크로 블록 게이지로 표시합니다." } } },
+      desc: { en: "All models plus your plan's per-model cap (e.g. Fable), as compact bars. A projected dot marks expected usage at reset. Hover to peek at the session & weekly reset countdowns.", ko: "전체 모델과 모델별 한도(예: Fable)를 얇은 막대로 표시합니다. 예측 도트는 초기화 시 예상 사용량을 표시합니다. 마우스를 올리면 세션·주간 초기화까지 남은 시간이 표시됩니다." },
+      inst: { desc: { en: "All models plus your plan's per-model cap (e.g. Fable), as micro block gauges. Hover to peek at the session & weekly reset countdowns.", ko: "전체 모델과 모델별 한도(예: Fable)를 마이크로 블록 게이지로 표시합니다. 마우스를 올리면 세션·주간 초기화까지 남은 시간이 표시됩니다." } } },
   ],
   detail: [
     { anchor: "active", side: "left", y: 120,

@@ -15,7 +15,10 @@ import {
 } from "../utils/project";
 import { startWindowDrag } from "../utils/drag";
 import { clamp } from "../utils/math";
-import { projText } from "../utils/format";
+import { projText, formatCountdown } from "../utils/format";
+import { formatResetsIn } from "./limitsVm";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { error as logError } from "@tauri-apps/plugin-log";
 
 function MiniRow(props: { label: string; value: number; projected?: number | null }) {
   return (
@@ -141,6 +144,20 @@ export function MiniView() {
   createEffect(() => {
     if (!atRisk() && !errInfo()) setInfoOpen(false);
   });
+  // Weekly-zone hover tooltip — the same native-title treatment as Normal's
+  // weekly caption, carrying the session/weekly reset countdowns. Minute
+  // granularity: a native tooltip is a static snapshot, so live seconds would
+  // just read stale.
+  const zoneTooltip = () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    store.tickMinute;
+    const lines: string[] = [];
+    const c = formatCountdown(store.usage.session_resets_at);
+    if (c) lines.push(`${t().session} · ${t().resetsIn(c.h, c.m)}`);
+    const w = formatResetsIn(store.usage.weekly_resets_at);
+    if (w) lines.push(`${t().weekly} · ${w}`);
+    return lines.join("\n");
+  };
   // Each tracked limit's current % + projection — drives both the click-to-open
   // in-Mini info overlay and the native-title hover summary.
   const limitRows = (): Array<{ label: string; pct: number; proj: LimitProjection | null }> => {
@@ -386,6 +403,21 @@ export function MiniView() {
       </Show>
       <div
         data-guide="weekly"
+        class="no-drag"
+        title={zoneTooltip() || undefined}
+        // no-drag exempts the zone from the OS drag hit-test — WebView2 never
+        // tracks hover inside app-region:drag areas, so the title tooltip
+        // would never show there. Left-press restores window drag via the JS
+        // API — the same mechanism main uses on macOS. startWindowDrag can't
+        // be reused here: its .no-drag guard would see this zone and bail.
+        // Right-press stays out so the DOM contextmenu listener (custom menu)
+        // still fires.
+        onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          getCurrentWindow()
+            .startDragging()
+            .catch((err) => void logError(`startDragging failed: ${err}`));
+        }}
         style={{
           flex: 1,
           "align-self": "stretch",
