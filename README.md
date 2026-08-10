@@ -81,9 +81,9 @@ Every string switches instantly, including time labels and AM/PM.
 ### macOS
 1. **Download** — Grab the latest `Claude Widget_X.Y.Z_aarch64.dmg` from the [Releases](../../releases) tab (Apple Silicon).
 2. **Install** — Open the .dmg, drag `Claude Widget.app` into `/Applications`.
-3. **First launch — Gatekeeper bypass** — The .dmg is *ad-hoc signed* (not paid Apple Developer ID), so macOS refuses the first launch with *"Apple could not verify…"*. Two options:
-   - **Right-click → Open** in Finder, then click *Open* in the dialog. macOS remembers the choice — subsequent launches are normal.
-   - Or run once in Terminal: `xattr -d com.apple.quarantine "/Applications/Claude Widget.app"`
+3. **First launch — Gatekeeper bypass** — The build ships without a paid Apple Developer signature, so macOS blocks the first launch with *"Apple could not verify that 'Claude Widget' is free of malware…"* (that dialog only has a Done button — no bypass option right there). One of these, **once**, clears it for good:
+   - **Terminal, one line** (most reliable): `xattr -d com.apple.quarantine "/Applications/Claude Widget.app"`
+   - **Or System Settings**: after seeing the warning once, go to System Settings → Privacy & Security → scroll down → click **"Open Anyway"** next to the Claude Widget block notice → authenticate → relaunch.
 4. **Run** — The widget reads your OAuth token from the macOS Keychain — wherever the `claude` CLI stored it. No extra setup if you've used Claude Code at least once on this Mac.
 
 ### Controls (Windows & macOS)

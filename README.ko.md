@@ -81,9 +81,9 @@ Claude Code를 매일 사용하는 개발자를 위한 가벼운 데스크탑 �
 ### macOS
 1. **다운로드** — [Releases](../../releases) 탭에서 최신 `Claude Widget_X.Y.Z_aarch64.dmg`를 받습니다 (Apple Silicon).
 2. **설치** — .dmg 더블클릭, `Claude Widget.app`을 `/Applications`로 드래그.
-3. **첫 실행 — Gatekeeper 우회** — Apple Developer 인증서 없이 *ad-hoc 서명*된 빌드라 macOS가 첫 실행을 차단합니다 (*"Apple이 확인할 수 없습니다…"* 경고). 두 가지 방법:
-   - **Finder에서 우클릭 → 열기** 후 다이얼로그에서 *열기* 클릭. 한 번 허용하면 이후 일반 실행 가능.
-   - 또는 터미널 1회: `xattr -d com.apple.quarantine "/Applications/Claude Widget.app"`
+3. **첫 실행 — Gatekeeper 우회** — Apple Developer 유료 인증 없는 빌드라, 첫 실행 시 macOS가 *"Apple은 'Claude Widget'에 있을 수 있는 악성 코드가 없음을 확인할 수 없습니다"* 로 차단합니다 (이 다이얼로그엔 "완료"만 있고 그 자리에서 바로 열 방법은 없음). 아래 중 하나로 **한 번만** 우회하면 이후엔 평범하게 실행됩니다:
+   - **터미널에서 한 줄** (가장 확실함): `xattr -d com.apple.quarantine "/Applications/Claude Widget.app"`
+   - **또는 시스템 설정**: 경고를 한 번 본 뒤 시스템 설정 → 개인정보 보호 및 보안 → 아래로 스크롤 → "Claude Widget" 차단 알림 옆 **"그래도 열기"** 클릭 → 인증 → 다시 실행.
 4. **실행** — `claude` CLI가 저장한 OAuth 토큰을 macOS Keychain에서 자동으로 읽습니다. 이 Mac에서 Claude Code를 한 번이라도 사용했다면 추가 설정 없이 동작.
 
 ### 조작 (양 OS 공통)
