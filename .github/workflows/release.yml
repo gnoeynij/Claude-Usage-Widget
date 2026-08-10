@@ -86,6 +86,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS dmg 번들러가 예쁜 Finder 창(배경·아이콘 배치)을 만들려고
+          # AppleScript 로 Finder 를 조작하는데, headless CI 에는 원래 지원
+          # 대상이 아님(Tauri 메인테이너 공식 확인) — 셸 에러 없이 "성공"으로
+          # 끝나면서도 내부적으로 깨진 dmg 를 만들어 사용자 마운트 시 "손상됨"
+          # 으로만 드러난 사고 발생(v2.5.0). 이 변수가 CI 감지를 확실히 살려
+          # Finder 스텝을 건너뛰게 강제 — 우린 배경·아이콘 커스텀을 안 쓰므로
+          # 잃는 것 없음. https://github.com/tauri-apps/tauri-action/issues/1003
+          TAURI_BUNDLER_DMG_IGNORE_CI: false
         with:
           tagName: ${{ github.ref_name }}
           releaseName: ${{ github.ref_name }}
@@ -94,3 +102,6 @@ jobs:
           # v2.0.2 → 정식, v2.0.2-rc1 → prerelease (dash 포함 자동 판별)
           prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: true
+          # dmg 번들 corruption 재발 시 bundle_dmg.sh 내부 로그 회수용
+          # (기본은 stdout 에 안 찍힘 — CLAUDE.md 회귀 §8 과 같은 패턴)
+          args: --verbose
