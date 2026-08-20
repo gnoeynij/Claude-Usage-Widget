@@ -78,11 +78,24 @@ fn read_credentials_raw() -> Option<String> {
                         return Some(s.trim().to_string());
                     }
                 }
-                Ok(o) => log::warn!(
-                    "keychain: security CLI exit={:?} stderr={}",
-                    o.status.code(),
-                    String::from_utf8_lossy(&o.stderr).trim()
-                ),
+                Ok(o) => {
+                    log::warn!(
+                        "keychain: security CLI exit={:?} stderr={}",
+                        o.status.code(),
+                        String::from_utf8_lossy(&o.stderr).trim()
+                    );
+                    // Claude Code can store the live credential under a
+                    // *suffixed* service name (`Claude Code-credentials-<hash>`,
+                    // upstream anthropics/claude-code#84275) — notably when
+                    // CLAUDE_CONFIG_DIR is set. Our `-s` query is an exact match,
+                    // so that user looks logged out to us while the CLI works
+                    // fine. Name it here or the report is undiagnosable.
+                    log::warn!(
+                        "keychain: no exact `Claude Code-credentials` item. If the CLI is \
+                         logged in, the live item may be suffixed — check with: \
+                         security dump-keychain | grep 'Claude Code-credentials'"
+                    );
+                }
                 Err(e) => log::warn!("keychain: security CLI spawn failed: {}", e),
             }
         }

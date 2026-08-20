@@ -189,12 +189,18 @@ fn parse_jsonl(path: &Path) -> Vec<Record> {
     let Ok(text) = std::fs::read_to_string(path) else {
         return out;
     };
+    // Malformed lines are skipped so one bad record can't sink a whole file,
+    // but that silence hides cost: upstream can splice records with
+    // unsynchronized writers (anthropics/claude-code#81843), and the only
+    // symptom is a total that reads low. Count them so it's diagnosable.
+    let mut malformed = 0usize;
     for line in text.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
         let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) else {
+            malformed += 1;
             continue;
         };
         let Some(msg) = value.get("message").and_then(|m| m.as_object()) else {
@@ -290,6 +296,13 @@ fn parse_jsonl(path: &Path) -> Vec<Record> {
             tokens,
             cost,
         });
+    }
+    if malformed > 0 {
+        log::warn!(
+            "jsonl: skipped {} malformed line(s) in {} — usage totals may read low",
+            malformed,
+            path.display()
+        );
     }
     out
 }
