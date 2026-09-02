@@ -13,7 +13,7 @@ pub struct Pricing {
 
 /// USD per million tokens.
 /// Official Anthropic pricing: https://platform.claude.com/docs/en/about-claude/pricing
-/// (last verified 2026-07-28 against models/overview.md). When Anthropic ships
+/// (last verified 2026-09-02 against that page). When Anthropic ships
 /// a new model generation, add an entry below and re-verify the existing ones.
 pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
     let fable = Pricing {
@@ -23,6 +23,18 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
         cache_write_5m: 12.5,
         cache_write_1h: 20.0,
         cache_read: 1.0,
+    };
+    let fable_51 = Pricing {
+        // Fable 5.1 / Mythos 5.1 (released 2026-09-01). Same $10/$50 tier as
+        // Fable 5, but cache reads are 0.025x base input instead of the
+        // universal 0.1x — the only models that break that rule. The map
+        // entries are load-bearing: without them `claude-fable-5-1` prefix-
+        // matches `claude-fable-5` and prices cache reads 4x too high.
+        input: 10.0,
+        output: 50.0,
+        cache_write_5m: 12.5,
+        cache_write_1h: 20.0,
+        cache_read: 0.25,
     };
     let opus_current = Pricing {
         // Opus 4.5 / 4.6 / 4.7 / 4.8 / 5 — same price tier. Opus 5 (released
@@ -51,9 +63,10 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
         cache_read: 0.3,
     };
     let sonnet_5 = Pricing {
-        // Sonnet 5 (released 2026-06-30). Introductory pricing through
-        // 2026-08-31; on 2026-09-01 it rises to the standard Sonnet tier
-        // ($3/$15 — the `sonnet` values above). Update this block then.
+        // Sonnet 5 (released 2026-06-30). $2/$10 launched as introductory
+        // pricing through 2026-08-31, but Anthropic made it permanent on
+        // 2026-08-10 — the scheduled 2026-09-01 rise to $3/$15 will not
+        // happen, so do NOT merge this into the `sonnet` tier.
         input: 2.0,
         output: 10.0,
         cache_write_5m: 2.5,
@@ -77,6 +90,7 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
 
     let mut m = HashMap::new();
     m.insert("claude-fable-5", fable);
+    m.insert("claude-fable-5-1", fable_51);
     // Opus 5 — `claude-opus-4` is NOT a prefix of `claude-opus-5`, so without
     // this entry resolve() returned None and every Opus 5 record counted $0
     // (observed live 2026-07-28: 1.3k+ such records in a week of JSONL).
@@ -85,6 +99,7 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
     // availability (Project Glasswing), so it won't normally appear in Claude
     // Code JSONL, but priced here so it isn't silently counted as $0.
     m.insert("claude-mythos-5", fable);
+    m.insert("claude-mythos-5-1", fable_51);
     m.insert("claude-opus-4-8", opus_current);
     m.insert("claude-opus-4-7", opus_current);
     m.insert("claude-opus-4-6", opus_current);
@@ -159,9 +174,11 @@ const US_INFERENCE_MULTIPLIER: f64 = 1.1;
 
 /// Fast mode (`speed: "fast"`) reprices supported Opus models. Cache rates
 /// derive from the fast base input (5m=1.25x, 1h=2x, read=0.1x), same as the
-/// standard tiers. Official fast pricing (verified 2026-07-28):
-/// Opus 5 / 4.8 = $10/$50; Opus 4.6/4.7 = $30/$150 (4.6/4.7 fast has since
-/// been removed from the API — kept here so historical JSONL still prices).
+/// standard tiers. Official fast pricing (verified 2026-09-02): Opus 5 / 4.8
+/// = $10/$50. Opus 4.7 now rejects `speed:"fast"` outright so no new records
+/// can appear — its $30/$150 tier stays for historical JSONL. Opus 4.6 is
+/// dropped: the docs say those requests run at standard speed and are billed
+/// at standard rates, so they must fall through to `resolve()`.
 /// Fable/Sonnet/Haiku have no fast tier — `speed:"fast"` shouldn't appear for
 /// them, and resolve falls back to standard if it ever does.
 fn resolve_fast(model: &str) -> Option<Pricing> {
@@ -172,7 +189,7 @@ fn resolve_fast(model: &str) -> Option<Pricing> {
         cache_write_1h: 20.0,
         cache_read: 1.0,
     };
-    let opus_67_fast = Pricing {
+    let opus_47_fast = Pricing {
         input: 30.0,
         output: 150.0,
         cache_write_5m: 37.5,
@@ -185,8 +202,7 @@ fn resolve_fast(model: &str) -> Option<Pricing> {
     for (base, pricing) in [
         ("claude-opus-5", opus_5_48_fast),
         ("claude-opus-4-8", opus_5_48_fast),
-        ("claude-opus-4-7", opus_67_fast),
-        ("claude-opus-4-6", opus_67_fast),
+        ("claude-opus-4-7", opus_47_fast),
     ] {
         if model == base
             || model
@@ -349,10 +365,29 @@ mod tests {
     }
 
     #[test]
-    fn sonnet_5_introductory_pricing() {
-        // Sonnet 5 (released 2026-06-30), introductory pricing through
-        // 2026-08-31: $2 in / $10 out. Must not resolve to None -> $0: the
-        // `claude-sonnet-4` entry is NOT a prefix of `claude-sonnet-5`.
+    fn fable_5_1_and_mythos_5_1_have_cheaper_cache_reads() {
+        // Released 2026-09-01. Input/output/cache writes match Fable 5, but
+        // cache reads are 0.025x base input ($0.25) instead of 0.1x ($1).
+        // Without their own entries these ids prefix-match `claude-fable-5`
+        // and overprice cache reads 4x — that silent path is what this guards.
+        for id in ["claude-fable-5-1", "claude-mythos-5-1", "claude-fable-5-1-20260901"] {
+            approx(cost_usd(id, &toks(1_000_000, 0, 0, 0, 0)), 10.0);
+            approx(cost_usd(id, &toks(0, 1_000_000, 0, 0, 0)), 50.0);
+            approx(cost_usd(id, &toks(0, 0, 1_000_000, 0, 0)), 12.5);
+            approx(cost_usd(id, &toks(0, 0, 0, 1_000_000, 0)), 20.0);
+            approx(cost_usd(id, &toks(0, 0, 0, 0, 1_000_000)), 0.25);
+            assert_eq!(family_of(id), "Fable");
+        }
+        // Fable 5 keeps the old $1 cache read.
+        approx(cost_usd("claude-fable-5", &toks(0, 0, 0, 0, 1_000_000)), 1.0);
+    }
+
+    #[test]
+    fn sonnet_5_pricing() {
+        // Sonnet 5 (released 2026-06-30): $2 in / $10 out — the launch price,
+        // made permanent 2026-08-10 (the 2026-09-01 rise to $3/$15 was
+        // cancelled). Must not resolve to None -> $0: the `claude-sonnet-4`
+        // entry is NOT a prefix of `claude-sonnet-5`.
         approx(cost_usd("claude-sonnet-5", &toks(1_000_000, 0, 0, 0, 0)), 2.0);
         approx(cost_usd("claude-sonnet-5", &toks(0, 1_000_000, 0, 0, 0)), 10.0);
         approx(cost_usd("claude-sonnet-5", &toks(0, 0, 1_000_000, 0, 0)), 2.5);
@@ -382,8 +417,9 @@ mod tests {
         // Opus 4.7 fast = $30/$150 (6x). Date-suffixed id resolves too.
         approx(fast("claude-opus-4-7", 1_000_000, 0), 30.0);
         approx(fast("claude-opus-4-7-20250416", 0, 1_000_000), 150.0);
-        // Opus 4.6 fast = $30/$150.
-        approx(fast("claude-opus-4-6", 1_000_000, 0), 30.0);
+        // Opus 4.6 has no fast tier: the API runs those requests at standard
+        // speed and bills standard rates, so it must fall back to $5/$25.
+        approx(fast("claude-opus-4-6", 1_000_000, 0), 5.0);
     }
 
     #[test]
