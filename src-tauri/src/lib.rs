@@ -65,14 +65,16 @@ pub fn run() {
             // the file with per-frame chatter. Bumped to DEBUG only when
             // chasing a specific issue.
             tauri_plugin_log::Builder::default()
-                .target(tauri_plugin_log::Target::new(
-                    tauri_plugin_log::TargetKind::LogDir {
+                // `targets` REPLACES the plugin defaults; `target` appends to
+                // them. The defaults already include `LogDir { file_name: None }`
+                // (-> "Claude Widget.log"), so appending our own LogDir wrote
+                // every line to two files and rotated both (~5 MB duplicated).
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
                         file_name: Some("widget".into()),
-                    },
-                ))
-                .target(tauri_plugin_log::Target::new(
-                    tauri_plugin_log::TargetKind::Stdout,
-                ))
+                    }),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                ])
                 .level(log::LevelFilter::Info)
                 .max_file_size(1_000_000) // 1 MB rotation
                 // Keep ~5 MB total. `KeepAll` 은 1년 사용 시 수십~수백 MB
