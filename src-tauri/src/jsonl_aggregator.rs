@@ -40,6 +40,10 @@ struct Record {
     /// re-resolving the model + re-summing tokens per record. `Arc<str>` keeps
     /// the per-aggregate `records.clone()` cheap for heavy users (100k+ rows).
     cost: f64,
+    /// `message.id` + `requestId` — one API call. Claude Code writes a line per
+    /// content block (each repeating the full usage) and copies history into
+    /// new files on resume, so the same call shows up many times on disk.
+    key: Option<Arc<str>>,
 }
 
 struct Block {
@@ -138,7 +142,7 @@ pub fn aggregate(counted_until_ms: f64) -> Result<AggregateOut> {
         }
     };
 
-    let mut records = collect_records(&root);
+    let mut records = dedup_records(collect_records(&root));
     records.sort_by_key(|r| r.ts);
 
     // Lifetime delta: cost of records newer than what the caller already
@@ -290,11 +294,20 @@ fn parse_jsonl(path: &Path) -> Vec<Record> {
             speed_fast,
         };
         let cost = cost_usd(&model, &tokens);
+        let key = match (
+            msg.get("id").and_then(|v| v.as_str()),
+            value.get("requestId").and_then(|v| v.as_str()),
+        ) {
+            (Some(id), Some(req)) => Some(Arc::from(format!("{id} {req}"))),
+            (Some(id), None) => Some(Arc::from(id)),
+            _ => None,
+        };
         out.push(Record {
             ts: ts.with_timezone(&Utc),
             model: model.into(),
             tokens,
             cost,
+            key,
         });
     }
     if malformed > 0 {
@@ -303,6 +316,42 @@ fn parse_jsonl(path: &Path) -> Vec<Record> {
             malformed,
             path.display()
         );
+    }
+    out
+}
+
+/// Collapse copies of the same API call to one record. Must run across *all*
+/// files (resume copies live in other session files), so it sits after
+/// collect_records rather than in the per-file cache. Among copies, the one
+/// with the most tokens wins: the first line can carry a streaming
+/// placeholder (output 3 where the final line says 700). The kept record takes
+/// the earliest ts of its copies so lifetimeCost (which adds records newer than
+/// its counted-until mark) can't count the same call twice.
+fn dedup_records(records: Vec<Record>) -> Vec<Record> {
+    fn total(r: &Record) -> u64 {
+        let t = &r.tokens;
+        t.input + t.output + t.cache_creation_5m + t.cache_creation_1h + t.cache_read
+    }
+    let mut out: Vec<Record> = Vec::with_capacity(records.len());
+    let mut index: HashMap<Arc<str>, usize> = HashMap::new();
+    for r in records {
+        let Some(key) = r.key.clone() else {
+            out.push(r);
+            continue;
+        };
+        match index.get(&key) {
+            Some(&i) => {
+                let ts = out[i].ts.min(r.ts);
+                if total(&r) > total(&out[i]) {
+                    out[i] = r;
+                }
+                out[i].ts = ts;
+            }
+            None => {
+                index.insert(key, out.len());
+                out.push(r);
+            }
+        }
     }
     out
 }
@@ -566,7 +615,43 @@ mod tests {
             cost: cost_usd(model, &tokens),
             model: model.into(),
             tokens,
+            key: None,
         }
+    }
+
+    fn keyed(hours: i64, key: &str, input: u64, output: u64) -> Record {
+        let tokens = UsageTokens { input, output, ..Default::default() };
+        Record {
+            ts: base() + Duration::hours(hours),
+            cost: cost_usd("claude-opus-5", &tokens),
+            model: "claude-opus-5".into(),
+            tokens,
+            key: Some(key.into()),
+        }
+    }
+
+    #[test]
+    fn dedup_counts_each_api_call_once() {
+        // Same call written 3x (content-block lines + a resume copy), one of
+        // them a streaming placeholder with output 3: keep the complete copy.
+        let records = vec![
+            keyed(0, "msg_a req_a", 10, 3),
+            keyed(1, "msg_a req_a", 10, 700),
+            keyed(1, "msg_a req_a", 10, 700),
+            keyed(1, "msg_b req_b", 20, 50),
+            rec(2, "claude-opus-5", 5), // no id: kept as-is
+        ];
+        let out = dedup_records(records);
+        assert_eq!(out.len(), 3);
+        let a = out.iter().find(|r| r.key.as_deref() == Some("msg_a req_a")).unwrap();
+        assert_eq!(a.tokens.output, 700);
+        // The complete copy lands seconds after the placeholder; the kept
+        // record must carry the *earliest* ts, or a sync that already counted
+        // the placeholder into lifetimeCost would count the call again.
+        assert_eq!(a.ts, base());
+        let total: f64 = out.iter().map(|r| r.cost).sum();
+        let expect = cost_usd("claude-opus-5", &UsageTokens { input: 35, output: 750, ..Default::default() });
+        assert!((total - expect).abs() < 1e-9, "{total} vs {expect}");
     }
 
     #[test]

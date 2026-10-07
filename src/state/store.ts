@@ -190,6 +190,9 @@ type StoreShape = {
   lifetimeCost: number;
   /** Newest record ts (ms) already folded into lifetimeCost. */
   lifetimeCountedUntilMs: number;
+  /** Version of the cost calculation the stored totals were built with. Below
+   *  COST_CALC_VERSION triggers the one-time recompute in refreshDetail. */
+  costCalcVersion: number;
   /** Stable per-device id (generated once) for cross-device combining. */
   deviceId: string;
   /** Shared cloud-synced folder for cross-device combining ("" = off). */
@@ -253,6 +256,7 @@ const [store, setStore] = createStore<StoreShape>({
   tickSecond: 0,
   lifetimeCost: 0,
   lifetimeCountedUntilMs: 0,
+  costCalcVersion: 0,
   deviceId: "",
   syncFolder: "",
   combinedCost: 0,
@@ -769,6 +773,11 @@ export async function initStore() {
     (v) => setStore("lifetimeCountedUntilMs", v),
     (v): v is number => typeof v === "number" && v >= 0,
   );
+  await loadSetting<number>(
+    "costCalcVersion",
+    (v) => setStore("costCalcVersion", v),
+    (v): v is number => typeof v === "number" && v >= 0,
+  );
   await loadSetting<string>(
     "deviceId",
     (v) => setStore("deviceId", v),
@@ -1099,6 +1108,12 @@ export async function syncNow(manual = false) {
     if (code === "TOKEN_EXPIRED") void maybeSpawnTokenRefresh();
     void warn(`sync failed ${Date.now() - t0}ms code=${code ?? "UNKNOWN"} msg=${msg}`);
     void invoke("set_tray_state", { state: "err" }).catch(() => {});
+    // Cost comes from local JSONL, not the usage API — keep folding it while
+    // the API is down (a reporter's log showed 8 days of NO_CREDENTIALS with
+    // no aggregation at all; files cleaned in that window would be lost).
+    await refreshDetail().catch((err) =>
+      void warn(`detail refresh failed (usage sync failed): ${toErrorMessage(err)}`),
+    );
   } finally {
     setStore("syncing", false);
   }
@@ -1113,10 +1128,62 @@ export function setMode(mode: Mode) {
   }
 }
 
+/** 2 = each API call counted once (message.id + requestId dedup). Before it,
+ *  every JSONL copy of a call was summed — ~4x high in practice.
+ *  Bump this whenever a calculation or pricing fix *lowers* past costs:
+ *  costHistory only max-merges, so a downward correction never lands without
+ *  the recompute. */
+const COST_CALC_VERSION = 2;
+
+/** One-time rebuild after a cost-calculation fix. costHistory max-merges and
+ *  lifetimeCost never decreases, so without this the inflated totals built by
+ *  the old calculation would stay forever. Days still on disk are replaced with
+ *  the recomputed values; days whose JSONL is gone can't be recomputed and are
+ *  kept as they were. `detail` must come from a countedUntilMs = 0 aggregate so
+ *  new_cost_since is the full on-disk total. */
+function recomputeCostTotals(detail: DetailPayload) {
+  const onDisk = new Set(detail.daily.map((d) => d.date));
+  const dayCost = (fams: Record<string, CostHistoryEntry>) =>
+    Object.values(fams).reduce((sum, f) => sum + f.cost, 0);
+  const hist: CostHistory = {};
+  let offDisk = 0;
+  let oldOnDisk = 0;
+  for (const [date, fams] of Object.entries(store.costHistory)) {
+    if (onDisk.has(date)) {
+      oldOnDisk += dayCost(fams);
+    } else {
+      hist[date] = fams;
+      offDisk += dayCost(fams);
+    }
+  }
+  for (const day of detail.daily) {
+    const fams: Record<string, CostHistoryEntry> = {};
+    for (const f of day.families) fams[f.family] = { tokens: f.tokens, cost: f.cost };
+    hist[day.date] = fams;
+  }
+  // Second term keeps lifetime cost from before costHistory existed (cleaned
+  // days with no history entry); the max guards the case where history ran
+  // ahead of lifetime under the old max-merge.
+  const lifetime = Math.max(
+    offDisk + detail.new_cost_since,
+    store.lifetimeCost - oldOnDisk + detail.new_cost_since,
+  );
+  setStore("costHistory", hist);
+  setStore("lifetimeCost", lifetime);
+  setStore("lifetimeCountedUntilMs", detail.max_ts_ms);
+  setStore("costCalcVersion", COST_CALC_VERSION);
+  void persistSetting("costHistory", hist);
+  void persistSetting("lifetimeCost", lifetime);
+  void persistSetting("lifetimeCountedUntilMs", detail.max_ts_ms);
+  void persistSetting("costCalcVersion", COST_CALC_VERSION);
+  void info(`cost totals recomputed (v${COST_CALC_VERSION}): lifetime ${lifetime.toFixed(2)}`);
+}
+
 /** Max-merge the on-disk daily breakdown into the durable costHistory.
  *  Per (day, family) we keep the *highest* cost ever seen: days still on disk
- *  get refreshed (today grows; a mis-priced past day self-corrects while its
- *  files remain), while days no longer on disk are left frozen — so the history
+ *  get refreshed (today grows; an *under*-priced past day self-corrects while
+ *  its files remain — over-pricing needs a COST_CALC_VERSION bump), while days
+ *  no longer on disk are left frozen — so the history
  *  survives cleanup and never loses a day's complete value to partial deletion. */
 function foldCostHistory(daily: DetailDay[] | undefined) {
   if (!daily || daily.length === 0) return;
@@ -1148,11 +1215,32 @@ function foldCostHistory(daily: DetailDay[] | undefined) {
 // wrote syncError directly, which contradicted syncNow's 'tray ok' success
 // path when fetch_usage succeeded but aggregate_detail failed. refreshDetail
 // also runs standalone from setMode, so ownership belongs to the caller.)
-export async function refreshDetail() {
+// syncNow and setMode("detail") can overlap; two concurrent runs would read the
+// same lifetimeCountedUntilMs and add new_cost_since twice. Share the run.
+let detailInFlight: Promise<void> | null = null;
+
+export function refreshDetail(): Promise<void> {
+  if (!detailInFlight) {
+    detailInFlight = runRefreshDetail().finally(() => {
+      detailInFlight = null;
+    });
+  }
+  return detailInFlight;
+}
+
+async function runRefreshDetail() {
+  const recompute = store.costCalcVersion < COST_CALC_VERSION;
   const detail = await invoke<DetailPayload>("aggregate_detail", {
-    countedUntilMs: store.lifetimeCountedUntilMs,
+    countedUntilMs: recompute ? 0 : store.lifetimeCountedUntilMs,
   });
   setStore("detail", detail);
+  // An empty aggregate (projects dir missing, no logs yet) can't recompute
+  // anything; marking the version done then would freeze the old totals.
+  if (recompute && detail.daily.length > 0) {
+    recomputeCostTotals(detail);
+    if (store.syncFolder) void syncDevices();
+    return;
+  }
   foldCostHistory(detail.daily);
   // Fold newly-seen cost into the non-decreasing lifetime total. The
   // counted-until guard makes this idempotent across repeated refreshes.
