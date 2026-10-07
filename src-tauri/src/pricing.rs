@@ -120,6 +120,10 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
     m.insert("claude-opus-4-5", opus_current);
     m.insert("claude-opus-4-1", opus_legacy);
     m.insert("claude-opus-4", opus_legacy);
+    // Sonnet 5.5 — same price as Sonnet 5 in all five columns (verified
+    // 2026-10-07); listed explicitly so a future price split can't hide behind
+    // the `claude-sonnet-5` prefix match (§25/§26).
+    m.insert("claude-sonnet-5-5", sonnet_5);
     m.insert("claude-sonnet-5", sonnet_5);
     m.insert("claude-sonnet-4-6", sonnet);
     m.insert("claude-sonnet-4-5", sonnet);
@@ -461,6 +465,8 @@ mod tests {
         // Date-suffixed id from JSONL resolves too.
         approx(cost_usd("claude-sonnet-5-20260630", &toks(1_000_000, 0, 0, 0, 0)), 2.0);
         assert_eq!(family_of("claude-sonnet-5"), "Sonnet");
+        approx(cost_usd("claude-sonnet-5-5", &toks(1_000_000, 0, 0, 0, 0)), 2.0);
+        approx(cost_usd("claude-sonnet-5-5", &toks(0, 0, 0, 0, 1_000_000)), 0.2);
     }
 
     #[test]
