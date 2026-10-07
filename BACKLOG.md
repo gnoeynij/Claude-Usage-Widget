@@ -34,6 +34,7 @@
 
 | 항목 | 영역 | 출처 | 비고 |
 |---|---|---|---|
+| **device-sync 합산의 구버전 기기 과대값** | 비용 정확도 | [회귀 §27](CLAUDE.md) | 각 기기가 자기 파일만 써서 합산 — v2.5.5 미만 기기의 파일은 ~4배 부풀린 lifetime/daily 를 계속 기여. 그 기기가 업데이트되면 자동 보정. 파일에 calc 버전을 넣어 구버전 파일을 합산에서 표시/제외할지는 설계 판단. |
 | **신모델 prefix 매칭 조기 탐지 — 날짜 아닌 접미사면 로그 경고** | 비용 정확도 | [회귀 §26](CLAUDE.md) | §19·§25·§26 세 번 같은 부류(신모델 entry 누락 → prefix fallback 이 $0 또는 틀린 단가). `resolve_uncached()` 가 prefix 로 매칭했는데 남은 접미사가 날짜 형태(`-YYYYMMDD`)가 아닌 짧은 숫자(`-1`, `-5`)면 "미등록 포인트 릴리즈, <base> 단가로 계산 중" 로그 경고(ID당 1회). 기억에 의존하는 §25 (a) 절차 규칙의 구조적 대체. 미구현. |
 | **저장형 한도 리셋 — 예측·알림 가정 실측 필요** | 한도 예측 | 2026-09-22 Opus 5.5 발표 · [Help Center](https://support.claude.com/en/articles/17007452-what-is-a-limit-reset) | 신기능: 받아둔 리셋을 원할 때 써서 5시간 또는 주간 한도를 즉시 0%로 되돌림. [project.ts](src/utils/project.ts) `projectLimit` 은 "창이 `resets_at` 의 windowMs 전에 0%에서 시작"을 가정해 평균 속도를 계산 → 리셋 후 `resets_at` 이 *유지*되면 평균 속도가 과소 = **과소 경고**(주간은 recentPace 없이 평균만 써서 특히), `notifyWindow` 도 같은 창으로 보고 85/95% 재발화 안 함. `resets_at` 이 *새로 시작*되면 문제없음(`blendPace` 의 하락 시 pace 0 처리는 이미 있음). 리셋을 쓸 때 전후로 `/api/oauth/usage` 를 한 번씩 찍어 `resets_at` 동작을 확정한 뒤 결정. |
 | **6/15 usage 엔드포인트 생존 재확인** | 인증·리스크 | (이번 세션 2026-06-04) | 6/15 = Anthropic 자동화 워크로드 구독한도→별도 크레딧 전환일. 로컬에서 `/api/oauth/usage` 라이브 HTTP 200 확인(credentials accessToken, 마스킹) + 6/15 정책이 usage *조회* 에도 적용됐는지 WebSearch 재검토. 위젯은 추론 안 하고 조회만 해 직접 대상 아닐 것으로 분석(6/4 기준 200 동작)됐으나 그날 실측 필요. **remote 스케줄 불가**(로컬 credentials 접근 X) → 그날 사용자가 직접 트리거 ("위젯 6/15 확인"). |
