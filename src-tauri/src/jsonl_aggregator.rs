@@ -298,7 +298,7 @@ fn parse_jsonl(path: &Path) -> Vec<Record> {
             msg.get("id").and_then(|v| v.as_str()),
             value.get("requestId").and_then(|v| v.as_str()),
         ) {
-            (Some(id), Some(req)) => Some(Arc::from(format!("{id} {req}"))),
+            (Some(id), Some(req)) => Some(Arc::from(format!("{id}\0{req}"))),
             (Some(id), None) => Some(Arc::from(id)),
             _ => None,
         };
@@ -635,15 +635,15 @@ mod tests {
         // Same call written 3x (content-block lines + a resume copy), one of
         // them a streaming placeholder with output 3: keep the complete copy.
         let records = vec![
-            keyed(0, "msg_a req_a", 10, 3),
-            keyed(1, "msg_a req_a", 10, 700),
-            keyed(1, "msg_a req_a", 10, 700),
-            keyed(1, "msg_b req_b", 20, 50),
+            keyed(0, "msg_a\0req_a", 10, 3),
+            keyed(1, "msg_a\0req_a", 10, 700),
+            keyed(1, "msg_a\0req_a", 10, 700),
+            keyed(1, "msg_b\0req_b", 20, 50),
             rec(2, "claude-opus-5", 5), // no id: kept as-is
         ];
         let out = dedup_records(records);
         assert_eq!(out.len(), 3);
-        let a = out.iter().find(|r| r.key.as_deref() == Some("msg_a req_a")).unwrap();
+        let a = out.iter().find(|r| r.key.as_deref() == Some("msg_a\0req_a")).unwrap();
         assert_eq!(a.tokens.output, 700);
         // The complete copy lands seconds after the placeholder; the kept
         // record must carry the *earliest* ts, or a sync that already counted
