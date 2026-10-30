@@ -13,7 +13,7 @@ pub struct Pricing {
 
 /// USD per million tokens.
 /// Official Anthropic pricing: https://platform.claude.com/docs/en/about-claude/pricing
-/// (last verified 2026-09-28 against that page). When Anthropic ships
+/// (last verified 2026-10-28 against that page). When Anthropic ships
 /// a new model generation, add an entry below and re-verify the existing ones.
 pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
     let fable = Pricing {
@@ -86,6 +86,25 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
         cache_write_1h: 4.0,
         cache_read: 0.2,
     };
+    let sonnet_5_5 = Pricing {
+        // Sonnet 5.5 — Sonnet 5's rates except cache reads at 0.05x base
+        // input ($0.10), like Opus 5.5. Without its own tier it prefix-matches
+        // `claude-sonnet-5` and prices cache reads 2x too high.
+        input: 2.0,
+        output: 10.0,
+        cache_write_5m: 2.5,
+        cache_write_1h: 4.0,
+        cache_read: 0.1,
+    };
+    let haiku_5_5 = Pricing {
+        // Haiku 5.5 (released 2026-10-07), prompts up to 100k tokens. Longer
+        // prompts use `HAIKU_5_5_LONG` — see `resolve_long_prompt`.
+        input: 0.1,
+        output: 0.5,
+        cache_write_5m: 0.125,
+        cache_write_1h: 0.2,
+        cache_read: 0.01,
+    };
     let haiku_45 = Pricing {
         input: 1.0,
         output: 5.0,
@@ -120,14 +139,14 @@ pub static PRICING: Lazy<HashMap<&'static str, Pricing>> = Lazy::new(|| {
     m.insert("claude-opus-4-5", opus_current);
     m.insert("claude-opus-4-1", opus_legacy);
     m.insert("claude-opus-4", opus_legacy);
-    // Sonnet 5.5 — same price as Sonnet 5 in all five columns (verified
-    // 2026-10-07); listed explicitly so a future price split can't hide behind
-    // the `claude-sonnet-5` prefix match (§25/§26).
-    m.insert("claude-sonnet-5-5", sonnet_5);
+    m.insert("claude-sonnet-5-5", sonnet_5_5);
     m.insert("claude-sonnet-5", sonnet_5);
     m.insert("claude-sonnet-4-6", sonnet);
     m.insert("claude-sonnet-4-5", sonnet);
     m.insert("claude-sonnet-4", sonnet);
+    // `claude-haiku-4-5` is NOT a prefix of `claude-haiku-5-5`, so without
+    // this entry Haiku 5.5 resolved to None and counted $0.
+    m.insert("claude-haiku-5-5", haiku_5_5);
     m.insert("claude-haiku-4-5", haiku_45);
     m.insert("claude-3-7-sonnet-latest", sonnet);
     m.insert("claude-3-5-sonnet-latest", sonnet);
@@ -154,6 +173,12 @@ fn resolve(model: &str) -> Option<Pricing> {
         return *hit;
     }
     let result = resolve_uncached(model);
+    // Unpriced models count $0 silently — Opus 5, Fable 5.1, Opus 5.5 and
+    // Haiku 5.5 each went unnoticed for days that way. Logged once per id
+    // thanks to the cache. `<synthetic>` is Claude Code's zero-usage filler.
+    if result.is_none() && model != "<synthetic>" {
+        log::warn!("pricing: no entry for model {model:?} — its cost counts as $0");
+    }
     RESOLVE_CACHE
         .lock()
         .unwrap()
@@ -246,6 +271,27 @@ fn resolve_fast(model: &str) -> Option<Pricing> {
     None
 }
 
+/// Haiku 5.5 bills a request whose prompt (input + cache writes + cache
+/// reads) is over this many tokens at its long-prompt rates — the whole
+/// request, not just the excess. Other models price 1M context flat.
+const LONG_PROMPT_THRESHOLD: u64 = 100_000;
+
+fn resolve_long_prompt(model: &str) -> Option<Pricing> {
+    const HAIKU_5_5_LONG: Pricing = Pricing {
+        input: 0.5,
+        output: 2.5,
+        cache_write_5m: 0.625,
+        cache_write_1h: 1.0,
+        cache_read: 0.05,
+    };
+    let base = "claude-haiku-5-5";
+    (model == base
+        || model
+            .strip_prefix(base)
+            .is_some_and(|rest| rest.starts_with('-')))
+    .then_some(HAIKU_5_5_LONG)
+}
+
 #[derive(Default, Clone)]
 pub struct UsageTokens {
     pub input: u64,
@@ -265,11 +311,10 @@ pub fn cost_usd(model: &str, u: &UsageTokens) -> f64 {
     // Fast mode reprices the model; fall back to standard pricing when the
     // model has no fast tier (Fable/Sonnet/Haiku) so cost is never $0 just
     // because speed was "fast".
-    let resolved = if u.speed_fast {
-        resolve_fast(model).or_else(|| resolve(model))
-    } else {
-        resolve(model)
-    };
+    let prompt = u.input + u.cache_creation_5m + u.cache_creation_1h + u.cache_read;
+    let fast = if u.speed_fast { resolve_fast(model) } else { None };
+    let long = if prompt > LONG_PROMPT_THRESHOLD { resolve_long_prompt(model) } else { None };
+    let resolved = fast.or(long).or_else(|| resolve(model));
     let Some(p) = resolved else { return 0.0 };
     let mut token_cost = (u.input as f64) * p.input / 1_000_000.0
         + (u.output as f64) * p.output / 1_000_000.0
@@ -465,8 +510,45 @@ mod tests {
         // Date-suffixed id from JSONL resolves too.
         approx(cost_usd("claude-sonnet-5-20260630", &toks(1_000_000, 0, 0, 0, 0)), 2.0);
         assert_eq!(family_of("claude-sonnet-5"), "Sonnet");
+        // Sonnet 5.5: Sonnet 5's rates, but cache reads 0.05x ($0.10).
         approx(cost_usd("claude-sonnet-5-5", &toks(1_000_000, 0, 0, 0, 0)), 2.0);
-        approx(cost_usd("claude-sonnet-5-5", &toks(0, 0, 0, 0, 1_000_000)), 0.2);
+        approx(cost_usd("claude-sonnet-5-5", &toks(0, 1_000_000, 0, 0, 0)), 10.0);
+        approx(cost_usd("claude-sonnet-5-5", &toks(0, 0, 1_000_000, 0, 0)), 2.5);
+        approx(cost_usd("claude-sonnet-5-5", &toks(0, 0, 0, 1_000_000, 0)), 4.0);
+        approx(cost_usd("claude-sonnet-5-5", &toks(0, 0, 0, 0, 1_000_000)), 0.1);
+        approx(cost_usd("claude-sonnet-5", &toks(0, 0, 0, 0, 1_000_000)), 0.2);
+    }
+
+    #[test]
+    fn haiku_5_5_prices_by_prompt_length() {
+        // Short prompt (<= 100k): $0.10 / $0.50, cache 5m $0.125, 1h $0.20,
+        // read $0.01. Each case stays at exactly 100k prompt tokens.
+        let short = |u: UsageTokens| cost_usd("claude-haiku-5-5", &u);
+        approx(short(toks(100_000, 0, 0, 0, 0)), 0.01);
+        approx(short(toks(0, 1_000_000, 0, 0, 0)), 0.5);
+        approx(short(toks(0, 0, 100_000, 0, 0)), 0.0125);
+        approx(short(toks(0, 0, 0, 100_000, 0)), 0.02);
+        approx(short(toks(0, 0, 0, 0, 100_000)), 0.001);
+        assert_eq!(family_of("claude-haiku-5-5"), "Haiku");
+
+        // Over 100k: the whole request at $0.50 / $2.50, 5m $0.625, 1h $1,
+        // read $0.05 — cache reads count toward the threshold.
+        for id in ["claude-haiku-5-5", "claude-haiku-5-5-20261007"] {
+            approx(cost_usd(id, &toks(1_000_000, 0, 0, 0, 0)), 0.5);
+            approx(cost_usd(id, &toks(1, 1_000_000, 0, 0, 100_000)), 2.5 + 0.005 + 0.0000005);
+            approx(cost_usd(id, &toks(0, 0, 1_000_000, 0, 0)), 0.625);
+            approx(cost_usd(id, &toks(0, 0, 0, 1_000_000, 0)), 1.0);
+            approx(cost_usd(id, &toks(0, 0, 0, 0, 1_000_000)), 0.05);
+        }
+
+        // US inference stacks on the long-prompt rates.
+        let mut t = toks(1_000_000, 0, 0, 0, 0);
+        t.inference_geo_us = true;
+        approx(cost_usd("claude-haiku-5-5", &t), 0.55);
+
+        // The threshold never reprices other models.
+        approx(cost_usd("claude-haiku-4-5", &toks(1_000_000, 0, 0, 0, 0)), 1.0);
+        approx(cost_usd("claude-opus-5-5", &toks(1_000_000, 0, 0, 0, 0)), 4.0);
     }
 
     #[test]

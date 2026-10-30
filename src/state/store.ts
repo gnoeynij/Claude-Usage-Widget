@@ -1130,10 +1130,11 @@ export function setMode(mode: Mode) {
 
 /** 2 = each API call counted once (message.id + requestId dedup). Before it,
  *  every JSONL copy of a call was summed — ~4x high in practice.
+ *  3 = Sonnet 5.5 cache reads at $0.10 (were priced at Sonnet 5's $0.20).
  *  Bump this whenever a calculation or pricing fix *lowers* past costs:
  *  costHistory only max-merges, so a downward correction never lands without
  *  the recompute. */
-const COST_CALC_VERSION = 2;
+const COST_CALC_VERSION = 3;
 
 /** One-time rebuild after a cost-calculation fix. costHistory max-merges and
  *  lifetimeCost never decreases, so without this the inflated totals built by
