@@ -76,7 +76,7 @@ const CALLOUTS: Record<GuideMode, Callout[]> = {
       desc: { en: "Dot color shows how recently your usage was synced.", ko: "마지막 동기화 시각을 점 색으로 표시합니다." } },
     { anchor: "donut", side: "left", y: 180, cond: "safe",
       title: { en: "Session usage (5h)", ko: "세션 사용량 (5시간)" },
-      desc: { en: "Arc color reflects usage level. A projected arc marks expected usage at reset. Click to refresh.", ko: "아크 색이 사용량 수준을 나타냅니다. 예측 아크는 초기화 시 예상 사용량을 표시합니다. 클릭하면 즉시 새로고침." },
+      desc: { en: "Arc color reflects usage level. A projected arc marks expected usage at reset. Click to refresh. Plans without a 5-hour limit (Ultra) show weekly usage here.", ko: "아크 색이 사용량 수준을 나타냅니다. 예측 아크는 초기화 시 예상 사용량을 표시합니다. 클릭하면 즉시 새로고침. 5시간 한도가 없는 플랜(Ultra)은 여기에 주간 사용량을 표시합니다." },
       inst: { desc: { en: "Seven-segment digits show the current 5h session. The caption below adds projected usage at reset. Click to refresh.", ko: "7-세그 숫자가 현재 세션 사용량을 표시합니다. 아래 캡션에 초기화 시 예상 사용량이 나타납니다. 클릭하면 즉시 새로고침." } } },
     { anchor: "donut", side: "left", y: 180, cond: "risk",
       title: { en: "Usage + projection", ko: "사용량 + 예상" },
@@ -114,7 +114,7 @@ const CALLOUTS: Record<GuideMode, Callout[]> = {
   mini: [
     { anchor: "donut", side: "left", y: 150, cond: "safe",
       title: { en: "Session usage", ko: "세션 사용량" },
-      desc: { en: "Current use, always on top. A projected arc marks expected usage at reset. Click to refresh.", ko: "현재 사용량을 항상 위에 표시합니다. 예측 아크는 초기화 시 예상 사용량을 표시합니다. 클릭하면 새로고침." },
+      desc: { en: "Current use, always on top. A projected arc marks expected usage at reset. Click to refresh. Plans without a 5-hour limit (Ultra) show weekly usage here.", ko: "현재 사용량을 항상 위에 표시합니다. 예측 아크는 초기화 시 예상 사용량을 표시합니다. 클릭하면 새로고침. 5시간 한도가 없는 플랜(Ultra)은 여기에 주간 사용량을 표시합니다." },
       inst: { desc: { en: "Current session digits, always on top. Click to refresh.", ko: "현재 세션 사용량을 숫자로 항상 위에 표시합니다. 클릭하면 새로고침." } } },
     { anchor: "donut", side: "left", y: 150, cond: "risk",
       title: { en: "Usage + projection", ko: "사용량 + 예상" },

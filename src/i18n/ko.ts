@@ -3,6 +3,7 @@ import type { Strings } from "./en";
 export const ko: Strings = {
   session: "세션",
   weekly: "주간 한도",
+  weeklyShort: "주간",
   allModels: "전체 모델",
   sonnetOnly: "Sonnet 전용",
   opusOnly: "Opus 전용",

@@ -1,6 +1,7 @@
 export const en = {
   session: "Session",
   weekly: "Weekly limits",
+  weeklyShort: "Weekly",
   allModels: "All models",
   sonnetOnly: "Sonnet only",
   opusOnly: "Opus only",

@@ -1,5 +1,5 @@
 import { createMemo } from "solid-js";
-import { store } from "../state/store";
+import { store, hasSession } from "../state/store";
 import { t } from "../i18n";
 import {
   projectLimit,
@@ -141,8 +141,11 @@ export function createLimitsVm() {
       })
       .join("\n");
   };
+  // The hero carries the weekly limit when the account has no 5h limit.
+  const heroProj = () => (hasSession() ? sessionProj() : weeklyProj());
   return {
     sessionProj,
+    heroProj,
     weeklyProj,
     scopedProj,
     weeklyMsg,

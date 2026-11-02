@@ -4,7 +4,7 @@ import { CapsuleProgress } from "../components/CapsuleProgress";
 import { SegDigits } from "../components/SegDigits";
 import { BlockGauge } from "../components/BlockGauge";
 import { AlertCircle } from "lucide-solid";
-import { store, setMode, syncNow, sessionDisplay, sessionRefreshing } from "../state/store";
+import { store, setMode, syncNow, sessionDisplay, sessionRefreshing, hasSession } from "../state/store";
 import { bannerFor } from "../components/ErrorBanner";
 import { t } from "../i18n";
 import {
@@ -162,7 +162,7 @@ export function MiniView() {
   // in-Mini info overlay and the native-title hover summary.
   const limitRows = (): Array<{ label: string; pct: number; proj: LimitProjection | null }> => {
     const rows = [
-      { label: t().session, pct: store.usage.five_hour, proj: sessionProj() },
+      ...(hasSession() ? [{ label: t().session, pct: store.usage.five_hour, proj: sessionProj() }] : []),
       { label: t().allModels, pct: store.usage.seven_day, proj: weeklyProj() },
     ];
     // Scoped caps come labeled from the API (`limits` array, e.g. "Fable");
@@ -365,13 +365,15 @@ export function MiniView() {
         when={store.theme === "instrument"}
         fallback={
           <div data-guide="donut" class="no-drag">
+            {/* 72px without a 5h limit — the window drops to 88px tall
+                (MODE_DEFAULTS_NO_SESSION) since only one row remains. */}
             <Donut
               value={sessionDisplay()}
               noArcTransition={sessionRefreshing()}
-              size={96}
-              stroke={7}
-              label={t().session.toLowerCase()}
-              projected={sessionProj()?.projectedPct ?? null}
+              size={hasSession() ? 96 : 72}
+              stroke={hasSession() ? 7 : 6}
+              label={(hasSession() ? t().session : t().weeklyShort).toLowerCase()}
+              projected={(hasSession() ? sessionProj() : weeklyProj())?.projectedPct ?? null}
               onClick={() => void syncNow(true)}
             />
           </div>
@@ -385,7 +387,7 @@ export function MiniView() {
           onClick={() => void syncNow(true)}
           title={t().syncNow}
           style={{
-            width: "96px",
+            width: hasSession() ? "96px" : "72px",
             cursor: "pointer",
             display: "flex",
             "flex-direction": "column",
@@ -394,9 +396,9 @@ export function MiniView() {
             gap: "3px",
           }}
         >
-          <span class="inst-caps">{t().session}</span>
+          <span class="inst-caps">{hasSession() ? t().session : t().weeklyShort}</span>
           <div style={{ display: "flex", "align-items": "flex-end", gap: "3px" }}>
-            <SegDigits value={sessionDisplay()} size={42} />
+            <SegDigits value={sessionDisplay()} size={hasSession() ? 42 : 32} />
             <span class="inst-caps" style={{ "font-size": "11px", "margin-bottom": "4px" }}>%</span>
           </div>
         </div>
@@ -427,8 +429,9 @@ export function MiniView() {
           // unit, and the leftover vertical space must land at the BOTTOM as
           // visible breathing room — evenly split it across all three gaps,
           // which kept the last gauge near-flush with the panel edge no
-          // matter how much the intra-row spacing was tightened.
-          "justify-content": "space-between",
+          // matter how much the intra-row spacing was tightened. Without a 5h
+          // limit the hero holds All models, leaving one row — center it.
+          "justify-content": hasSession() ? "space-between" : "center",
           // 20px lines the ALL MODELS caps' GLYPHS up with SESSION's: box tops
           // match at 18px, but SESSION keeps inst-caps line-height 1.2 (~2px
           // leading above the glyphs) while this label runs line-height 1 —
@@ -440,11 +443,13 @@ export function MiniView() {
           "padding-bottom": "19px",
         }}
       >
-        <MiniRowT
-          label={t().allModels}
-          value={store.usage.seven_day}
-          projected={weeklyProj()?.projectedPct ?? null}
-        />
+        <Show when={hasSession()}>
+          <MiniRowT
+            label={t().allModels}
+            value={store.usage.seven_day}
+            projected={weeklyProj()?.projectedPct ?? null}
+          />
+        </Show>
         {/* Mini fits exactly one more capsule: the first scoped cap from the
             API (e.g. "Fable"), else the legacy Sonnet row, else nothing — a
             null must never reach MiniRow (would render NaN%). With a single

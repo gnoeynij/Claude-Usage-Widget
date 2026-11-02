@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import { Donut } from "../components/Donut";
 import { CapsuleProgress } from "../components/CapsuleProgress";
-import { store, syncNow, sessionDisplay, sessionRefreshing } from "../state/store";
+import { store, syncNow, sessionDisplay, sessionRefreshing, hasSession } from "../state/store";
 import { t } from "../i18n";
 import { clamp } from "../utils/math";
 import { formatCountdown } from "../utils/format";
@@ -142,18 +142,39 @@ export function NormalView() {
             noArcTransition={sessionRefreshing()}
             size={144}
             stroke={8}
-            label={t().session.toLowerCase()}
-            projected={vm.sessionProj()?.projectedPct ?? null}
+            label={(hasSession() ? t().session : t().weeklyShort).toLowerCase()}
+            projected={vm.heroProj()?.projectedPct ?? null}
             onClick={() => void syncNow(true)}
           />
         </div>
-        <Show when={sessionCountdown()}>
-          {(c) => (
-            <span class="t-caption label-tertiary" data-guide="session-caption" style={{ "text-align": "center" }}>
-              {t().resetsInLive(c().h, c().m, c().s)}
-              {projInline(vm.sessionProj(), store.usage.five_hour)}
-            </span>
-          )}
+        {/* No 5h limit (verified Ultra): the donut is All models weekly, so the
+            weekly caption moves up here and its rows/caption below drop it. */}
+        <Show
+          when={hasSession()}
+          fallback={
+            <Show when={weeklyReset()}>
+              {(s) => (
+                <span
+                  class="t-caption label-tertiary"
+                  data-guide="weekly-caption"
+                  title={vm.weeklyTooltip()}
+                  style={{ "text-align": "center" }}
+                >
+                  {s()}
+                  {weeklyProjMsg(vm)}
+                </span>
+              )}
+            </Show>
+          }
+        >
+          <Show when={sessionCountdown()}>
+            {(c) => (
+              <span class="t-caption label-tertiary" data-guide="session-caption" style={{ "text-align": "center" }}>
+                {t().resetsInLive(c().h, c().m, c().s)}
+                {projInline(vm.sessionProj(), store.usage.five_hour)}
+              </span>
+            )}
+          </Show>
         </Show>
       </div>
 
@@ -167,11 +188,13 @@ export function NormalView() {
           padding: "0 var(--s-2)",
         }}
       >
-        <MiniMetric
-          label={t().allModels}
-          value={store.usage.seven_day}
-          projected={vm.weeklyProj()?.projectedPct ?? null}
-        />
+        <Show when={hasSession()}>
+          <MiniMetric
+            label={t().allModels}
+            value={store.usage.seven_day}
+            projected={vm.weeklyProj()?.projectedPct ?? null}
+          />
+        </Show>
         {/* Scoped weekly caps arrive labeled from the API (`limits` array —
             e.g. "Fable" while that promo cap runs); the legacy fixed
             sonnet/opus rows only render when the server sends none. */}
@@ -198,7 +221,7 @@ export function NormalView() {
             )}
           </For>
         </Show>
-        <Show when={weeklyReset()}>
+        <Show when={hasSession() && weeklyReset()}>
           {(s) => (
             <span
               data-guide="weekly-caption"

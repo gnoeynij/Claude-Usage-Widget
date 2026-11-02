@@ -1,7 +1,7 @@
 import { Show, For, createMemo, createSignal } from "solid-js";
 import type { JSX } from "solid-js";
 import { GlassCard } from "../components/GlassCard";
-import { store } from "../state/store";
+import { store, hasSession } from "../state/store";
 import { t } from "../i18n";
 import { formatCost, formatTokens } from "../utils/format";
 import { startWindowDrag } from "../utils/drag";
@@ -117,9 +117,17 @@ function ActiveStrip() {
                 {formatCost(act().cost_usd)}
               </span>
             </span>
+            {/* "left" counts down the local JSONL 5h block — without a 5h
+                limit (verified Ultra) it'd read as time left on a limit that
+                doesn't exist, so only the burn rate stays. */}
             <span class="t-caption label-tertiary tabular-nums">
-              {t().leftShort(Math.floor(remaining() / 60), remaining() % 60)}
-              <Show when={rate() > 0}> · {t().ratePerHr(compactCost(rate()))}</Show>
+              <Show when={hasSession()}>
+                {t().leftShort(Math.floor(remaining() / 60), remaining() % 60)}
+              </Show>
+              <Show when={rate() > 0}>
+                {hasSession() ? " · " : ""}
+                {t().ratePerHr(compactCost(rate()))}
+              </Show>
             </span>
           </div>
         );

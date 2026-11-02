@@ -36,6 +36,9 @@ export type ErrorCode =
 
 export type UsagePayload = {
   five_hour: number;
+  /** false = the account has no 5h limit (verified Ultra, 2026-10-30); the
+   *  heroes then show the weekly limit. Absent (boot/guide) counts as true. */
+  has_session?: boolean;
   seven_day: number;
   /** Fixed Sonnet weekly cap — retired server-side in favor of
    *  `scoped_limits` (null since 2026-07-21); the legacy row hides on null,
@@ -152,6 +155,19 @@ export const MODE_DEFAULTS: Record<Mode, [number, number, number, number]> = {
   // stable scrollbar gutter (DetailView main).
   detail: [520, 644, 520, 520],
 };
+
+/** Without a 5h limit (verified Ultra) the heroes carry the weekly limit and a
+ *  row + caption drop out, so Mini/Normal shrink. Normal 300: the glass layout
+ *  frees ~51px above the footer (measured); 292 left the last row crowding the
+ *  footer, so ~17px of it stays as breathing room. Mini 88 fits the 72px donut. */
+const MODE_DEFAULTS_NO_SESSION: Partial<Record<Mode, [number, number, number, number]>> = {
+  mini: [240, 88, 240, 88],
+  normal: [320, 300, 320, 300],
+};
+
+function modeDefaults(mode: Mode): [number, number, number, number] {
+  return (!hasSession() && MODE_DEFAULTS_NO_SESSION[mode]) || MODE_DEFAULTS[mode];
+}
 
 /** Visual grammar of the three widget modes: `glass` = the original Liquid
  *  Glass look; `instrument` = the retro instrument-panel skin (7-seg session,
@@ -279,12 +295,17 @@ const [store, setStore] = createStore<StoreShape>({
 
 export { store, setStore };
 
-/** Human-readable plan label, e.g. "Max 20×", or null when not signed in.
- *  A `rate_limit_tier` like "default_claude_max_20x" supplies the "20×". */
+/** Human-readable plan label, e.g. "Ultra", or null when not signed in.
+ *  A `rate_limit_tier` like "default_claude_max_20x" supplies the multiple. */
 export function planLabel(p: PlanPayload | null): string | null {
   const raw = p?.subscription_type;
   if (!raw) return null;
   const lower = raw.toLowerCase();
+  const mult = p?.rate_limit_tier?.match(/(\d+)x/i)?.[1];
+  // 2026-10-30 rename: Max 20x → "Ultra", Max 5x → plain "Max". Stored
+  // credentials still say max + max_20x/max_5x, so map from the tier.
+  if (lower === "ultra" || (lower === "max" && mult === "20")) return "Ultra";
+  if (lower === "max" && mult === "5") return "Max";
   const name =
     lower === "max" ? "Max"
     : lower === "pro" ? "Pro"
@@ -292,7 +313,6 @@ export function planLabel(p: PlanPayload | null): string | null {
     : lower === "team" ? "Team"
     : lower === "enterprise" ? "Enterprise"
     : raw.charAt(0).toUpperCase() + raw.slice(1);
-  const mult = p?.rate_limit_tier?.match(/(\d+)x/i)?.[1];
   return mult ? `${name} ${mult}×` : name;
 }
 
@@ -633,12 +653,17 @@ let suppressPersist = false;
 let userTouchedDark = false;
 
 function applyModeSize(mode: Mode) {
-  const saved = store.modeSizes[mode];
-  const [dw, dh, mw, mh] = MODE_DEFAULTS[mode];
+  let saved = store.modeSizes[mode];
+  const [dw, dh, mw, mh] = modeDefaults(mode);
+  // A saved size equal to the regular default is a default the user never
+  // changed — let the compact no-5h-limit default win over it.
+  const [rw, rh] = MODE_DEFAULTS[mode];
+  if (saved && saved.w === rw && saved.h === rh) saved = null;
   // Every mode restores the user's last resized size (persisted in modeSizes);
   // fall back to the per-mode default only when no saved size exists yet.
-  const w = saved?.w ?? dw;
-  const h = saved?.h ?? dh;
+  // Clamped: a size saved under the compact min can sit below the regular min.
+  const w = Math.max(saved?.w ?? dw, mw);
+  const h = Math.max(saved?.h ?? dh, mh);
   resizeSuppressUntil = Date.now() + 1000;
   void invoke("set_window_size", {
     width: w,
@@ -777,6 +802,16 @@ export async function initStore() {
     "costCalcVersion",
     (v) => setStore("costCalcVersion", v),
     (v): v is number => typeof v === "number" && v >= 0,
+  );
+  // Last known 5h-limit state, so a no-5h-limit account (verified Ultra)
+  // boots straight into the compact Mini/Normal size instead of shrinking
+  // after the first sync. Must load before the boot applyModeSize below.
+  await loadSetting<boolean>(
+    "lastHasSession",
+    (v) => {
+      if (!v) setStore("usage", "has_session", false);
+    },
+    (v): v is boolean => typeof v === "boolean",
   );
   await loadSetting<string>(
     "deviceId",
@@ -991,6 +1026,16 @@ async function maybeSpawnTokenRefresh() {
   void syncNow();
 }
 
+async function persistLastHasSession(v: boolean) {
+  try {
+    const ps = await getPersistStore();
+    await ps.set("lastHasSession", v);
+    await ps.save();
+  } catch (e) {
+    console.error("persist lastHasSession failed", e);
+  }
+}
+
 async function persistLastRefreshSpawnAt(ms: number) {
   try {
     const ps = await getPersistStore();
@@ -1009,7 +1054,7 @@ export function usageSummaryText(): string {
   const u = store.usage;
   const scoped = u.scoped_limits ?? [];
   const parts = [
-    `${s.session} ${Math.round(u.five_hour)}%`,
+    ...(hasSession() ? [`${s.session} ${Math.round(u.five_hour)}%`] : []),
     `${s.allModels} ${Math.round(u.seven_day)}%`,
     ...(scoped.length
       ? scoped.map((r) => `${r.label} ${Math.round(r.percent)}%`)
@@ -1041,8 +1086,13 @@ export function openLoginTerminal() {
 // target is read live each frame, so it lands on the fresh value when the sync
 // resolves mid-animation.
 const [sessionAnim, setSessionAnim] = createSignal<number | null>(null);
-/** Session % for the hero: the count-up value while refreshing, else live usage. */
-export const sessionDisplay = () => sessionAnim() ?? store.usage.five_hour;
+/** False when the account has no 5h limit (verified Ultra) — the heroes then
+ *  carry the all-models weekly % instead. */
+export const hasSession = () => store.usage.has_session !== false;
+const heroPct = () => (hasSession() ? store.usage.five_hour : store.usage.seven_day);
+/** Hero % (session, or weekly without a 5h limit): the count-up value while
+ *  refreshing, else live usage. */
+export const sessionDisplay = () => sessionAnim() ?? heroPct();
 /** True while the reload runs — heroes drop the arc CSS transition so the JS
  *  count-up drives the fill directly (no 600ms per-frame lag). */
 export const sessionRefreshing = () => sessionAnim() !== null;
@@ -1054,7 +1104,7 @@ export function playSessionRefresh() {
   const frame = () => {
     const p = Math.min(1, (Date.now() - start) / dur);
     const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
-    setSessionAnim(eased * store.usage.five_hour);
+    setSessionAnim(eased * heroPct());
     if (p < 1) sessionAnimRAF = requestAnimationFrame(frame);
     else setSessionAnim(null);
   };
@@ -1070,7 +1120,14 @@ export async function syncNow(manual = false) {
   const t0 = Date.now();
   try {
     const usage = await invoke<UsagePayload>("fetch_usage");
+    const hadSession = hasSession();
     setStore("usage", usage);
+    // 5h limit appeared/disappeared (e.g. Ultra verification) → the compact
+    // Mini/Normal size changes; resize only on the flip, never per sync.
+    if (hasSession() !== hadSession) {
+      if (store.mode !== "detail") applyModeSize(store.mode);
+      void persistLastHasSession(hasSession());
+    }
     // Clear errors only on success — clearing at the start would make a
     // persistent error blink (null → re-set) on every retry, closing the
     // mini info overlay each sync.
@@ -1406,7 +1463,7 @@ function scheduleCompositorRepaint() {
       const sz = await win.innerSize();
       const w = Math.round(sz.width / scale);
       const h = Math.round(sz.height / scale);
-      const [, , mw, mh] = MODE_DEFAULTS[store.mode];
+      const [, , mw, mh] = modeDefaults(store.mode);
       resizeSuppressUntil = Date.now() + 1000;
       await invoke("set_window_size", { width: w, height: h + 1, minWidth: mw, minHeight: mh, alwaysOnTop: store.alwaysOnTop });
       await new Promise<void>((r) => requestAnimationFrame(() => r()));

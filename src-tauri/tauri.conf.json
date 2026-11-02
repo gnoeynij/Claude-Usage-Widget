@@ -18,7 +18,7 @@
         "width": 320,
         "height": 360,
         "minWidth": 240,
-        "minHeight": 112,
+        "minHeight": 88,
         "decorations": false,
         "transparent": true,
         "shadow": false,

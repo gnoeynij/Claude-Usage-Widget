@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import { SegDigits } from "../components/SegDigits";
 import { BlockGauge } from "../components/BlockGauge";
-import { store, syncNow, sessionDisplay } from "../state/store";
+import { store, syncNow, sessionDisplay, hasSession } from "../state/store";
 import { t } from "../i18n";
 import { formatCountdown } from "../utils/format";
 import { startWindowDrag } from "../utils/drag";
@@ -92,13 +92,28 @@ export function NormalInstrument() {
         title={t().syncNow}
       >
         <div style={{ display: "flex", "justify-content": "space-between", "align-items": "baseline" }}>
-          <span class="inst-caps">{t().session}</span>
-          <Show when={sessionCountdown()}>
-            {(c) => (
-              <span class="inst-caps tabular-nums" data-guide="session-caption">
-                {t().resetsInLive(c().h, c().m, c().s)}
-              </span>
-            )}
+          {/* No 5h limit (verified Ultra): this zone shows All models weekly,
+              and the weekly zone below drops that row and its reset. */}
+          <span class="inst-caps">{hasSession() ? t().session : t().weeklyShort}</span>
+          <Show
+            when={hasSession()}
+            fallback={
+              <Show when={weeklyReset()}>
+                {(s) => (
+                  <span class="inst-caps tabular-nums" data-guide="weekly-caption" title={vm.weeklyTooltip()}>
+                    {s()}
+                  </span>
+                )}
+              </Show>
+            }
+          >
+            <Show when={sessionCountdown()}>
+              {(c) => (
+                <span class="inst-caps tabular-nums" data-guide="session-caption">
+                  {t().resetsInLive(c().h, c().m, c().s)}
+                </span>
+              )}
+            </Show>
           </Show>
         </div>
         <div
@@ -114,7 +129,9 @@ export function NormalInstrument() {
           <span class="inst-caps" style={{ "font-size": "14px", "margin-bottom": "4px" }}>%</span>
         </div>
         <div class="inst-caps" style={{ "text-align": "right", "min-height": "12px" }}>
-          {projInline(vm.sessionProj(), store.usage.five_hour)}
+          {hasSession()
+            ? projInline(vm.sessionProj(), store.usage.five_hour)
+            : projInline(vm.weeklyProj(), store.usage.seven_day)}
         </div>
       </div>
 
@@ -124,7 +141,7 @@ export function NormalInstrument() {
           style={{ display: "flex", "justify-content": "space-between", "align-items": "baseline", "margin-bottom": "9px" }}
         >
           <span class="inst-caps">{t().weekly}</span>
-          <Show when={weeklyReset()}>
+          <Show when={hasSession() && weeklyReset()}>
             {(s) => (
               <span class="inst-caps tabular-nums" data-guide="weekly-caption" title={vm.weeklyTooltip()}>
                 {s()}
@@ -133,7 +150,9 @@ export function NormalInstrument() {
           </Show>
         </div>
         <div style={{ display: "flex", "flex-direction": "column", gap: "8px" }}>
-          <BlockRow label={t().allModels} value={store.usage.seven_day} />
+          <Show when={hasSession()}>
+            <BlockRow label={t().allModels} value={store.usage.seven_day} />
+          </Show>
           <Show
             when={scoped().length > 0}
             fallback={
@@ -150,7 +169,9 @@ export function NormalInstrument() {
             <For each={scoped()}>{(row) => <BlockRow label={row.label} value={row.percent} />}</For>
           </Show>
         </div>
-        <Show when={weeklyMsgText(vm.weeklyMsg())}>
+        {/* Without a 5h limit an unlabeled (All models) message belongs to the
+            hero above — here it would read as the Fable row's projection. */}
+        <Show when={weeklyMsgText(hasSession() || vm.weeklyMsg()?.label ? vm.weeklyMsg() : null)}>
           {(m) => (
             <div
               class="inst-caps"
