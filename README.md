@@ -19,11 +19,14 @@ A lightweight desktop tool that sits in a corner of your screen and tracks your 
 ## ✨ Features
 
 ### Three-mode widget
-- **Mini** (240×112) — Donut + 2-row capsule. Minimum footprint
-- **Normal** (320×360) — Donut hero + weekly capsules: All models plus any per-model cap your plan tracks, rendered with the server's own label (e.g. **Fable** on Max — the row re-scopes automatically when Anthropic changes it). Default
-- **Detail** (592×619, minSize 520×520) — dashboard: Active session (current 5h block — spend · time left · spend/hour), a daily cost trend chart (colored by model, 7 / 14 / 30-day ranges, click a bar to pick a date, per-device toggle), a per-model cost breakdown (Opus · Fable · Sonnet · Haiku with token counts), and a totals card (this week / month · per-device & combined lifetime · cache-hit rate)
+- **Mini** (240×112, or 240×88 without a 5-hour limit) — Donut + 2-row capsule. Minimum footprint
+- **Normal** (320×334, or 320×300 without a 5-hour limit) — Donut hero + weekly capsules: All models plus any per-model cap your plan tracks, rendered with the server's own label (e.g. **Fable** on Max — the row re-scopes automatically when Anthropic changes it). Default
+- **Detail** (520×644, minSize 520×520) — dashboard: Active session (current 5h block — spend · time left · spend/hour; time left is hidden on plans without a 5-hour limit), a daily cost trend chart (colored by model, 7 / 14 / 30-day ranges, click a bar to pick a date, per-device toggle), a per-model cost breakdown (Opus · Fable · Sonnet · Haiku with token counts), and a totals card (this week / month · per-device & combined lifetime · cache-hit rate)
 
 Switch via footer SegmentedControl or tray menu. Each mode has its own default size + minSize, and any size you drag-adjust is remembered per mode.
+
+### Plans without a 5-hour limit (Ultra)
+Verified **Ultra** accounts (formerly Max 20×) have only a weekly limit, so the donut / hero switches to weekly usage and its projection, the duplicate All models row drops out, and Mini / Normal shrink to the compact sizes above (a size you set yourself is kept). The Settings plan chip reads **Ultra** or **Max** (formerly Max 5×). The widget remembers the plan between launches so it boots at the right size.
 
 ### Limit projection
 A translucent **ghost arc/dot** overlays the donut and weekly bars to show where usage is expected to land at reset if your current pace holds, and the reset captions add the projected figure. The session estimate blends in a faster recent pace so warnings surface sooner; weekly uses the week-to-date average only, since a work-hours burst shouldn't extrapolate to the rest of the week. Projection pauses for a short while after each reset until there's enough data to extrapolate.
@@ -47,7 +50,7 @@ Silent check 3 seconds after boot + manual button in Settings. When an update is
 Reads Claude Code's OAuth token from the platform-native store — `~/.claude/.credentials.json` on Windows, the **macOS Keychain** (`Claude Code-credentials` service) on macOS. On expiry the widget heals itself: it quietly runs a minimal Claude Code call so the CLI refreshes the token, then re-syncs (at most one CLI run per expiry episode). If you're signed out entirely, the banner's **Open login** button launches the `claude auth login` browser flow in a terminal.
 
 ### Usage notifications
-- An alert fires when you cross **85%** or **95%** of the 5-hour session *or* 7-day weekly limit
+- An alert fires when you cross **85%** or **95%** of the 5-hour session *or* 7-day weekly limit (weekly only on plans without a 5-hour limit)
 - **In-app Liquid Glass toast** while the widget is on screen — matches the widget's look, needs no OS permission; falls back to an **OS notification** when the widget is hidden to the tray
 - One alert per threshold per block — no repeats on every sync; OS permission requested lazily on the first tray-hidden crossing
 
