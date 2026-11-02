@@ -178,10 +178,13 @@ struct LimitScopeModel {
 
 #[derive(Deserialize, Debug, Default)]
 struct UsageResponse {
+    // Option too: verified Ultra accounts have no 5h limit and the API sends
+    // `five_hour: null` (2026-11-02 live) — a bare block failed the whole
+    // response. Null → has_session false.
     #[serde(default)]
-    five_hour: UsageBlock,
+    five_hour: Option<UsageBlock>,
     #[serde(default)]
-    seven_day: UsageBlock,
+    seven_day: Option<UsageBlock>,
     // Option like seven_day_opus: the API sends `null` for this block on some
     // plans/rollouts, and a bare UsageBlock fails the whole response on null.
     #[serde(default)]
@@ -227,6 +230,10 @@ fn scoped_from_limits(limits: Option<Vec<Option<LimitEntry>>>) -> Vec<ScopedLimi
 #[derive(Serialize, Default, Debug)]
 pub struct UsageOutput {
     pub five_hour: f64,
+    /// False when the API sends no 5h block — verified Ultra accounts have no
+    /// 5h limit (2026-10-30 plan change). The frontend then promotes the
+    /// weekly limit into the hero slot instead of showing a dead 0%.
+    pub has_session: bool,
     pub seven_day: f64,
     /// `None` when the API nulls/omits the fixed Sonnet weekly cap — which is
     /// its steady state since the labeled `limits` array replaced the fixed
@@ -350,24 +357,48 @@ async fn call_usage(access_token: &str) -> Result<UsageOutput> {
         warn!("usage parse failed: {e}; body[..300]={preview:?}");
         anyhow!("JSON_PARSE_ERROR")
     })?;
+    Ok(usage_output(body))
+}
 
+fn usage_output(body: UsageResponse) -> UsageOutput {
     let extra = body.extra_usage.unwrap_or_default();
-    Ok(UsageOutput {
-        five_hour: body.five_hour.utilization.unwrap_or(0.0),
-        seven_day: body.seven_day.utilization.unwrap_or(0.0),
+    let has_session = body.five_hour.is_some();
+    let five_hour = body.five_hour.unwrap_or_default();
+    let seven_day = body.seven_day.unwrap_or_default();
+    UsageOutput {
+        five_hour: five_hour.utilization.unwrap_or(0.0),
+        has_session,
+        seven_day: seven_day.utilization.unwrap_or(0.0),
         seven_day_sonnet: body.seven_day_sonnet.and_then(|b| b.utilization),
         seven_day_opus: body.seven_day_opus.and_then(|b| b.utilization),
         extra_usage_enabled: extra.is_enabled,
         extra_usage: if extra.is_enabled { extra.utilization } else { None },
-        session_resets_at: body.five_hour.resets_at,
-        weekly_resets_at: body.seven_day.resets_at,
+        session_resets_at: five_hour.resets_at,
+        weekly_resets_at: seven_day.resets_at,
         scoped_limits: scoped_from_limits(body.limits),
-    })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn has_session_tracks_the_five_hour_block() {
+        let out = |json: &str| usage_output(serde_json::from_str(json).unwrap());
+        // Regular plan: 5h block present.
+        let o = out(r#"{"five_hour":{"utilization":31.0,"resets_at":"2026-11-02T10:00:00Z"},"seven_day":{"utilization":8.0}}"#);
+        assert!(o.has_session);
+        assert_eq!(o.five_hour, 31.0);
+        assert_eq!(o.session_resets_at.as_deref(), Some("2026-11-02T10:00:00Z"));
+        // Verified Ultra (2026-11-02 live): five_hour null → no 5h limit.
+        let o = out(r#"{"five_hour":null,"seven_day":{"utilization":88.0,"resets_at":"2026-11-02T06:00:00Z"}}"#);
+        assert!(!o.has_session);
+        assert_eq!(o.five_hour, 0.0);
+        assert!(o.session_resets_at.is_none());
+        assert_eq!(o.seven_day, 88.0);
+        assert_eq!(o.weekly_resets_at.as_deref(), Some("2026-11-02T06:00:00Z"));
+    }
 
     // Regression: optional top-level usage blocks must tolerate an explicit
     // `null` (not just absence). serde's `default` fills only *absent* fields,
@@ -384,6 +415,9 @@ mod tests {
             // plus new per-block dollar fields (limit/used/remaining_dollars).
             // Neither may fail the whole response (sonnet was a bare struct before).
             r#"{"five_hour":{"utilization":8.0,"limit_dollars":null,"used_dollars":null,"remaining_dollars":null},"seven_day":{"utilization":50.0},"seven_day_sonnet":null}"#,
+            // Regression (2026-11-02): five_hour:null on verified Ultra (no 5h limit).
+            r#"{"five_hour":null,"seven_day":{"utilization":88.0}}"#,
+            r#"{"five_hour":null,"seven_day":null}"#,
         ];
         for v in variants {
             let parsed: Result<UsageResponse, _> = serde_json::from_str(v);
