@@ -1,0 +1,42 @@
+name: Test build (macOS)
+
+# 테스트용 빌드 — release 발행 없이 dmg 를 Actions artifact 로만 올린다.
+# test/** 브랜치 push 시에만 동작 (release.yml 은 태그 push → 공개 release 발행).
+on:
+  push:
+    branches:
+      - 'test/**'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # release.yml 과 동일 — headless CI 에서 Finder 스타일링 스킵 (회귀 §23)
+          TAURI_BUNDLER_DMG_IGNORE_CI: false
+        run: npm run tauri build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: claude-widget-macos-test
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          retention-days: 14

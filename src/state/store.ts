@@ -169,6 +169,20 @@ function modeDefaults(mode: Mode): [number, number, number, number] {
   return (!hasSession() && MODE_DEFAULTS_NO_SESSION[mode]) || MODE_DEFAULTS[mode];
 }
 
+/** Sizes the app itself sets: every mode default, plus the tauri.conf initial
+ *  window (320×360, also the old Normal default). On macOS a resize event can
+ *  land after the 1s suppression window and get stored as the user's size —
+ *  even under the wrong mode (a reported Mini saved as 320×334). A user won't
+ *  drag to exactly one of these, so treat them as "never resized". */
+const PROGRAMMATIC_SIZES = new Set(
+  [
+    ...Object.values(MODE_DEFAULTS),
+    ...Object.values(MODE_DEFAULTS_NO_SESSION),
+    [320, 360],
+  ].map(([w, h]) => `${w}x${h}`),
+);
+const isProgrammaticSize = (w: number, h: number) => PROGRAMMATIC_SIZES.has(`${w}x${h}`);
+
 /** Visual grammar of the three widget modes: `glass` = the original Liquid
  *  Glass look; `instrument` = the retro instrument-panel skin (7-seg session,
  *  block gauges, zones). Palette (graphite/silver) is shared — the theme only
@@ -655,10 +669,9 @@ let userTouchedDark = false;
 function applyModeSize(mode: Mode) {
   let saved = store.modeSizes[mode];
   const [dw, dh, mw, mh] = modeDefaults(mode);
-  // A saved size equal to the regular default is a default the user never
-  // changed — let the compact no-5h-limit default win over it.
-  const [rw, rh] = MODE_DEFAULTS[mode];
-  if (saved && saved.w === rw && saved.h === rh) saved = null;
+  // A saved size equal to an app-set size is a default the user never changed
+  // — let the current (possibly compact no-5h-limit) default win over it.
+  if (saved && isProgrammaticSize(saved.w, saved.h)) saved = null;
   // Every mode restores the user's last resized size (persisted in modeSizes);
   // fall back to the per-mode default only when no saved size exists yet.
   // Clamped: a size saved under the compact min can sit below the regular min.
@@ -890,6 +903,7 @@ export async function initStore() {
         const h = Math.round(payload.height / scale);
         // Ignore degenerate sizes from minimize/maximize edge events.
         if (w < 100 || h < 100) return;
+        if (isProgrammaticSize(w, h)) return;
         setStore("modeSizes", store.mode, { w, h });
         void persistModeSizes();
       } catch (e) {
